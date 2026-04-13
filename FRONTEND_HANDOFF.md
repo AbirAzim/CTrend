@@ -12,7 +12,7 @@
 
 ## এনভায়রনমেন্ট (ব্যাকএন্ড)
 
-কপি: `backend/.env.example` → `backend/.env`। মিনিমাম: `MONGODB_URI`, `JWT_SECRET`।
+কপি: `.env.example` → `.env`। মিনিমাম: `MONGODB_URI`, `JWT_SECRET`।
 
 Stripe চেকআউট/ওয়েবহুকের জন্য: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `FRONTEND_URL`। Raw body ওয়েবহুকের জন্য `main.ts`-এ `rawBody: true` আছে।
 
@@ -131,7 +131,7 @@ REST ওয়েবহুক (GraphQL নয়): `POST /webhooks/stripe` — `Stripe
 
 ## স্কিমা ফাইল
 
-অ্যাপ চালু হলে `backend/src/schema.gql` অটো-জেনারেট হয় — ক্লায়েন্ট codegen-এর জন্য এটি ব্যবহার করতে পারেন।
+অ্যাপ চালু হলে `src/schema.gql` অটো-জেনারেট হয় — ক্লায়েন্ট codegen-এর জন্য এটি ব্যবহার করতে পারেন।
 
 ## ত্রুটি ও রেট লিমিট
 

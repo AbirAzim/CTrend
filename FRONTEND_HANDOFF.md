@@ -1,109 +1,113 @@
-# CTrend — ফ্রন্টএন্ড হ্যান্ডঅফ (ব্যাকএন্ড অনুযায়ী)
+# CTrend — Frontend handoff (aligned with backend)
 
-এই ডকুমেন্ট **NestJS + GraphQL (Apollo) + MongoDB** ব্যাকএন্ডের সাথে Next.js / Expo ক্লায়েন্ট তৈরির জন্য। মূল SRS: `CTrendsrs.md`।
+This document is for building **Next.js** or **Expo** clients against the **NestJS + GraphQL (Apollo) + MongoDB** API. Source requirements: `CTrendsrs.md`.
 
-## বেস URL ও টুলিং
+## Base URLs and tooling
 
-- ডিফল্ট পোর্ট: `PORT` env (ডিফল্ট `4000`) — `http://localhost:4000/graphql`
-- **HTTP**: একই এন্ডপয়েন্টে `POST` (JSON body) GraphQL
-- **WebSocket (সাবস্ক্রিপশন)**: `graphql-ws` — ক্লায়েন্টে `graphql-ws` + `@apollo/client` বা অনুরূপ সেটআপ লাগবে
-- অথেন্টিকেশন: `Authorization: Bearer <accessToken>`
-- Playground: `NODE_ENV !== 'production'` হলে চালু (লোকাল ডেভ)
+- Default port: `PORT` env variable (default **`4000`**)
+- **HTTP (queries/mutations)**: `http://localhost:<PORT>/graphql` — `POST` with JSON body
+- **WebSocket (subscriptions `voteUpdates`, `newPosts`)**: same path, `ws:` / `wss:` — local example: `ws://localhost:4000/graphql`
+- When you run `npm run start:dev`, **Bootstrap** logs print the base URL, GraphQL endpoint, and Stripe webhook URL
+- **CORS**: enabled on the backend (`enableCors()`), needed when the web dev server runs on another port
+- Authentication: `Authorization: Bearer <accessToken>`
+- Playground: enabled when `NODE_ENV !== 'production'` (local dev)
 
-## এনভায়রনমেন্ট (ব্যাকএন্ড)
+## Environment (backend)
 
-কপি: `.env.example` → `.env`। মিনিমাম: `MONGODB_URI`, `JWT_SECRET`।
+Copy `.env.example` → `.env`. Minimum: `MONGODB_URI`, `JWT_SECRET`.
 
-Stripe চেকআউট/ওয়েবহুকের জন্য: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `FRONTEND_URL`। Raw body ওয়েবহুকের জন্য `main.ts`-এ `rawBody: true` আছে।
+For Stripe checkout/webhooks: `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `FRONTEND_URL`. Webhooks use raw body; `main.ts` sets `rawBody: true`.
 
-## ইউজার রোল ও ফিড লজিক (সংক্ষেপ)
+Optional: **`CORS_ORIGIN`** — comma-separated origins (e.g. `http://localhost:3000`). If unset in dev, all origins are allowed (`true`).
+
+## User roles and feed logic (summary)
 
 - `UserRole`: `user` | `org` | `admin`
-- সাধারণ ইউজার: `createPost` → টাইপ `user` (ডিফল্ট)। `type: org` দিলে অ্যাকাউন্ট **org** হতে হবে এবং সংস্থা থাকতে হবে।
-- `createSystemPost`: শুধু **admin**
-- অর্গ ফ্রি: `orgReach` জোর করে `connected` (ফলোয়ারদের কাছে)। প্রিমিয়াম: `global` মাসে সর্বোচ্চ **২০** পোস্ট (`globalPostsThisMonth`)
-- ফিড:
-  - `scope: global` → সিস্টেম পোস্ট, পাবলিক ইউজার পোস্ট, `orgReach: global` অর্গ পোস্ট
-  - `scope: personalized` + লগইন → উপরেরগুলো **সাথে** ইন্টারেস্ট ম্যাচ (ইউজারের `interests` = ক্যাটেগরি **slug**), নিজের পোস্ট, ফলো করা ইউজারের `private` পোস্ট, ফলো করা অর্গ-মালিকের `connected` অর্গ পোস্ট
+- Normal users: `createPost` defaults to type `user`. For `type: org` the account must be **org** and have an organization.
+- `createSystemPost`: **admin** only
+- Org free tier: `orgReach` is forced to `connected` (followers). Premium: up to **20** `global` posts per month (`globalPostsThisMonth`)
+- Feed:
+  - `scope: global` → system posts, public user posts, org posts with `orgReach: global`
+  - `scope: personalized` + logged in → all of the above **plus** interest match (user `interests` = category **slugs**), own posts, `private` posts from followed users, `connected` org posts where the viewer follows the org owner
 
-অনবোর্ডিংয়ে ইন্টারেস্ট হিসেবে **ক্যাটেগরি slug** পাঠান (যেমন `tech`, `food`) — `categories` কুয়েরি থেকে `slug` নিন।
+During onboarding, send **category slugs** as interests (e.g. `tech`, `food`) — load `slug` from the `categories` query.
 
-## GraphQL — অপারেশন তালিকা
+## GraphQL — operations
 
-### Auth (পাবলিক)
+### Auth (public)
 
 - `register(input: RegisterInput!): AuthPayload!`
 - `login(input: LoginInput!): AuthPayload!`
 
 `AuthPayload`: `{ accessToken, user }`
 
-### প্রোফাইল (JWT)
+### Profile (JWT)
 
 - `me: User!`
 - `updateProfile(input: UpdateProfileInput!): User!`
-- `getUserProfile(userId: ID!): User!` (পাবলিক)
+- `getUserProfile(userId: ID!): User!` (public)
 
-### ক্যাটেগরি
+### Categories
 
 - `categories: [Category!]!`
 
-### ফিড
+### Feed
 
 - `getFeed(scope: FeedScope!, sort: FeedSort!, skip: Int, take: Int): FeedConnection!`
-  - অপশনাল JWT: থাকলে পার্সোনালাইজড ফিল্টারে `viewer` ধরা হয়; না থাকলে `global`-সমতুল্য পাবলিক কনটেন্ট
+  - Optional JWT: if present, personalized filtering uses the viewer; if absent, behavior matches public/global content
 - `FeedConnection`: `{ nodes: [Post!]!, totalCount: Int! }`
 
-### পোস্ট
+### Posts
 
 - `createPost(input: CreatePostInput!): Post!` (JWT)
 - `createSystemPost(input: CreatePostInput!): Post!` (JWT + admin)
-- `getPostById(id: ID!): Post!` (JWT অপশনাল — `mySelectedOptionIndex`)
-- `getPostsByUser(userId: ID!): [Post!]!` (JWT অপশনাল)
+- `getPostById(id: ID!): Post!` (JWT optional — `mySelectedOptionIndex`)
+- `getPostsByUser(userId: ID!): [Post!]!` (JWT optional)
 
-`CreatePostInput` গুরুত্বপূর্ণ ফিল্ড:
+Important `CreatePostInput` fields:
 
-- `options`: কমপক্ষে **২টি** `{ label, imageUrl? }`
-- `categoryId`: Mongo ObjectId স্ট্রিং
-- `visibility`: `public` | `private` (ইউজার পোস্ট)
-- `type`: সাধারণত ছেড়ে দিন (`user`); অর্গ পোস্টের জন্য `org` + `orgReach`: `connected` | `global`
+- `options`: at least **two** `{ label, imageUrl? }`
+- `categoryId`: MongoDB ObjectId string
+- `visibility`: `public` | `private` (user posts)
+- `type`: usually omit (defaults to `user`); for org posts use `org` + `orgReach`: `connected` | `global`
 
-`Post` টাইপে ভোট সারাংশ:
+Vote summary on `Post`:
 
 - `totalVotes`, `optionStats[]` (`index`, `label`, `count`, `percentage`), `mySelectedOptionIndex`
-- সিস্টেম পোস্ট: `likesDisabled: true` (UI-তে লাইক লুকান)
+- System posts: `likesDisabled: true` (hide like UI)
 
-### ভোট (JWT)
+### Votes (JWT)
 
 - `votePost(postId: ID!, selectedOptionIndex: Int!): VoteResult!`
 
-### সাবস্ক্রিপশন
+### Subscriptions
 
-- `voteUpdates(postId: ID!): VoteUpdate!` — রিয়েলটাইম শতাংশ/কাউন্ট
-- `newPosts: NewPost!` — `{ postId }`; নতুন পোস্ট তৈরি হলে ইভেন্ট
+- `voteUpdates(postId: ID!): VoteUpdate!` — live percentages/counts
+- `newPosts: NewPost!` — `{ postId }` when a new post is created
 
-### কমেন্ট
+### Comments
 
 - `commentPost(input: CommentPostInput!): Comment!` (JWT)
 - `commentsByPost(postId: ID!): [Comment!]!`
 
-### ফলো
+### Follows
 
 - `followUser(userId: ID!): Boolean!` (JWT)
 
-### অর্গ
+### Organizations
 
-- `createOrganization(name: String!): Organization!` (JWT — ইউজার রোল `org` করে)
-- `myOrganization: Organization` (JWT, org রোল)
+- `createOrganization(name: String!): Organization!` (JWT — promotes user to `org` role)
+- `myOrganization: Organization` (JWT, org role)
 - `organizationDashboard(organizationId: String!): OrganizationDashboard!` (JWT, org)
 
-### বিলিং (JWT মিউটেশন; ওয়েবহুক REST)
+### Billing (JWT mutations; Stripe webhook is REST)
 
 - `createStripeCheckoutSession(plan: SubscriptionPlan!, organizationId: ID): CheckoutSession!`
-  - প্রিমিয়ামের জন্য `organizationId` বাধ্যতামূলক; রেসপন্সে `url` থাকলে রিডাইরেক্ট
-- `verifyBkashPayment(payload: String!): BkashVerification!` — বর্তমানে স্টাব (`success: false`)
+  - Premium requires `organizationId`; redirect if response includes `url`
+- `verifyBkashPayment(payload: String!): BkashVerification!` — stub for now (`success: false`)
 - `cancelSubscription(organizationId: ID): Boolean!`
 
-REST ওয়েবহুক (GraphQL নয়): `POST /webhooks/stripe` — `Stripe-Signature` হেডার + raw body।
+REST webhook (not GraphQL): `POST /webhooks/stripe` — `Stripe-Signature` header + raw body.
 
 ## Enums (GraphQL)
 
@@ -113,31 +117,31 @@ REST ওয়েবহুক (GraphQL নয়): `POST /webhooks/stripe` — `Stripe
 - `SubscriptionPlan`: `free` | `premium`
 - `PaymentProvider`, `SubscriptionStatus`
 
-## UI ফ্লো সাজেশন (SRS ম্যাপ)
+## UI flow mapping (SRS)
 
-| স্ক্রিন | ব্যাকএন্ড |
-|----------|-----------|
-| লগইন/রেজিস্টার | `login`, `register` |
-| অনবোর্ডিং ইন্টারেস্ট | `categories` + `updateProfile` / `register(..., interests: [slug])` |
-| গ্লোবাল/পার্সোনাল ফিড | `getFeed` + ট্যাবে `sort` বদল |
-| পোস্ট ডিটেইল | `getPostById`, `commentsByPost`, `votePost`, `voteUpdates` |
-| প্রোফাইল | `getUserProfile`, `getPostsByUser`, `followUser` |
-| পোস্ট তৈরি | `createPost` (২+ অপশন, ক্যাটেগরি) |
-| অর্গ ড্যাশবোর্ড | `myOrganization`, `organizationDashboard` |
-| প্রিমিয়াম | `createStripeCheckoutSession` → Stripe → সাক্সেস URL |
-| অ্যাডমিন | `createSystemPost` (আলাদা অ্যাডমিন অ্যাকাউন্ট; রোল DB-তে `admin`) |
+| Screen | Backend |
+|--------|---------|
+| Login / register | `login`, `register` |
+| Onboarding interests | `categories` + `updateProfile` / `register(..., interests: [slug])` |
+| Global / personalized feed | `getFeed` + change `sort` in tabs |
+| Post detail | `getPostById`, `commentsByPost`, `votePost`, `voteUpdates` |
+| Profile | `getUserProfile`, `getPostsByUser`, `followUser` |
+| Create post | `createPost` (2+ options, category) |
+| Org dashboard | `myOrganization`, `organizationDashboard` |
+| Premium | `createStripeCheckoutSession` → Stripe → success URL |
+| Admin | `createSystemPost` (dedicated admin account; `role: "admin"` in DB) |
 
-**নোট:** প্রথম অ্যাডমিন তৈরি করতে MongoDB-তে সরাসরি ইউজার ডকুমেন্টে `role: "admin"` সেট করুন, বা পরে একটি অ্যাডমিন-ইনভাইট মিউটেশন যোগ করা যেতে পারে।
+**Note:** Create the first admin by setting `role: "admin"` on a user document in MongoDB, or add an admin-invite mutation later.
 
-## স্কিমা ফাইল
+## Schema file
 
-অ্যাপ চালু হলে `src/schema.gql` অটো-জেনারেট হয় — ক্লায়েন্ট codegen-এর জন্য এটি ব্যবহার করতে পারেন।
+After the app starts, `src/schema.gql` is auto-generated — use it for client codegen.
 
-## ত্রুটি ও রেট লিমিট
+## Errors and rate limits
 
-- ইনপুট ভ্যালিডেশন: `class-validator` (whitelisted ফিল্ড)
-- গ্লোবাল থ্রটল: ~১২০ রিকোয়েস্ট/মিনিট/IP (প্রোডাকশনে টিউন করুন)
+- Input validation: `class-validator` (whitelisted fields)
+- Global throttle: ~**120** requests/minute/IP (tune in production)
 
 ---
 
-**ট্যাগলাইন (SRS):** *CTrend — Compare. Vote. See the Trend.*
+**Tagline (SRS):** *CTrend — Compare. Vote. See the Trend.*

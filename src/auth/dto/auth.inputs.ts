@@ -29,14 +29,3 @@ export class RegisterInput {
   @IsString({ each: true })
   interests?: string[];
 }
-
-@InputType()
-export class LoginInput {
-  @Field()
-  @IsEmail()
-  email: string;
-
-  @Field()
-  @IsString()
-  password: string;
-}

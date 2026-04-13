@@ -12,6 +12,13 @@ export class User {
   @Prop({ required: true, unique: true, lowercase: true, trim: true })
   email: string;
 
+  /** Shown to clients as displayName (signup / Google). */
+  @Prop({ trim: true })
+  displayName?: string;
+
+  @Prop({ sparse: true, unique: true })
+  googleSub?: string;
+
   @Prop({ required: true })
   password: string;
 

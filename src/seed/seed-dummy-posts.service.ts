@@ -46,6 +46,9 @@ export class SeedDummyPostsService implements OnModuleInit {
       b: string;
       contentText: string;
       categorySlug: string;
+      postImage: string;
+      aImage: string;
+      bImage: string;
     }> = [
       {
         a: 'Cristiano Ronaldo',
@@ -53,28 +56,70 @@ export class SeedDummyPostsService implements OnModuleInit {
         contentText:
           'CR7 vs Messi — who is the GOAT? Cast your vote on this all-time classic rivalry.',
         categorySlug: 'sports',
+        postImage:
+          'https://images.unsplash.com/photo-1570498839593-e565b39455fc?auto=format&fit=crop&w=1200&q=80',
+        aImage:
+          'https://upload.wikimedia.org/wikipedia/commons/8/8c/Cristiano_Ronaldo_2018.jpg',
+        bImage:
+          'https://upload.wikimedia.org/wikipedia/commons/8/89/Portrait_of_Lionel_Messi.jpg',
       },
       {
         a: 'iPhone',
         b: 'Android',
         contentText: 'iPhone vs Android — which ecosystem do you prefer?',
         categorySlug: 'tech',
+        postImage:
+          'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=1200&q=80',
+        aImage:
+          'https://images.unsplash.com/photo-1592750475338-74b7b21085ab?auto=format&fit=crop&w=800&q=80',
+        bImage:
+          'https://images.unsplash.com/photo-1598327105666-5b89351aff97?auto=format&fit=crop&w=800&q=80',
       },
       {
         a: 'Apu Vai',
         b: 'Mamun Vai',
         contentText: 'Apu Vai vs Mamun Vai — pick your favorite!',
         categorySlug: 'entertainment',
+        postImage:
+          'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?auto=format&fit=crop&w=1200&q=80',
+        aImage:
+          'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=800&q=80',
+        bImage:
+          'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=800&q=80',
       },
     ];
 
     for (const t of templates) {
-      const dup = await this.postModel.exists({
+      const existing = await this.postModel.findOne({
         createdBy: authorId,
         'options.0.label': t.a,
         'options.1.label': t.b,
       });
-      if (dup) continue;
+      if (existing) {
+        const needsPostImage = !existing.imageUrls?.length;
+        const needsOptionImages =
+          !existing.options?.[0]?.imageUrl || !existing.options?.[1]?.imageUrl;
+        if (needsPostImage || needsOptionImages) {
+          existing.imageUrls = existing.imageUrls?.length
+            ? existing.imageUrls
+            : [t.postImage];
+          existing.options = [
+            {
+              ...existing.options[0],
+              label: existing.options[0]?.label ?? t.a,
+              imageUrl: existing.options[0]?.imageUrl ?? t.aImage,
+            },
+            {
+              ...existing.options[1],
+              label: existing.options[1]?.label ?? t.b,
+              imageUrl: existing.options[1]?.imageUrl ?? t.bImage,
+            },
+          ];
+          await existing.save();
+          this.logger.log(`Updated images for seed post: ${t.a} vs ${t.b}`);
+        }
+        continue;
+      }
 
       const cat = await this.categoriesService.findBySlug(t.categorySlug);
       if (!cat) {
@@ -85,8 +130,11 @@ export class SeedDummyPostsService implements OnModuleInit {
       await this.postModel.create({
         type: PostType.USER,
         contentText: t.contentText,
-        imageUrls: [],
-        options: [{ label: t.a }, { label: t.b }],
+        imageUrls: [t.postImage],
+        options: [
+          { label: t.a, imageUrl: t.aImage },
+          { label: t.b, imageUrl: t.bImage },
+        ],
         categoryId: cat._id,
         visibility: Visibility.PUBLIC,
         createdBy: authorId,

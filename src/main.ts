@@ -7,6 +7,16 @@ async function bootstrap() {
   app.enableCors({
     origin: process.env.CORS_ORIGIN?.split(',').map((s) => s.trim()) ?? true,
     credentials: true,
+    methods: ['GET', 'POST', 'OPTIONS', 'HEAD'],
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'Accept',
+      'Apollo-Require-Preflight',
+      'apollographql-client-name',
+      'apollographql-client-version',
+    ],
+    exposedHeaders: ['Content-Type'],
   });
   app.useGlobalPipes(
     new ValidationPipe({

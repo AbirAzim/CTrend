@@ -6,6 +6,9 @@ export class AuthPayloadGql {
   @Field()
   accessToken: string;
 
+  @Field(() => String, { nullable: true })
+  refreshToken?: string | null;
+
   @Field(() => UserGql)
   user: UserGql;
 }

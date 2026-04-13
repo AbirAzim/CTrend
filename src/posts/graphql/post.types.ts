@@ -57,6 +57,14 @@ export class PostGql {
   @Field(() => UserGql)
   author: UserGql;
 
+  /** Legacy frontend alias: author.username */
+  @Field()
+  authorUsername: string;
+
+  /** Legacy frontend alias: author.displayName (nullable) */
+  @Field(() => String, { nullable: true })
+  authorDisplayName?: string | null;
+
   @Field(() => OrgPostReach, { nullable: true })
   orgReach?: OrgPostReach;
 
@@ -69,11 +77,31 @@ export class PostGql {
   @Field(() => Int)
   totalVotes: number;
 
+  /** Legacy frontend alias: first option vote count */
+  @Field(() => Int)
+  upvoteCount: number;
+
+  /** Legacy frontend alias: second option vote count */
+  @Field(() => Int)
+  downvoteCount: number;
+
   @Field(() => [VoteOptionStatGql])
   optionStats: VoteOptionStatGql[];
 
   @Field(() => Int, { nullable: true })
   mySelectedOptionIndex?: number;
+
+  /** Legacy frontend alias: "up" | "down" | null */
+  @Field(() => String, { nullable: true })
+  viewerVote?: string | null;
+
+  /** Legacy frontend alias for contentText */
+  @Field(() => String, { nullable: true })
+  caption?: string;
+
+  /** Legacy frontend alias for first image URL */
+  @Field(() => String, { nullable: true })
+  imageUrl?: string;
 
   @Field()
   createdAt: Date;

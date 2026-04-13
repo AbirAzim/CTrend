@@ -7,10 +7,14 @@ export class UserGql {
   id: string;
 
   @Field()
-  username: string;
+  email: string;
+
+  /** Omitted in API response when unset (frontend may fall back to email). */
+  @Field(() => String, { nullable: true })
+  displayName?: string | null;
 
   @Field()
-  email: string;
+  username: string;
 
   @Field(() => [String])
   interests: string[];

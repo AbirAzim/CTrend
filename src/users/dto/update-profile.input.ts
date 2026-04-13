@@ -6,6 +6,12 @@ export class UpdateProfileInput {
   @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @MaxLength(120)
+  displayName?: string;
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
   @MaxLength(500)
   bio?: string;
 

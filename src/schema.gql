@@ -4,6 +4,7 @@
 
 type AuthPayloadGql {
   accessToken: String!
+  refreshToken: String
   user: UserGql!
 }
 
@@ -70,11 +71,6 @@ enum FeedSort {
   TRENDING
 }
 
-input LoginInput {
-  email: String!
-  password: String!
-}
-
 type Mutation {
   cancelSubscription(organizationId: ID): Boolean!
   commentPost(input: CommentPostInput!): CommentGql!
@@ -83,8 +79,10 @@ type Mutation {
   createStripeCheckoutSession(organizationId: ID, plan: SubscriptionPlan!): CheckoutSessionGql!
   createSystemPost(input: CreatePostInput!): PostGql!
   followUser(userId: ID!): Boolean!
-  login(input: LoginInput!): AuthPayloadGql!
+  googleLogin(idToken: String!): AuthPayloadGql!
+  login(email: String!, password: String!): AuthPayloadGql!
   register(input: RegisterInput!): AuthPayloadGql!
+  signup(displayName: String, email: String!, password: String!): AuthPayloadGql!
   updateProfile(input: UpdateProfileInput!): UserGql!
   verifyBkashPayment(payload: String!): BkashVerificationGql!
   votePost(postId: ID!, selectedOptionIndex: Int!): VoteResultGql!
@@ -118,11 +116,16 @@ type OrganizationGql {
 
 type PostGql {
   author: UserGql!
+  authorDisplayName: String
+  authorUsername: String!
+  caption: String
   category: CategoryGql!
   commentsDisabled: Boolean!
   contentText: String
   createdAt: DateTime!
+  downvoteCount: Int!
   id: ID!
+  imageUrl: String
   imageUrls: [String!]!
   likesDisabled: Boolean!
   mySelectedOptionIndex: Int
@@ -131,6 +134,8 @@ type PostGql {
   orgReach: OrgPostReach
   totalVotes: Int!
   type: PostType!
+  upvoteCount: Int!
+  viewerVote: String
   visibility: Visibility!
 }
 
@@ -153,6 +158,7 @@ enum PostType {
 type Query {
   categories: [CategoryGql!]!
   commentsByPost(postId: ID!): [CommentGql!]!
+  feedPosts(scope: FeedScope, skip: Int = 0, sort: FeedSort, take: Int = 20): [PostGql!]!
   getFeed(scope: FeedScope!, skip: Int = 0, sort: FeedSort!, take: Int = 20): FeedConnectionGql!
   getPostById(id: ID!): PostGql!
   getPostsByUser(userId: ID!): [PostGql!]!
@@ -181,12 +187,14 @@ enum SubscriptionPlan {
 
 input UpdateProfileInput {
   bio: String
+  displayName: String
   interests: [String!]
   profileImageUrl: String
 }
 
 type UserGql {
   bio: String
+  displayName: String
   email: String!
   id: ID!
   interests: [String!]!

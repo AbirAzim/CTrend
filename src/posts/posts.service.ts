@@ -218,7 +218,9 @@ export class PostsService {
       id: post._id.toHexString(),
       type: post.type,
       contentText: post.contentText,
+      caption: post.contentText,
       imageUrls: post.imageUrls ?? [],
+      imageUrl: (post.imageUrls ?? [])[0],
       options: post.options.map((o) => ({
         label: o.label,
         imageUrl: o.imageUrl,
@@ -226,12 +228,18 @@ export class PostsService {
       category: this.categoriesService.toGql(category),
       visibility: post.visibility,
       author: this.usersService.toGql(author as UserDocument),
+      authorUsername: author.username,
+      authorDisplayName: author.displayName ?? null,
       orgReach: post.orgReach,
       commentsDisabled: post.commentsDisabled,
       likesDisabled: post.likesDisabled,
       totalVotes: stats.totalVotes,
+      upvoteCount: stats.countsPerOption[0] ?? 0,
+      downvoteCount: stats.countsPerOption[1] ?? 0,
       optionStats,
       mySelectedOptionIndex: mySelected,
+      viewerVote:
+        mySelected === undefined ? null : mySelected === 0 ? 'up' : 'down',
       createdAt: post.createdAt ?? new Date(),
     };
   }

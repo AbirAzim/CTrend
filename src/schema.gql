@@ -1,0 +1,228 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+type AuthPayloadGql {
+  accessToken: String!
+  user: UserGql!
+}
+
+type BkashVerificationGql {
+  message: String
+  success: Boolean!
+}
+
+type CategoryGql {
+  id: ID!
+  name: String!
+  slug: String!
+}
+
+type CheckoutSessionGql {
+  message: String!
+  sessionId: String
+  url: String
+}
+
+type CommentGql {
+  author: UserGql!
+  content: String!
+  createdAt: DateTime!
+  id: ID!
+  parentId: ID
+  postId: ID!
+}
+
+input CommentPostInput {
+  content: String!
+  parentId: ID
+  postId: ID!
+}
+
+input CreatePostInput {
+  categoryId: String!
+  contentText: String
+  imageUrls: [String!]
+  options: [PostOptionInput!]!
+  orgReach: OrgPostReach
+  type: PostType
+  visibility: Visibility
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+type FeedConnectionGql {
+  nodes: [PostGql!]!
+  totalCount: Int!
+}
+
+enum FeedScope {
+  GLOBAL
+  PERSONALIZED
+}
+
+enum FeedSort {
+  ADMIN_PRIORITY
+  LATEST
+  TRENDING
+}
+
+input LoginInput {
+  email: String!
+  password: String!
+}
+
+type Mutation {
+  cancelSubscription(organizationId: ID): Boolean!
+  commentPost(input: CommentPostInput!): CommentGql!
+  createOrganization(name: String!): OrganizationGql!
+  createPost(input: CreatePostInput!): PostGql!
+  createStripeCheckoutSession(organizationId: ID, plan: SubscriptionPlan!): CheckoutSessionGql!
+  createSystemPost(input: CreatePostInput!): PostGql!
+  followUser(userId: ID!): Boolean!
+  login(input: LoginInput!): AuthPayloadGql!
+  register(input: RegisterInput!): AuthPayloadGql!
+  updateProfile(input: UpdateProfileInput!): UserGql!
+  verifyBkashPayment(payload: String!): BkashVerificationGql!
+  votePost(postId: ID!, selectedOptionIndex: Int!): VoteResultGql!
+}
+
+type NewPostGql {
+  postId: ID!
+}
+
+enum OrgPostReach {
+  CONNECTED
+  GLOBAL
+}
+
+type OrganizationDashboardGql {
+  estimatedReach: Int!
+  totalComments: Int!
+  totalPosts: Int!
+  totalVotes: Int!
+}
+
+type OrganizationGql {
+  globalPostsThisMonth: Int!
+  id: ID!
+  name: String!
+  ownerUserId: ID!
+  postLimit: Int!
+  postsUsed: Int!
+  subscriptionPlan: SubscriptionPlan!
+}
+
+type PostGql {
+  author: UserGql!
+  category: CategoryGql!
+  commentsDisabled: Boolean!
+  contentText: String
+  createdAt: DateTime!
+  id: ID!
+  imageUrls: [String!]!
+  likesDisabled: Boolean!
+  mySelectedOptionIndex: Int
+  optionStats: [VoteOptionStatGql!]!
+  options: [PostOptionGql!]!
+  orgReach: OrgPostReach
+  totalVotes: Int!
+  type: PostType!
+  visibility: Visibility!
+}
+
+type PostOptionGql {
+  imageUrl: String
+  label: String!
+}
+
+input PostOptionInput {
+  imageUrl: String
+  label: String!
+}
+
+enum PostType {
+  ORG
+  SYSTEM
+  USER
+}
+
+type Query {
+  categories: [CategoryGql!]!
+  commentsByPost(postId: ID!): [CommentGql!]!
+  getFeed(scope: FeedScope!, skip: Int = 0, sort: FeedSort!, take: Int = 20): FeedConnectionGql!
+  getPostById(id: ID!): PostGql!
+  getPostsByUser(userId: ID!): [PostGql!]!
+  getUserProfile(userId: ID!): UserGql!
+  me: UserGql!
+  myOrganization: OrganizationGql
+  organizationDashboard(organizationId: String!): OrganizationDashboardGql!
+}
+
+input RegisterInput {
+  email: String!
+  interests: [String!]
+  password: String!
+  username: String!
+}
+
+type Subscription {
+  newPosts: NewPostGql!
+  voteUpdates(postId: ID!): VoteUpdateGql!
+}
+
+enum SubscriptionPlan {
+  FREE
+  PREMIUM
+}
+
+input UpdateProfileInput {
+  bio: String
+  interests: [String!]
+  profileImageUrl: String
+}
+
+type UserGql {
+  bio: String
+  email: String!
+  id: ID!
+  interests: [String!]!
+  profileImageUrl: String
+  role: UserRole!
+  username: String!
+}
+
+enum UserRole {
+  ADMIN
+  ORG
+  USER
+}
+
+enum Visibility {
+  PRIVATE
+  PUBLIC
+}
+
+type VoteOptionStatGql {
+  count: Float!
+  index: Int!
+  label: String!
+  percentage: Float!
+}
+
+type VoteResultGql {
+  countsPerOption: [Int!]!
+  percentages: [Float!]!
+  postId: ID!
+  totalVotes: Int!
+}
+
+type VoteUpdateGql {
+  countsPerOption: [Int!]!
+  percentages: [Float!]!
+  postId: ID!
+  totalVotes: Int!
+}

@@ -1,4 +1,4 @@
-import { ValidationPipe } from '@nestjs/common';
+import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
@@ -11,7 +11,11 @@ async function bootstrap() {
       transform: true,
     }),
   );
-  const port = process.env.PORT ?? 4000;
+  const port = Number(process.env.PORT) || 4000;
   await app.listen(port);
+  const base = `http://localhost:${port}`;
+  Logger.log(`Application: ${base}`, 'Bootstrap');
+  Logger.log(`GraphQL:       ${base}/graphql`, 'Bootstrap');
+  Logger.log(`Stripe webhook: ${base}/webhooks/stripe`, 'Bootstrap');
 }
 bootstrap();

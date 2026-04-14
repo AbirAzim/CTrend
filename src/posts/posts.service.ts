@@ -79,10 +79,12 @@ export class PostsService {
     }
 
     const visibility = input.visibility ?? Visibility.PUBLIC;
+    const contentText = input.contentText ?? input.caption;
+    const votingEndsAt = this.parseFutureDate(input.votingEndsAt, 'votingEndsAt');
     const doc = await this.postModel.create({
       type: PostType.USER,
-      contentText: input.contentText,
-      imageUrls: input.imageUrls ?? [],
+      contentText,
+      imageUrls: input.imageUrls,
       options: input.options.map((o) => ({
         label: o.label,
         imageUrl: o.imageUrl,
@@ -94,6 +96,7 @@ export class PostsService {
       voteCount: 0,
       commentsDisabled: false,
       likesDisabled: false,
+      votingEndsAt,
     });
     await this.publishNewPost(doc._id.toHexString());
     return doc;
@@ -129,10 +132,12 @@ export class PostsService {
       await org.save();
     }
 
+    const contentText = input.contentText ?? input.caption;
+    const votingEndsAt = this.parseFutureDate(input.votingEndsAt, 'votingEndsAt');
     const doc = await this.postModel.create({
       type: PostType.ORG,
-      contentText: input.contentText,
-      imageUrls: input.imageUrls ?? [],
+      contentText,
+      imageUrls: input.imageUrls,
       options: input.options.map((o) => ({
         label: o.label,
         imageUrl: o.imageUrl,
@@ -146,6 +151,7 @@ export class PostsService {
       voteCount: 0,
       commentsDisabled: false,
       likesDisabled: false,
+      votingEndsAt,
     });
     await this.publishNewPost(doc._id.toHexString());
     return doc;
@@ -162,10 +168,12 @@ export class PostsService {
     const category = await this.categoriesService.findById(input.categoryId);
     if (!category) throw new BadRequestException('Invalid category');
 
+    const contentText = input.contentText ?? input.caption;
+    const votingEndsAt = this.parseFutureDate(input.votingEndsAt, 'votingEndsAt');
     const doc = await this.postModel.create({
       type: PostType.SYSTEM,
-      contentText: input.contentText,
-      imageUrls: input.imageUrls ?? [],
+      contentText,
+      imageUrls: input.imageUrls,
       options: input.options.map((o) => ({
         label: o.label,
         imageUrl: o.imageUrl,
@@ -177,6 +185,7 @@ export class PostsService {
       voteCount: 0,
       commentsDisabled: false,
       likesDisabled: true,
+      votingEndsAt,
     });
     await this.publishNewPost(doc._id.toHexString());
     return doc;
@@ -184,6 +193,45 @@ export class PostsService {
 
   private async publishNewPost(postId: string) {
     await pubsub.publish(NEW_POST, { newPost: { postId } });
+  }
+
+  private parseFutureDate(
+    value: string | undefined,
+    fieldName: string,
+  ): Date | undefined {
+    if (!value) return undefined;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new BadRequestException(`${fieldName} must be a valid ISO date-time`);
+    }
+    if (parsed.getTime() <= Date.now()) {
+      throw new BadRequestException(`${fieldName} must be a future date-time`);
+    }
+    return parsed;
+  }
+
+  async extendVotingWindow(
+    actorUserId: string,
+    postId: string,
+    newVotingEndsAt: string,
+  ): Promise<PostDocument> {
+    const post = await this.findById(postId);
+    if (!post) throw new NotFoundException('Post not found');
+    if (post.createdBy.toHexString() !== actorUserId) {
+      throw new ForbiddenException('Only the post author can extend voting time');
+    }
+    const nextEndAt = this.parseFutureDate(newVotingEndsAt, 'newVotingEndsAt');
+    if (!nextEndAt) {
+      throw new BadRequestException('newVotingEndsAt is required');
+    }
+    if (post.votingEndsAt && nextEndAt <= post.votingEndsAt) {
+      throw new BadRequestException(
+        'newVotingEndsAt must be later than current votingEndsAt',
+      );
+    }
+    post.votingEndsAt = nextEndAt;
+    await post.save();
+    return post;
   }
 
   async toGql(
@@ -214,6 +262,9 @@ export class PostsService {
         post._id.toHexString(),
       );
     }
+    const now = Date.now();
+    const isVotingOpen =
+      !post.votingEndsAt || post.votingEndsAt.getTime() > now;
     return {
       id: post._id.toHexString(),
       type: post.type,
@@ -240,6 +291,8 @@ export class PostsService {
       mySelectedOptionIndex: mySelected,
       viewerVote:
         mySelected === undefined ? null : mySelected === 0 ? 'up' : 'down',
+      votingEndsAt: post.votingEndsAt,
+      isVotingOpen,
       createdAt: post.createdAt ?? new Date(),
     };
   }

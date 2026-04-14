@@ -49,6 +49,9 @@ export class VotesService {
   async vote(userId: string, postId: string, selectedOptionIndex: number) {
     const post = await this.postModel.findById(postId);
     if (!post) throw new NotFoundException('Post not found');
+    if (post.votingEndsAt && post.votingEndsAt.getTime() <= Date.now()) {
+      throw new BadRequestException('Voting period has ended for this post');
+    }
     if (selectedOptionIndex < 0 || selectedOptionIndex >= post.options.length) {
       throw new BadRequestException('Invalid option');
     }

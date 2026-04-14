@@ -40,13 +40,15 @@ input CommentPostInput {
 }
 
 input CreatePostInput {
+  caption: String
   categoryId: String!
   contentText: String
-  imageUrls: [String!]
+  imageUrls: [String!]!
   options: [PostOptionInput!]!
   orgReach: OrgPostReach
   type: PostType
   visibility: Visibility
+  votingEndsAt: DateTime
 }
 
 """
@@ -77,6 +79,7 @@ type Mutation {
   createPost(input: CreatePostInput!): PostGql!
   createStripeCheckoutSession(organizationId: ID, plan: SubscriptionPlan!): CheckoutSessionGql!
   createSystemPost(input: CreatePostInput!): PostGql!
+  extendPostVoting(newVotingEndsAt: DateTime!, postId: ID!): PostGql!
   followUser(userId: ID!): Boolean!
   googleLogin(idToken: String!): AuthPayloadGql!
   login(email: String!, password: String!): AuthPayloadGql!
@@ -126,6 +129,7 @@ type PostGql {
   id: ID!
   imageUrl: String
   imageUrls: [String!]!
+  isVotingOpen: Boolean!
   likesDisabled: Boolean!
   mySelectedOptionIndex: Int
   optionStats: [VoteOptionStatGql!]!
@@ -136,6 +140,7 @@ type PostGql {
   upvoteCount: Int!
   viewerVote: String
   visibility: Visibility!
+  votingEndsAt: DateTime
 }
 
 type PostOptionGql {
@@ -158,6 +163,7 @@ type Query {
   categories: [CategoryGql!]!
   commentsByPost(postId: ID!): [CommentGql!]!
   feedPosts(scope: FeedScope, skip: Int = 0, sort: FeedSort, take: Int = 20): [PostGql!]!
+  getAllCategories: [CategoryGql!]!
   getFeed(scope: FeedScope!, skip: Int = 0, sort: FeedSort!, take: Int = 20): FeedConnectionGql!
   getPostById(id: ID!): PostGql!
   getPostsByUser(userId: ID!): [PostGql!]!

@@ -58,6 +58,9 @@ export class Post {
 
   @Prop({ default: 0 })
   voteCount: number;
+
+  @Prop({ type: Date })
+  votingEndsAt?: Date;
 }
 
 export const PostSchema = SchemaFactory.createForClass(Post);

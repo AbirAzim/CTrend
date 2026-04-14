@@ -103,6 +103,12 @@ export class PostGql {
   @Field(() => String, { nullable: true })
   imageUrl?: string;
 
+  @Field(() => Date, { nullable: true })
+  votingEndsAt?: Date;
+
+  @Field()
+  isVotingOpen: boolean;
+
   @Field()
   createdAt: Date;
 }

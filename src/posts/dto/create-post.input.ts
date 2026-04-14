@@ -2,6 +2,7 @@ import { Field, InputType, Int } from '@nestjs/graphql';
 import {
   ArrayMinSize,
   IsArray,
+  IsDateString,
   IsEnum,
   IsOptional,
   IsString,
@@ -38,11 +39,18 @@ export class CreatePostInput {
   @MaxLength(10000)
   contentText?: string;
 
-  @Field(() => [String], { nullable: true })
+  // Frontend-friendly alias of contentText
+  @Field({ nullable: true })
   @IsOptional()
+  @IsString()
+  @MaxLength(10000)
+  caption?: string;
+
+  @Field(() => [String])
   @IsArray()
+  @ArrayMinSize(2)
   @IsString({ each: true })
-  imageUrls?: string[];
+  imageUrls: string[];
 
   @Field(() => [PostOptionInput])
   @IsArray()
@@ -64,4 +72,9 @@ export class CreatePostInput {
   @IsOptional()
   @IsEnum(OrgPostReach)
   orgReach?: OrgPostReach;
+
+  @Field(() => Date, { nullable: true })
+  @IsOptional()
+  @IsDateString()
+  votingEndsAt?: string;
 }

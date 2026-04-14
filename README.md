@@ -62,6 +62,20 @@ $ npm run test:cov
 
 When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
 
+### CI/CD + Render (configured)
+
+- CI pipeline: `.github/workflows/ci.yml`
+  - Runs on PR and push to `main`
+  - Executes `npm ci`, `npm run build`, and tests
+- Deploy pipeline: `.github/workflows/deploy-render.yml`
+  - Triggers Render deployment on push to `main` (or manual trigger)
+
+Set these GitHub repository secrets before deployment:
+
+- `RENDER_DEPLOY_HOOK_URL`
+
+Render blueprint file is `render.yaml`.
+
 If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
 
 ```bash

@@ -7,7 +7,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Vote, VoteDocument } from './vote.schema';
 import { Post, PostDocument } from '../posts/post.schema';
-import { pubsub, VOTE_UPDATED } from '../pubsub';
+import { POST_VOTE_UPDATED, pubsub, VOTE_UPDATED } from '../pubsub';
 
 @Injectable()
 export class VotesService {
@@ -75,6 +75,9 @@ export class VotesService {
     const stats = await this.getStats(postId, post.options.length);
     await pubsub.publish(VOTE_UPDATED, {
       voteUpdated: { postId, ...stats },
+    });
+    await pubsub.publish(POST_VOTE_UPDATED, {
+      postVoteUpdated: { postId },
     });
     return {
       postId,

@@ -65,6 +65,9 @@ export class PostGql {
   @Field(() => String, { nullable: true })
   authorDisplayName?: string | null;
 
+  @Field()
+  authorEmail: string;
+
   @Field(() => OrgPostReach, { nullable: true })
   orgReach?: OrgPostReach;
 

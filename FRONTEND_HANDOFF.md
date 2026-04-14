@@ -112,6 +112,9 @@ Vote summary on `Post`:
 
 - `voteUpdates(postId: ID!): VoteUpdate!` — live percentages/counts
 - `newPosts: NewPost!` — `{ postId }` when a new post is created
+- `postVoteUpdated(postId: ID!): Post!` — live post snapshot (counts, viewer vote state, option stats, voting window state)
+
+For websocket auth, pass `Authorization: Bearer <accessToken>` in `connectionParams` so viewer-specific fields (like `mySelectedOptionIndex`) are resolved for that user.
 
 ### Comments
 
@@ -121,6 +124,14 @@ Vote summary on `Post`:
 ### Follows
 
 - `followUser(userId: ID!): Boolean!` (JWT)
+- `addFriend(userId: ID!): String!` (JWT) — sends friend request; returns `requested` or `accepted`
+- `incomingFriendRequests: [User!]!` (JWT) — users who requested to be your friend
+- `friendRequests: FriendRequests!` (JWT) — both lists in one call:
+  - `requestedByMe` (outgoing pending)
+  - `requestedMe` (incoming pending)
+- `respondFriendRequest(requesterId: ID!, accept: Boolean!): Boolean!` (JWT)
+- `myFriends: [User!]!` (JWT) — accepted friends list
+- `friendSuggestions(limit: Int): [User!]!` (JWT) — excludes accepted/pending relations
 
 ### Organizations
 

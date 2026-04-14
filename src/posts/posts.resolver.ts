@@ -1,4 +1,4 @@
-import { Args, ID, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { Args, ID, Mutation, Query, Resolver, Subscription } from '@nestjs/graphql';
 import { NotFoundException, UseGuards } from '@nestjs/common';
 import { PostsService } from './posts.service';
 import { PostGql } from './graphql/post.types';
@@ -9,6 +9,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../common/enums';
+import { POST_VOTE_UPDATED, pubsub } from '../pubsub';
 
 type ReqUser = { id: string };
 
@@ -73,5 +74,25 @@ export class PostsResolver {
     return Promise.all(
       rows.map((p) => this.postsService.toGql(p, user?.id)),
     );
+  }
+
+  @Subscription(() => PostGql, {
+    filter: (
+      payload: { postVoteUpdated: { postId: string } },
+      variables: { postId: string },
+    ) => payload.postVoteUpdated.postId === variables.postId,
+    resolve: async function (
+      this: PostsResolver,
+      payload: { postVoteUpdated: { postId: string } },
+      _variables: { postId: string },
+      context: { req?: { user?: ReqUser } },
+    ) {
+      const post = await this.postsService.findById(payload.postVoteUpdated.postId);
+      if (!post) throw new NotFoundException('Post not found');
+      return this.postsService.toGql(post, context.req?.user?.id);
+    },
+  })
+  postVoteUpdated(@Args('postId', { type: () => ID }) _postId: string) {
+    return pubsub.asyncIterableIterator(POST_VOTE_UPDATED);
   }
 }

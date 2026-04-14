@@ -22,7 +22,7 @@ import { VotesService } from '../votes/votes.service';
 import { CategoryDocument } from '../categories/category.schema';
 import { UserDocument } from '../users/user.schema';
 import { PostGql } from './graphql/post.types';
-import { pubsub, NEW_POST } from '../pubsub';
+import { NEW_POST, POST_VOTE_UPDATED, pubsub } from '../pubsub';
 
 const PREMIUM_GLOBAL_MONTHLY = 20;
 
@@ -196,11 +196,11 @@ export class PostsService {
   }
 
   private parseFutureDate(
-    value: string | undefined,
+    value: Date | string | undefined,
     fieldName: string,
   ): Date | undefined {
     if (!value) return undefined;
-    const parsed = new Date(value);
+    const parsed = value instanceof Date ? value : new Date(value);
     if (Number.isNaN(parsed.getTime())) {
       throw new BadRequestException(`${fieldName} must be a valid ISO date-time`);
     }
@@ -231,6 +231,9 @@ export class PostsService {
     }
     post.votingEndsAt = nextEndAt;
     await post.save();
+    await pubsub.publish(POST_VOTE_UPDATED, {
+      postVoteUpdated: { postId: post._id.toHexString() },
+    });
     return post;
   }
 
@@ -281,6 +284,7 @@ export class PostsService {
       author: this.usersService.toGql(author as UserDocument),
       authorUsername: author.username,
       authorDisplayName: author.displayName ?? null,
+      authorEmail: author.email,
       orgReach: post.orgReach,
       commentsDisabled: post.commentsDisabled,
       likesDisabled: post.likesDisabled,

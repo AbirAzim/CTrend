@@ -72,7 +72,13 @@ enum FeedSort {
   TRENDING
 }
 
+type FriendRequestsGql {
+  requestedByMe: [UserGql!]!
+  requestedMe: [UserGql!]!
+}
+
 type Mutation {
+  addFriend(userId: ID!): String!
   cancelSubscription(organizationId: ID): Boolean!
   commentPost(input: CommentPostInput!, postId: ID!): CommentGql!
   createOrganization(name: String!): OrganizationGql!
@@ -84,6 +90,7 @@ type Mutation {
   googleLogin(idToken: String!): AuthPayloadGql!
   login(email: String!, password: String!): AuthPayloadGql!
   register(input: RegisterInput!): AuthPayloadGql!
+  respondFriendRequest(accept: Boolean!, requesterId: ID!): Boolean!
   signup(displayName: String, email: String!, password: String!): AuthPayloadGql!
   updateProfile(input: UpdateProfileInput!): UserGql!
   verifyBkashPayment(payload: String!): BkashVerificationGql!
@@ -119,6 +126,7 @@ type OrganizationGql {
 type PostGql {
   author: UserGql!
   authorDisplayName: String
+  authorEmail: String!
   authorUsername: String!
   caption: String
   category: CategoryGql!
@@ -163,12 +171,16 @@ type Query {
   categories: [CategoryGql!]!
   commentsByPost(postId: ID!): [CommentGql!]!
   feedPosts(scope: FeedScope, skip: Int = 0, sort: FeedSort, take: Int = 20): [PostGql!]!
+  friendRequests: FriendRequestsGql!
+  friendSuggestions(limit: Int): [UserGql!]!
   getAllCategories: [CategoryGql!]!
   getFeed(scope: FeedScope!, skip: Int = 0, sort: FeedSort!, take: Int = 20): FeedConnectionGql!
   getPostById(id: ID!): PostGql!
   getPostsByUser(userId: ID!): [PostGql!]!
   getUserProfile(userId: ID!): UserGql!
+  incomingFriendRequests: [UserGql!]!
   me: UserGql!
+  myFriends: [UserGql!]!
   myOrganization: OrganizationGql
   organizationDashboard(organizationId: String!): OrganizationDashboardGql!
 }
@@ -182,6 +194,7 @@ input RegisterInput {
 
 type Subscription {
   newPosts: NewPostGql!
+  postVoteUpdated(postId: ID!): PostGql!
   voteUpdates(postId: ID!): VoteUpdateGql!
 }
 

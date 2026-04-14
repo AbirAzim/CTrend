@@ -7,6 +7,8 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { join } from 'path';
 import { GqlThrottlerGuard } from './common/guards/gql-throttler.guard';
+import { JwtService } from '@nestjs/jwt';
+import { UsersService } from './users/users.service';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { CategoriesModule } from './categories/categories.module';
@@ -37,15 +39,63 @@ import { SeedModule } from './seed/seed.module';
     ]),
     GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService) => ({
+      imports: [ConfigModule, UsersModule, AuthModule],
+      inject: [ConfigService, JwtService, UsersService],
+      useFactory: (
+        config: ConfigService,
+        jwtService: JwtService,
+        usersService: UsersService,
+      ) => ({
         autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
         sortSchema: true,
-        context: ({ req, res }: { req: unknown; res: unknown }) => ({
+        context: async ({
           req,
           res,
-        }),
+          connectionParams,
+        }: {
+          req?: {
+            headers?: Record<string, string | string[] | undefined>;
+            user?: unknown;
+          };
+          res?: unknown;
+          connectionParams?: Record<string, unknown>;
+        }) => {
+          const ctxReq = req ?? { headers: {} };
+          const tokenFromHeader =
+            typeof ctxReq.headers?.authorization === 'string'
+              ? ctxReq.headers.authorization
+              : typeof ctxReq.headers?.Authorization === 'string'
+                ? ctxReq.headers.Authorization
+                : undefined;
+          const tokenFromWsParams =
+            typeof connectionParams?.Authorization === 'string'
+              ? connectionParams.Authorization
+              : typeof connectionParams?.authorization === 'string'
+                ? connectionParams.authorization
+                : undefined;
+          const bearer = tokenFromHeader ?? tokenFromWsParams;
+          const token = bearer?.startsWith('Bearer ')
+            ? bearer.slice('Bearer '.length)
+            : undefined;
+          if (token) {
+            try {
+              const payload = await jwtService.verifyAsync<{ sub: string }>(token);
+              const user = await usersService.findById(payload.sub);
+              if (user) {
+                ctxReq.user = {
+                  id: user._id.toHexString(),
+                  role: user.role,
+                  email: user.email,
+                  username: user.username,
+                  interests: user.interests ?? [],
+                };
+              }
+            } catch {
+              // Ignore invalid tokens in context; guards still enforce auth where required.
+            }
+          }
+          return { req: ctxReq, res };
+        },
         subscriptions: {
           'graphql-ws': true,
         },

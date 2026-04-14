@@ -2,7 +2,7 @@ import { Field, InputType, Int } from '@nestjs/graphql';
 import {
   ArrayMinSize,
   IsArray,
-  IsDateString,
+  IsDate,
   IsEnum,
   IsOptional,
   IsString,
@@ -75,6 +75,7 @@ export class CreatePostInput {
 
   @Field(() => Date, { nullable: true })
   @IsOptional()
-  @IsDateString()
-  votingEndsAt?: string;
+  @Type(() => Date)
+  @IsDate()
+  votingEndsAt?: Date;
 }

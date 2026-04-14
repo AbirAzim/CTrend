@@ -11,9 +11,6 @@ type ReqUser = { id: string };
 
 @InputType()
 export class CommentPostInput {
-  @Field(() => ID)
-  postId: string;
-
   @Field()
   @IsString()
   @MaxLength(5000)
@@ -33,11 +30,12 @@ export class CommentsResolver {
   @UseGuards(GqlAuthGuard)
   async commentPost(
     @CurrentUser() user: ReqUser,
+    @Args('postId', { type: () => ID }) postId: string,
     @Args('input') input: CommentPostInput,
   ) {
     const c = await this.commentsService.create(
       user.id,
-      input.postId,
+      postId,
       input.content,
       input.parentId,
     );

@@ -37,7 +37,6 @@ type CommentGql {
 input CommentPostInput {
   content: String!
   parentId: ID
-  postId: ID!
 }
 
 input CreatePostInput {
@@ -73,7 +72,7 @@ enum FeedSort {
 
 type Mutation {
   cancelSubscription(organizationId: ID): Boolean!
-  commentPost(input: CommentPostInput!): CommentGql!
+  commentPost(input: CommentPostInput!, postId: ID!): CommentGql!
   createOrganization(name: String!): OrganizationGql!
   createPost(input: CreatePostInput!): PostGql!
   createStripeCheckoutSession(organizationId: ID, plan: SubscriptionPlan!): CheckoutSessionGql!

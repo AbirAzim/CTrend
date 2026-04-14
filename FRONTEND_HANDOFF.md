@@ -108,7 +108,7 @@ Vote summary on `Post`:
 
 ### Comments
 
-- `commentPost(input: CommentPostInput!): Comment!` (JWT)
+- `commentPost(postId: ID!, input: CommentPostInput!): Comment!` (JWT) — `CommentPostInput` is `{ content, parentId? }` only; do not send `postId` inside `input`.
 - `commentsByPost(postId: ID!): [Comment!]!`
 
 ### Follows

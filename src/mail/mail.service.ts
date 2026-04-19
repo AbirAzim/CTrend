@@ -14,8 +14,6 @@ export class MailService {
   private from: string;
   /** data:image/png;base64,... for inline email images (no attachment) */
   private readonly logoDataUrl: string | null;
-  /** Base URL for links in email (Copy code page lives on API) */
-  private readonly publicAppUrl: string;
 
   constructor(private config: ConfigService) {
     const host = this.config.get<string>('SMTP_HOST') || process.env.SMTP_HOST;
@@ -25,12 +23,6 @@ export class MailService {
       this.config.get<string>('SMTP_FROM') ||
       process.env.SMTP_FROM ||
       'CTrend <no-reply@ctrend.app>';
-
-    this.publicAppUrl = (
-      this.config.get<string>('PUBLIC_APP_URL') ||
-      process.env.PUBLIC_APP_URL ||
-      ''
-    ).replace(/\/+$/, '');
 
     this.logoDataUrl = this.loadLogoDataUrl();
 
@@ -81,21 +73,6 @@ export class MailService {
   }
 
   async sendVerificationCode(to: string, code: string): Promise<void> {
-    const copyHref = this.publicAppUrl
-      ? `${this.publicAppUrl}/email/copy-code?code=${encodeURIComponent(code)}`
-      : '';
-
-    const copyCell = copyHref
-      ? `<td style="vertical-align:middle;padding-left:12px;">
-          <a href="${copyHref}" target="_blank" rel="noopener noreferrer"
-            style="display:inline-block;background:#1A1A2E;color:#fff;text-decoration:none;
-              border-radius:10px;padding:12px 20px;font-size:14px;font-weight:600;
-              font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-            Copy
-          </a>
-        </td>`
-      : '';
-
     const html = this.baseTemplate(`
       <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1A1A2E;text-align:center;">
         Verify your email
@@ -106,26 +83,26 @@ export class MailService {
         It expires in <strong>15 minutes</strong>.
       </p>
 
-      <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 20px;width:100%;max-width:360px;">
+      <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 16px;width:100%;max-width:400px;">
         <tr>
-          <td style="vertical-align:middle;text-align:center;">
+          <td style="vertical-align:middle;text-align:right;padding-right:10px;">
             <span style="display:inline-block;background:#EEEEF6;border:1.5px solid #D0D0E0;
               border-radius:10px;padding:14px 22px;font-size:28px;font-weight:800;
               letter-spacing:0.25em;color:#1A1A2E;font-family:ui-monospace,monospace;
               user-select:all;-webkit-user-select:all;">${code}</span>
           </td>
-          ${copyCell}
+          <td style="vertical-align:middle;text-align:left;">
+            <span style="display:inline-block;background:#1A1A2E;color:#fff;border-radius:10px;
+              padding:12px 20px;font-size:14px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+              Copy
+            </span>
+          </td>
         </tr>
       </table>
-      ${
-        copyHref
-          ? `<p style="margin:0;font-size:12px;color:#999;text-align:center;">
-              Tap <strong>Copy</strong> to open a page that copies the code (works best in mobile mail apps).
-            </p>`
-          : `<p style="margin:0;font-size:13px;color:#999;text-align:center;">
-              Set <code style="background:#f4f4f8;padding:2px 6px;border-radius:4px;">PUBLIC_APP_URL</code> on the server to enable the Copy button.
-            </p>`
-      }
+      <p style="margin:0;font-size:12px;color:#999;text-align:center;line-height:1.5;">
+        Tap the code to select it, then use your keyboard or phone menu to copy.<br>
+        (Email apps cannot run a one-tap copy without opening a web page.)
+      </p>
     `);
 
     await this.send(to, 'Your CTrend verification code', html, {

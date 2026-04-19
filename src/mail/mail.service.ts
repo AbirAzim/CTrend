@@ -156,19 +156,26 @@ export class MailService {
       this.logger.log(`[DEV MAIL] To: ${to} | Subject: ${subject}\n${opts.text ?? '(html only)'}`);
       return;
     }
-    await this.transporter.sendMail({
-      from: this.from,
-      to,
-      subject,
-      html,
-      text: opts.text,
-      attachments: [
-        {
-          filename: 'logo.png',
-          path: LOGO_PATH,
-          cid: LOGO_CID,
-        },
-      ],
-    });
+    try {
+      await this.transporter.sendMail({
+        from: this.from,
+        to,
+        subject,
+        html,
+        text: opts.text,
+        attachments: [
+          {
+            filename: 'logo.png',
+            path: LOGO_PATH,
+            cid: LOGO_CID,
+          },
+        ],
+      });
+      this.logger.log(`Email sent to ${to}: ${subject}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Failed to send email to ${to}: ${message}`);
+      throw err;
+    }
   }
 }

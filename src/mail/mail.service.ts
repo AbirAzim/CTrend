@@ -14,20 +14,36 @@ export class MailService {
   private from: string;
 
   constructor(private config: ConfigService) {
-    const host = this.config.get<string>('SMTP_HOST');
-    const user = this.config.get<string>('SMTP_USER');
-    const pass = this.config.get<string>('SMTP_PASS');
-    this.from = this.config.get<string>('SMTP_FROM', 'CTrend <no-reply@ctrend.app>');
+    const host = this.config.get<string>('SMTP_HOST') || process.env.SMTP_HOST;
+    const user = this.config.get<string>('SMTP_USER') || process.env.SMTP_USER;
+    const pass = this.config.get<string>('SMTP_PASS') || process.env.SMTP_PASS;
+    this.from =
+      this.config.get<string>('SMTP_FROM') ||
+      process.env.SMTP_FROM ||
+      'CTrend <no-reply@ctrend.app>';
+
+    this.logger.log(
+      `SMTP config — host:${host ?? 'MISSING'} user:${user ?? 'MISSING'} pass:${pass ? 'SET' : 'MISSING'}`,
+    );
 
     if (host && user && pass) {
       this.transporter = nodemailer.createTransport({
         host,
-        port: Number(this.config.get<string>('SMTP_PORT', '587')),
-        secure: this.config.get<string>('SMTP_SECURE') === 'true',
+        port: Number(
+          this.config.get<string>('SMTP_PORT') ||
+            process.env.SMTP_PORT ||
+            '587',
+        ),
+        secure:
+          (this.config.get<string>('SMTP_SECURE') ||
+            process.env.SMTP_SECURE) === 'true',
         auth: { user, pass },
       });
+      this.logger.log('SMTP transporter ready');
     } else {
-      this.logger.warn('SMTP not configured — emails will be logged to console only');
+      this.logger.warn(
+        'SMTP not configured — emails will be logged to console only',
+      );
     }
   }
 
@@ -153,7 +169,9 @@ export class MailService {
     opts: { text?: string } = {},
   ): Promise<void> {
     if (!this.transporter) {
-      this.logger.log(`[DEV MAIL] To: ${to} | Subject: ${subject}\n${opts.text ?? '(html only)'}`);
+      this.logger.log(
+        `[DEV MAIL] To: ${to} | Subject: ${subject}\n${opts.text ?? '(html only)'}`,
+      );
       return;
     }
     try {

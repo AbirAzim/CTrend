@@ -20,6 +20,7 @@ import { CommentsModule } from './comments/comments.module';
 import { FeedModule } from './feed/feed.module';
 import { BillingModule } from './billing/billing.module';
 import { SeedModule } from './seed/seed.module';
+import { MailModule } from './mail/mail.module';
 
 @Module({
   imports: [
@@ -102,6 +103,7 @@ import { SeedModule } from './seed/seed.module';
         playground: config.get('NODE_ENV') !== 'production',
       }),
     }),
+    MailModule,
     UsersModule,
     AuthModule,
     CategoriesModule,

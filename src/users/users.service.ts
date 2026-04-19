@@ -23,6 +23,10 @@ export class UsersService {
     };
   }
 
+  async findByPasswordResetToken(tokenHash: string): Promise<UserDocument | null> {
+    return this.userModel.findOne({ passwordResetToken: tokenHash }).exec();
+  }
+
   async create(data: {
     username: string;
     email: string;
@@ -32,12 +36,14 @@ export class UsersService {
     profileImageUrl?: string;
     interests?: string[];
     role?: UserRole;
+    emailVerified?: boolean;
   }): Promise<UserDocument> {
     const user = new this.userModel({
       ...data,
       email: normalizeEmail(data.email),
       interests: data.interests ?? [],
       role: data.role ?? UserRole.USER,
+      emailVerified: data.emailVerified ?? false,
     });
     return user.save();
   }

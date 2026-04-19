@@ -90,10 +90,14 @@ type Mutation {
   googleLogin(idToken: String!): AuthPayloadGql!
   login(email: String!, password: String!): AuthPayloadGql!
   register(input: RegisterInput!): AuthPayloadGql!
+  requestPasswordReset(email: String!): Boolean!
+  resendVerificationEmail(email: String!): Boolean!
+  resetPassword(newPassword: String!, token: String!): Boolean!
   respondFriendRequest(accept: Boolean!, requesterId: ID!): Boolean!
-  signup(displayName: String, email: String!, password: String!): AuthPayloadGql!
+  signup(displayName: String, email: String!, password: String!): Boolean!
   updateProfile(input: UpdateProfileInput!): UserGql!
   verifyBkashPayment(payload: String!): BkashVerificationGql!
+  verifyEmail(code: String!, email: String!): AuthPayloadGql!
   votePost(postId: ID!, selectedOptionIndex: Int!): VoteResultGql!
 }
 

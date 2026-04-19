@@ -33,6 +33,21 @@ export class User {
 
   @Prop()
   profileImageUrl?: string;
+
+  @Prop({ default: false })
+  emailVerified: boolean;
+
+  @Prop()
+  emailVerificationCode?: string;
+
+  @Prop()
+  emailVerificationExpiry?: Date;
+
+  @Prop()
+  passwordResetToken?: string;
+
+  @Prop()
+  passwordResetExpiry?: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { existsSync, readFileSync } from 'fs';
 import * as nodemailer from 'nodemailer';
 import { join } from 'path';
 
-const LOGO_CID = 'ctrend-logo';
 const LOGO_PATH = join(process.cwd(), 'logo.png');
 
 @Injectable()
@@ -12,6 +12,10 @@ export class MailService {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private transporter: any = null;
   private from: string;
+  /** data:image/png;base64,... for inline email images (no attachment) */
+  private readonly logoDataUrl: string | null;
+  /** Base URL for links in email (Copy code page lives on API) */
+  private readonly publicAppUrl: string;
 
   constructor(private config: ConfigService) {
     const host = this.config.get<string>('SMTP_HOST') || process.env.SMTP_HOST;
@@ -21,6 +25,14 @@ export class MailService {
       this.config.get<string>('SMTP_FROM') ||
       process.env.SMTP_FROM ||
       'CTrend <no-reply@ctrend.app>';
+
+    this.publicAppUrl = (
+      this.config.get<string>('PUBLIC_APP_URL') ||
+      process.env.PUBLIC_APP_URL ||
+      ''
+    ).replace(/\/+$/, '');
+
+    this.logoDataUrl = this.loadLogoDataUrl();
 
     this.logger.log(
       `SMTP config — host:${host ?? 'MISSING'} user:${user ?? 'MISSING'} pass:${pass ? 'SET' : 'MISSING'}`,
@@ -47,41 +59,73 @@ export class MailService {
     }
   }
 
+  private loadLogoDataUrl(): string | null {
+    try {
+      if (!existsSync(LOGO_PATH)) {
+        this.logger.warn(`logo.png not found at ${LOGO_PATH}`);
+        return null;
+      }
+      const buf = readFileSync(LOGO_PATH);
+      return `data:image/png;base64,${buf.toString('base64')}`;
+    } catch (e) {
+      this.logger.warn(
+        `Could not read logo.png: ${e instanceof Error ? e.message : String(e)}`,
+      );
+      return null;
+    }
+  }
+
+  private logoImgTag(width: number, marginBottom: string): string {
+    if (!this.logoDataUrl) return '';
+    return `<img src="${this.logoDataUrl}" alt="CTrend" width="${width}" height="${width}" style="border-radius:12px;display:block;margin:0 auto ${marginBottom};">`;
+  }
+
   async sendVerificationCode(to: string, code: string): Promise<void> {
-    const digits = code.split('');
-    const digitBoxes = digits
-      .map(
-        (d) =>
-          `<td style="width:48px;height:56px;text-align:center;vertical-align:middle;` +
-          `background:#F4F4F8;border-radius:10px;font-size:28px;font-weight:700;` +
-          `color:#1A1A2E;font-family:monospace;letter-spacing:0;">${d}</td>`,
-      )
-      .join('<td style="width:8px;"></td>');
+    const copyHref = this.publicAppUrl
+      ? `${this.publicAppUrl}/email/copy-code?code=${encodeURIComponent(code)}`
+      : '';
+
+    const copyCell = copyHref
+      ? `<td style="vertical-align:middle;padding-left:12px;">
+          <a href="${copyHref}" target="_blank" rel="noopener noreferrer"
+            style="display:inline-block;background:#1A1A2E;color:#fff;text-decoration:none;
+              border-radius:10px;padding:12px 20px;font-size:14px;font-weight:600;
+              font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+            Copy
+          </a>
+        </td>`
+      : '';
 
     const html = this.baseTemplate(`
-      <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1A1A2E;">
+      <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1A1A2E;text-align:center;">
         Verify your email
       </h2>
-      <p style="margin:0 0 28px;font-size:15px;color:#555;line-height:1.6;">
+      ${this.logoImgTag(48, '20px')}
+      <p style="margin:0 0 28px;font-size:15px;color:#555;line-height:1.6;text-align:center;">
         Enter this code in the CTrend app to complete your sign-up.<br>
         It expires in <strong>15 minutes</strong>.
       </p>
 
-      <!-- Code block -->
-      <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 28px;">
-        <tr>${digitBoxes}</tr>
+      <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 20px;width:100%;max-width:360px;">
+        <tr>
+          <td style="vertical-align:middle;text-align:center;">
+            <span style="display:inline-block;background:#EEEEF6;border:1.5px solid #D0D0E0;
+              border-radius:10px;padding:14px 22px;font-size:28px;font-weight:800;
+              letter-spacing:0.25em;color:#1A1A2E;font-family:ui-monospace,monospace;
+              user-select:all;-webkit-user-select:all;">${code}</span>
+          </td>
+          ${copyCell}
+        </tr>
       </table>
-
-      <!-- Copy-friendly plain text fallback shown prominently -->
-      <p style="margin:0 0 28px;text-align:center;">
-        <span style="display:inline-block;background:#EEEEF6;border:1.5px dashed #A0A0C0;
-          border-radius:8px;padding:10px 28px;font-size:32px;font-weight:800;
-          letter-spacing:10px;color:#1A1A2E;font-family:monospace;
-          user-select:all;-webkit-user-select:all;cursor:text;">${code}</span>
-      </p>
-      <p style="margin:0;font-size:13px;color:#999;text-align:center;">
-        Click the code above to select it, then copy.
-      </p>
+      ${
+        copyHref
+          ? `<p style="margin:0;font-size:12px;color:#999;text-align:center;">
+              Tap <strong>Copy</strong> to open a page that copies the code (works best in mobile mail apps).
+            </p>`
+          : `<p style="margin:0;font-size:13px;color:#999;text-align:center;">
+              Set <code style="background:#f4f4f8;padding:2px 6px;border-radius:4px;">PUBLIC_APP_URL</code> on the server to enable the Copy button.
+            </p>`
+      }
     `);
 
     await this.send(to, 'Your CTrend verification code', html, {
@@ -117,6 +161,7 @@ export class MailService {
   }
 
   private baseTemplate(content: string): string {
+    const headerLogo = this.logoImgTag(56, '12px');
     return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -131,9 +176,8 @@ export class MailService {
           <!-- Header -->
           <tr>
             <td style="background:#1A1A2E;padding:28px 36px;text-align:center;">
-              <img src="cid:${LOGO_CID}" alt="CTrend" width="56" height="56"
-                style="border-radius:12px;display:block;margin:0 auto 12px;">
-              <span style="color:#fff;font-size:20px;font-weight:700;letter-spacing:0.5px;">CTrend</span>
+              ${headerLogo}
+              <span style="color:#fff;font-size:20px;font-weight:700;letter-spacing:0.5px;display:block;${headerLogo ? 'margin-top:10px;' : ''}">CTrend</span>
             </td>
           </tr>
 
@@ -181,13 +225,6 @@ export class MailService {
         subject,
         html,
         text: opts.text,
-        attachments: [
-          {
-            filename: 'logo.png',
-            path: LOGO_PATH,
-            cid: LOGO_CID,
-          },
-        ],
       });
       this.logger.log(`Email sent to ${to}: ${subject}`);
     } catch (err: unknown) {

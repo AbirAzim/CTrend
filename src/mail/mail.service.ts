@@ -83,25 +83,27 @@ export class MailService {
         It expires in <strong>15 minutes</strong>.
       </p>
 
-      <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 16px;width:100%;max-width:400px;">
+      <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 16px;width:100%;max-width:440px;">
         <tr>
           <td style="vertical-align:middle;text-align:right;padding-right:10px;">
-            <span style="display:inline-block;background:#EEEEF6;border:1.5px solid #D0D0E0;
+            <span id="verification-code" style="display:inline-block;background:#EEEEF6;border:1.5px solid #D0D0E0;
               border-radius:10px;padding:14px 22px;font-size:28px;font-weight:800;
               letter-spacing:0.25em;color:#1A1A2E;font-family:ui-monospace,monospace;
               user-select:all;-webkit-user-select:all;">${code}</span>
           </td>
           <td style="vertical-align:middle;text-align:left;">
-            <span style="display:inline-block;background:#1A1A2E;color:#fff;border-radius:10px;
-              padding:12px 20px;font-size:14px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
+            <button
+              type="button"
+              onclick="navigator.clipboard&&navigator.clipboard.writeText('${code}');this.innerText='Copied';"
+              style="display:inline-block;background:#1A1A2E;color:#fff;border-radius:10px;
+              padding:12px 20px;font-size:14px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;border:0;cursor:pointer;">
               Copy
-            </span>
+            </button>
           </td>
         </tr>
       </table>
       <p style="margin:0;font-size:12px;color:#999;text-align:center;line-height:1.5;">
-        Tap the code to select it, then use your keyboard or phone menu to copy.<br>
-        (Email apps cannot run a one-tap copy without opening a web page.)
+        Tap <strong>Copy</strong>. If your email client blocks it, long-press the code to copy manually.
       </p>
     `);
 

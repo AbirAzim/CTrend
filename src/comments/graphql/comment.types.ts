@@ -19,5 +19,11 @@ export class CommentGql {
   parentId?: string;
 
   @Field()
+  likeCount: number;
+
+  @Field()
+  viewerHasLiked: boolean;
+
+  @Field()
   createdAt: Date;
 }

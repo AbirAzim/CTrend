@@ -6,6 +6,7 @@ import {
 } from '../../common/enums';
 import { CategoryGql } from '../../categories/graphql/category.types';
 import { UserGql } from '../../users/graphql/user.types';
+import { CommentGql } from '../../comments/graphql/comment.types';
 
 @ObjectType()
 export class PostOptionGql {
@@ -76,6 +77,24 @@ export class PostGql {
 
   @Field()
   likesDisabled: boolean;
+
+  @Field(() => Int)
+  commentCount: number;
+
+  @Field(() => Int)
+  likeCount: number;
+
+  @Field(() => Int)
+  hypeCount: number;
+
+  @Field(() => Int)
+  saveCount: number;
+
+  @Field()
+  viewerHasSaved: boolean;
+
+  @Field(() => [CommentGql])
+  recentComments: CommentGql[];
 
   @Field(() => Int)
   totalVotes: number;

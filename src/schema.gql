@@ -30,8 +30,10 @@ type CommentGql {
   content: String!
   createdAt: DateTime!
   id: ID!
+  likeCount: Float!
   parentId: ID
   postId: ID!
+  viewerHasLiked: Boolean!
 }
 
 input CommentPostInput {
@@ -94,11 +96,15 @@ type Mutation {
   resendVerificationEmail(email: String!): Boolean!
   resetPassword(newPassword: String!, token: String!): Boolean!
   respondFriendRequest(accept: Boolean!, requesterId: ID!): Boolean!
+  setCommentLike(commentId: ID!, liked: Boolean!): CommentGql!
+  setPostHype(active: Boolean!, postId: ID!): Boolean!
+  setPostKeep(keep: Boolean!, postId: ID!): Boolean!
+  setPostLike(active: Boolean!, postId: ID!): Boolean!
   signup(displayName: String, email: String!, password: String!): Boolean!
   updateProfile(input: UpdateProfileInput!): UserGql!
   verifyBkashPayment(payload: String!): BkashVerificationGql!
   verifyEmail(code: String!, email: String!): AuthPayloadGql!
-  votePost(postId: ID!, selectedOptionIndex: Int!): VoteResultGql!
+  votePost(anonymous: Boolean, postId: ID!, selectedOptionIndex: Int!): VoteResultGql!
 }
 
 type NewPostGql {
@@ -134,22 +140,28 @@ type PostGql {
   authorUsername: String!
   caption: String
   category: CategoryGql!
+  commentCount: Int!
   commentsDisabled: Boolean!
   contentText: String
   createdAt: DateTime!
   downvoteCount: Int!
+  hypeCount: Int!
   id: ID!
   imageUrl: String
   imageUrls: [String!]!
   isVotingOpen: Boolean!
+  likeCount: Int!
   likesDisabled: Boolean!
   mySelectedOptionIndex: Int
   optionStats: [VoteOptionStatGql!]!
   options: [PostOptionGql!]!
   orgReach: OrgPostReach
+  recentComments: [CommentGql!]!
+  saveCount: Int!
   totalVotes: Int!
   type: PostType!
   upvoteCount: Int!
+  viewerHasSaved: Boolean!
   viewerVote: String
   visibility: Visibility!
   votingEndsAt: DateTime
@@ -171,6 +183,15 @@ enum PostType {
   USER
 }
 
+type PostVoterGql {
+  anonymous: Boolean!
+  createdAt: DateTime!
+  selectedOptionIndex: Int!
+  updatedAt: DateTime!
+  user: UserGql
+  voteId: ID!
+}
+
 type Query {
   categories: [CategoryGql!]!
   commentsByPost(postId: ID!): [CommentGql!]!
@@ -186,7 +207,9 @@ type Query {
   me: UserGql!
   myFriends: [UserGql!]!
   myOrganization: OrganizationGql
+  mySavedPosts: [PostGql!]!
   organizationDashboard(organizationId: String!): OrganizationDashboardGql!
+  votersByPost(optionIndex: Int, postId: ID!): [PostVoterGql!]!
 }
 
 input RegisterInput {

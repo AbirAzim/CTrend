@@ -1,7 +1,10 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 
-export type VoteDocument = HydratedDocument<Vote>;
+export type VoteDocument = HydratedDocument<Vote> & {
+  createdAt: Date;
+  updatedAt: Date;
+};
 
 @Schema({ timestamps: true })
 export class Vote {
@@ -13,6 +16,9 @@ export class Vote {
 
   @Prop({ required: true, min: 0 })
   selectedOptionIndex: number;
+
+  @Prop({ default: false })
+  anonymous: boolean;
 }
 
 export const VoteSchema = SchemaFactory.createForClass(Vote);

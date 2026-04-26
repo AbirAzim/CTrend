@@ -27,6 +27,38 @@ export class PostsResolver {
     return this.postsService.toGql(post, user.id);
   }
 
+  @Mutation(() => Boolean)
+  @UseGuards(GqlAuthGuard)
+  async setPostKeep(
+    @CurrentUser() user: ReqUser,
+    @Args('postId', { type: () => ID }) postId: string,
+    @Args('keep') keep: boolean,
+  ) {
+    return this.postsService.setSaved(user.id, postId, keep);
+  }
+
+  @Mutation(() => Boolean)
+  @UseGuards(GqlAuthGuard)
+  async setPostLike(
+    @CurrentUser() user: ReqUser,
+    @Args('postId', { type: () => ID }) postId: string,
+    @Args('active') active: boolean,
+  ) {
+    await this.postsService.setReaction(user.id, postId, 'like', active);
+    return active;
+  }
+
+  @Mutation(() => Boolean)
+  @UseGuards(GqlAuthGuard)
+  async setPostHype(
+    @CurrentUser() user: ReqUser,
+    @Args('postId', { type: () => ID }) postId: string,
+    @Args('active') active: boolean,
+  ) {
+    await this.postsService.setReaction(user.id, postId, 'hype', active);
+    return active;
+  }
+
   @Mutation(() => PostGql)
   @UseGuards(GqlAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -74,6 +106,13 @@ export class PostsResolver {
     return Promise.all(
       rows.map((p) => this.postsService.toGql(p, user?.id)),
     );
+  }
+
+  @Query(() => [PostGql])
+  @UseGuards(GqlAuthGuard)
+  async mySavedPosts(@CurrentUser() user: ReqUser) {
+    const rows = await this.postsService.listSavedPosts(user.id);
+    return Promise.all(rows.map((p) => this.postsService.toGql(p, user.id)));
   }
 
   @Subscription(() => PostGql, {

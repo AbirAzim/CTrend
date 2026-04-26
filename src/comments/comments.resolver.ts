@@ -4,6 +4,7 @@ import { CommentsService } from './comments.service';
 import { CommentGql } from './graphql/comment.types';
 import { GqlAuthGuard } from '../common/guards/gql-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { OptionalJwtGqlGuard } from '../common/guards/optional-jwt-gql.guard';
 import { MaxLength, IsOptional, IsString } from 'class-validator';
 import { Field, InputType } from '@nestjs/graphql';
 
@@ -39,11 +40,25 @@ export class CommentsResolver {
       input.content,
       input.parentId,
     );
-    return this.commentsService.toGql(c);
+    return this.commentsService.toGql(c, user.id);
   }
 
   @Query(() => [CommentGql])
-  async commentsByPost(@Args('postId', { type: () => ID }) postId: string) {
-    return this.commentsService.listByPost(postId);
+  @UseGuards(OptionalJwtGqlGuard)
+  async commentsByPost(
+    @Args('postId', { type: () => ID }) postId: string,
+    @CurrentUser() user?: ReqUser,
+  ) {
+    return this.commentsService.listByPost(postId, user?.id);
+  }
+
+  @Mutation(() => CommentGql)
+  @UseGuards(GqlAuthGuard)
+  async setCommentLike(
+    @CurrentUser() user: ReqUser,
+    @Args('commentId', { type: () => ID }) commentId: string,
+    @Args('liked') liked: boolean,
+  ) {
+    return this.commentsService.setCommentLike(user.id, commentId, liked);
   }
 }

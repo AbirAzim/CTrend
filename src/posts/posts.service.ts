@@ -7,6 +7,12 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Post, PostDocument } from './post.schema';
+import {
+  PostReaction,
+  PostReactionDocument,
+  PostReactionKind,
+} from './post-reaction.schema';
+import { SavedPost, SavedPostDocument } from './saved-post.schema';
 import { CreatePostInput } from './dto/create-post.input';
 import {
   OrgPostReach,
@@ -23,6 +29,8 @@ import { CategoryDocument } from '../categories/category.schema';
 import { UserDocument } from '../users/user.schema';
 import { PostGql } from './graphql/post.types';
 import { NEW_POST, POST_VOTE_UPDATED, pubsub } from '../pubsub';
+import { Comment, CommentDocument } from '../comments/comment.schema';
+import { CommentsService } from '../comments/comments.service';
 
 const PREMIUM_GLOBAL_MONTHLY = 20;
 
@@ -35,10 +43,17 @@ function currentMonthKey(): string {
 export class PostsService {
   constructor(
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
+    @InjectModel(PostReaction.name)
+    private postReactionModel: Model<PostReactionDocument>,
+    @InjectModel(SavedPost.name)
+    private savedPostModel: Model<SavedPostDocument>,
+    @InjectModel(Comment.name)
+    private commentModel: Model<CommentDocument>,
     private categoriesService: CategoriesService,
     private organizationsService: OrganizationsService,
     private usersService: UsersService,
     private votesService: VotesService,
+    private commentsService: CommentsService,
   ) {}
 
   async findById(id: string): Promise<PostDocument | null> {
@@ -53,6 +68,67 @@ export class PostsService {
       .sort({ createdAt: -1 })
       .limit(limit)
       .exec();
+  }
+
+  async listSavedPosts(userId: string, limit = 100): Promise<PostDocument[]> {
+    if (!Types.ObjectId.isValid(userId)) return [];
+    const saves = await this.savedPostModel
+      .find({ userId: new Types.ObjectId(userId) })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .lean()
+      .exec();
+    const postIds = saves.map((s) => s.postId);
+    if (!postIds.length) return [];
+    const posts = await this.postModel.find({ _id: { $in: postIds } }).exec();
+    const byId = new Map(posts.map((p) => [p._id.toHexString(), p]));
+    const ordered: PostDocument[] = [];
+    for (const id of postIds) {
+      const row = byId.get(id.toHexString());
+      if (row) ordered.push(row as PostDocument);
+    }
+    return ordered;
+  }
+
+  async setSaved(userId: string, postId: string, keep: boolean): Promise<boolean> {
+    const post = await this.findById(postId);
+    if (!post) throw new NotFoundException('Post not found');
+    const uid = new Types.ObjectId(userId);
+    const pid = post._id;
+    if (keep) {
+      await this.savedPostModel.updateOne(
+        { userId: uid, postId: pid },
+        { $setOnInsert: { userId: uid, postId: pid } },
+        { upsert: true },
+      );
+      return true;
+    }
+    await this.savedPostModel.deleteOne({ userId: uid, postId: pid });
+    return false;
+  }
+
+  async setReaction(
+    userId: string,
+    postId: string,
+    kind: PostReactionKind,
+    active: boolean,
+  ): Promise<void> {
+    const post = await this.findById(postId);
+    if (!post) throw new NotFoundException('Post not found');
+    if (post.likesDisabled) {
+      throw new ForbiddenException('Reactions are disabled on this post');
+    }
+    const uid = new Types.ObjectId(userId);
+    const pid = post._id;
+    if (active) {
+      await this.postReactionModel.updateOne(
+        { userId: uid, postId: pid, kind },
+        { $setOnInsert: { userId: uid, postId: pid, kind } },
+        { upsert: true },
+      );
+      return;
+    }
+    await this.postReactionModel.deleteOne({ userId: uid, postId: pid, kind });
   }
 
   async create(authorId: string, input: CreatePostInput): Promise<PostDocument> {
@@ -241,9 +317,18 @@ export class PostsService {
     post: PostDocument,
     viewerId?: string,
   ): Promise<PostGql> {
-    const [category, author] = await Promise.all([
+    const [category, author, commentCount, likeCount, hypeCount, saveCount] =
+      await Promise.all([
       this.categoriesService.findById(post.categoryId.toString()),
       this.usersService.findById(post.createdBy.toString()),
+      this.commentModel.countDocuments({ postId: post._id }).exec(),
+      this.postReactionModel
+        .countDocuments({ postId: post._id, kind: 'like' })
+        .exec(),
+      this.postReactionModel
+        .countDocuments({ postId: post._id, kind: 'hype' })
+        .exec(),
+      this.savedPostModel.countDocuments({ postId: post._id }).exec(),
     ]);
     if (!category || !author) {
       throw new NotFoundException('Related data missing');
@@ -260,11 +345,19 @@ export class PostsService {
     }));
     let mySelected: number | undefined;
     if (viewerId) {
-      mySelected = await this.votesService.getMyVoteIndex(
-        viewerId,
-        post._id.toHexString(),
-      );
+      const [voteIndex] = await Promise.all([
+        this.votesService.getMyVoteIndex(viewerId, post._id.toHexString()),
+      ]);
+      mySelected = voteIndex;
     }
+    const [viewerHasSaved, recentComments] = await Promise.all([
+      viewerId
+        ? this.savedPostModel
+            .exists({ userId: new Types.ObjectId(viewerId), postId: post._id })
+            .exec()
+        : Promise.resolve(null),
+      this.commentsService.listMostRecentByPost(post._id.toHexString(), 2, viewerId),
+    ]);
     const now = Date.now();
     const isVotingOpen =
       !post.votingEndsAt || post.votingEndsAt.getTime() > now;
@@ -288,6 +381,12 @@ export class PostsService {
       orgReach: post.orgReach,
       commentsDisabled: post.commentsDisabled,
       likesDisabled: post.likesDisabled,
+      commentCount,
+      likeCount,
+      hypeCount,
+      saveCount,
+      viewerHasSaved: !!viewerHasSaved,
+      recentComments,
       totalVotes: stats.totalVotes,
       upvoteCount: stats.countsPerOption[0] ?? 0,
       downvoteCount: stats.countsPerOption[1] ?? 0,

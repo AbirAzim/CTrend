@@ -21,6 +21,7 @@ import { FeedModule } from './feed/feed.module';
 import { BillingModule } from './billing/billing.module';
 import { SeedModule } from './seed/seed.module';
 import { MailModule } from './mail/mail.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
   imports: [
@@ -115,6 +116,7 @@ import { MailModule } from './mail/mail.module';
     FeedModule,
     BillingModule,
     SeedModule,
+    UploadsModule,
   ],
   providers: [
     {

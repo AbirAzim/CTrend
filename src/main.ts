@@ -28,8 +28,8 @@ async function bootstrap() {
   const port = Number(process.env.PORT) || 4000;
   await app.listen(port);
   const base = `http://localhost:${port}`;
-  Logger.log(`Application: ${base}`, 'Bootstrap');
-  Logger.log(`GraphQL:       ${base}/graphql`, 'Bootstrap');
+  Logger.log(`Application:    ${base}`, 'Bootstrap');
+  Logger.log(`GraphQL:        ${base}/graphql`, 'Bootstrap');
   Logger.log(`Stripe webhook: ${base}/webhooks/stripe`, 'Bootstrap');
 }
 bootstrap();

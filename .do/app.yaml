@@ -10,7 +10,7 @@
 # Tune region/instance for cost; see App Platform pricing.
 # https://docs.digitalocean.com/products/app-platform/reference/app-spec/
 
-name: ctrend-api
+name: ctrend-app
 region: nyc
 
 services:
@@ -30,35 +30,35 @@ services:
       - key: NODE_ENV
         value: production
         scope: RUN_TIME
-        type: general
+        type: GENERAL
       - key: JWT_SECRET
         value: ${JWT_SECRET}
         scope: RUN_TIME
-        type: secret
+        type: SECRET
       - key: MONGODB_URI
         value: ${MONGODB_URI}
         scope: RUN_TIME
-        type: secret
+        type: SECRET
       # Uncomment and wire matching GitHub Actions `env:` if you use OAuth:
       # - key: GOOGLE_CLIENT_ID
       #   value: ${GOOGLE_CLIENT_ID}
       #   scope: RUN_TIME
-      #   type: secret
+      #   type: SECRET
       # Stripe (optional — match secrets in workflow when enabled):
       # - key: STRIPE_SECRET_KEY
       #   value: ${STRIPE_SECRET_KEY}
       #   scope: RUN_TIME
-      #   type: secret
+      #   type: SECRET
       # - key: STRIPE_WEBHOOK_SECRET
       #   value: ${STRIPE_WEBHOOK_SECRET}
       #   scope: RUN_TIME
-      #   type: secret
+      #   type: SECRET
       # Comma-separated origins for your Vercel (or other) frontends:
       # - key: CORS_ORIGIN
       #   value: ${CORS_ORIGIN}
       #   scope: RUN_TIME
-      #   type: secret
+      #   type: SECRET
       # - key: FRONTEND_URL
       #   value: ${FRONTEND_URL}
       #   scope: RUN_TIME
-      #   type: secret
+      #   type: SECRET

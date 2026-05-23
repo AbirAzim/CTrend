@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
@@ -22,23 +22,29 @@ const CONTENT_TYPE_EXT: Record<string, string> = {
 
 @Injectable()
 export class UploadsService {
-  private readonly s3: S3Client;
-  private readonly bucket: string;
-  private readonly publicUrl: string;
+  private _s3: S3Client | null = null;
+  private _bucket: string | null = null;
+  private _publicUrl: string | null = null;
 
-  constructor(private config: ConfigService) {
-    const accountId = config.getOrThrow<string>('CLOUDFLARE_ACCOUNT_ID');
-    this.bucket = config.getOrThrow<string>('R2_BUCKET_NAME');
-    this.publicUrl = config.getOrThrow<string>('R2_PUBLIC_URL');
+  constructor(private config: ConfigService) {}
 
-    this.s3 = new S3Client({
-      region: 'auto',
-      endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: config.getOrThrow<string>('R2_ACCESS_KEY_ID'),
-        secretAccessKey: config.getOrThrow<string>('R2_SECRET_ACCESS_KEY'),
-      },
-    });
+  private get s3(): S3Client {
+    if (!this._s3) {
+      const accountId = this.config.get<string>('CLOUDFLARE_ACCOUNT_ID');
+      const accessKeyId = this.config.get<string>('R2_ACCESS_KEY_ID');
+      const secretAccessKey = this.config.get<string>('R2_SECRET_ACCESS_KEY');
+      if (!accountId || !accessKeyId || !secretAccessKey) {
+        throw new InternalServerErrorException('R2 storage is not configured');
+      }
+      this._bucket = this.config.get<string>('R2_BUCKET_NAME') ?? '';
+      this._publicUrl = this.config.get<string>('R2_PUBLIC_URL') ?? '';
+      this._s3 = new S3Client({
+        region: 'auto',
+        endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
+        credentials: { accessKeyId, secretAccessKey },
+      });
+    }
+    return this._s3;
   }
 
   async getImageUploadUrl(
@@ -51,20 +57,21 @@ export class UploadsService {
       );
     }
 
+    const s3 = this.s3;
     const ext = CONTENT_TYPE_EXT[contentType];
     const key = `posts/${userId}/${uuidv4()}.${ext}`;
 
     const command = new PutObjectCommand({
-      Bucket: this.bucket,
+      Bucket: this._bucket!,
       Key: key,
       ContentType: contentType,
     });
 
-    const uploadUrl = await getSignedUrl(this.s3, command, { expiresIn: 300 });
+    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 300 });
 
     return {
       uploadUrl,
-      publicUrl: `${this.publicUrl}/${key}`,
+      publicUrl: `${this._publicUrl}/${key}`,
       key,
     };
   }

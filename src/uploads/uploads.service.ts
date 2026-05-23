@@ -43,6 +43,7 @@ export class UploadsService {
         endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
         credentials: { accessKeyId, secretAccessKey },
         forcePathStyle: true,
+        requestChecksumCalculation: 'WHEN_REQUIRED',
       });
     }
     return this._s3;

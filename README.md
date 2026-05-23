@@ -183,7 +183,8 @@ Do **not** hand-edit `src/schema.gql` for schema changes — it is regenerated f
 ## Deployment & CI
 
 - **CI:** `.github/workflows/ci.yml` — install, build, test on PR/push to `main`
-- **Deploy:** `.github/workflows/deploy-digitalocean.yml` — DigitalOcean App Platform (`digitalocean/app_action/deploy@v2`); app spec `.do/app.yaml`; repository secrets **`DIGITALOCEAN_ACCESS_TOKEN`**, **`JWT_SECRET`**, **`MONGODB_URI`** (optional env vars are commented in the spec — uncomment and add matching keys to the deploy step `env`)
+- **Deploy:** `.github/workflows/deploy-digitalocean.yml` — after build + tests runs **`doctl apps create-deployment`** only (does **not** re-apply `.do/app.yaml`), so secrets stay whatever you set in the **DigitalOcean Dashboard**. GitHub secrets: **`DIGITALOCEAN_ACCESS_TOKEN`**, **`DIGITALOCEAN_APP_ID`** (app UUID from the dashboard URL).
+- **Bootstrap spec:** `.do/app.yaml` — reference for creating/importing the app once; configure **`JWT_SECRET`**, **`MONGODB_URI`**, and others in Dashboard (not in this YAML for recurring deploys).
 
 Frontend (Vercel) and this API are typically **separate services**; point the client at your deployed GraphQL URL and set **`CORS_ORIGIN`** appropriately.
 ---

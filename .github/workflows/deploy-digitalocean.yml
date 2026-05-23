@@ -1,12 +1,10 @@
-# DigitalOcean App Platform via official deploy action (.do/app.yaml).
-# Runs build + tests, then ships with digitalocean/app_action/deploy@v2.
+# Builds + tests locally in CI, then triggers an App Platform *deployment* without
+# re-applying `.do/app.yaml`. That keeps env vars you set in the DigitalOcean
+# Dashboard (JWT_SECRET, MONGODB_URI, etc.) from being overwritten each push.
 #
-# Repo secrets required:
-#   DIGITALOCEAN_ACCESS_TOKEN — https://docs.digitalocean.com/reference/api/create-personal-access-token/
-#   JWT_SECRET, MONGODB_URI    — CTrend runtime
-#
-# Optional: add `project_id:` under `with:` using `vars.DIGITALOCEAN_PROJECT_ID`
-# when you don't want the default DigitalOcean project.
+# GitHub Actions secrets:
+#   DIGITALOCEAN_ACCESS_TOKEN — PAT with App access
+#   DIGITALOCEAN_APP_ID       — Apps → your app → URL .../apps/<uuid>/...
 
 name: Deploy to DigitalOcean
 
@@ -42,23 +40,15 @@ jobs:
       - name: Run tests
         run: npm test -- --passWithNoTests
 
-      - name: Verify deploy secrets exist (JWT + MongoDB)
-        env:
-          JWT_SET: ${{ secrets.JWT_SECRET != '' }}
-          MONGO_SET: ${{ secrets.MONGODB_URI != '' }}
-        run: |
-          if [ "$JWT_SET" != "true" ] || [ "$MONGO_SET" != "true" ]; then
-            echo "::error::Add non-empty repository secrets JWT_SECRET and MONGODB_URI (GitHub → Settings → Secrets and variables → Actions)."
-            exit 1
-          fi
-
-      - name: Deploy App Platform app
-        uses: digitalocean/app_action/deploy@v2
-        env:
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
-          print_build_logs: true
-          print_deploy_logs: true
+
+      - name: Trigger deployment (preserves Dashboard env vars)
+        run: |
+          if [ -z "${{ secrets.DIGITALOCEAN_APP_ID }}" ]; then
+            echo "::error::Set repository secret DIGITALOCEAN_APP_ID (UUID from Apps → Overview URL)."
+            exit 1
+          fi
+          doctl apps create-deployment "${{ secrets.DIGITALOCEAN_APP_ID }}"

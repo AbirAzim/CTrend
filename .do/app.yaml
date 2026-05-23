@@ -1,14 +1,13 @@
-# DigitalOcean App Platform spec (used by digitalocean/app_action/deploy@v2).
-# GitHub Actions injects secrets into ${...} placeholders when deploying.
+# Reference App Platform spec — use when creating the app in the Dashboard
+# (Import spec) or with `doctl apps create --spec .do/app.yaml` once.
 #
-# Prerequisites:
-#   - GitHub secret: DIGITALOCEAN_ACCESS_TOKEN
-#   - GitHub secrets: JWT_SECRET, MONGODB_URI (required for CTrend bootstrap)
+# CI no longer pushes this spec on every deploy (see deploy-digitalocean.yml).
+# Set secrets in DigitalOcean → your app → Settings → Environment Variables
+# for the api component: JWT_SECRET, MONGODB_URI, CORS_ORIGIN, FRONTEND_URL,
+# Stripe, Google, SMTP, etc.
 #
-# Repo is templated via the runner env GITHUB_REPOSITORY (owner/name).
-#
-# Tune region/instance for cost; see App Platform pricing.
-# https://docs.digitalocean.com/products/app-platform/reference/app-spec/
+# Replace github.repo `${GITHUB_REPOSITORY}` with owner/repo manually if importing from file.
+# Tune region/instance for cost: https://docs.digitalocean.com/products/app-platform/reference/app-spec/
 
 name: ctrend-app
 region: nyc
@@ -16,7 +15,7 @@ region: nyc
 services:
   - name: api
     github:
-      repo: ${GITHUB_REPOSITORY}
+      repo: REPLACE_OWNER/REPLACE_REPO
       branch: main
       deploy_on_push: false
     build_command: npm ci --legacy-peer-deps && npm run build
@@ -24,41 +23,9 @@ services:
     environment_slug: node-js
     instance_size_slug: basic-xxs
     instance_count: 1
-    # App Platform sets PORT automatically; Nest uses process.env.PORT.
     http_port: 8080
     envs:
       - key: NODE_ENV
         value: production
         scope: RUN_TIME
         type: GENERAL
-      - key: JWT_SECRET
-        value: ${JWT_SECRET}
-        scope: RUN_TIME
-        type: SECRET
-      - key: MONGODB_URI
-        value: ${MONGODB_URI}
-        scope: RUN_TIME
-        type: SECRET
-      # Uncomment and wire matching GitHub Actions `env:` if you use OAuth:
-      # - key: GOOGLE_CLIENT_ID
-      #   value: ${GOOGLE_CLIENT_ID}
-      #   scope: RUN_TIME
-      #   type: SECRET
-      # Stripe (optional — match secrets in workflow when enabled):
-      # - key: STRIPE_SECRET_KEY
-      #   value: ${STRIPE_SECRET_KEY}
-      #   scope: RUN_TIME
-      #   type: SECRET
-      # - key: STRIPE_WEBHOOK_SECRET
-      #   value: ${STRIPE_WEBHOOK_SECRET}
-      #   scope: RUN_TIME
-      #   type: SECRET
-      # Comma-separated origins for your Vercel (or other) frontends:
-      # - key: CORS_ORIGIN
-      #   value: ${CORS_ORIGIN}
-      #   scope: RUN_TIME
-      #   type: SECRET
-      # - key: FRONTEND_URL
-      #   value: ${FRONTEND_URL}
-      #   scope: RUN_TIME
-      #   type: SECRET

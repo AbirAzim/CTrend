@@ -187,6 +187,7 @@ Do **not** hand-edit `src/schema.gql` for schema changes — it is regenerated f
 - **Bootstrap spec:** `.do/app.yaml` — reference for creating/importing the app once; configure **`JWT_SECRET`**, **`MONGODB_URI`**, and others in Dashboard (not in this YAML for recurring deploys).
 
 Frontend (Vercel) and this API are typically **separate services**; point the client at your deployed GraphQL URL and set **`CORS_ORIGIN`** appropriately.
+
 ---
 
 ## Repository layout (quick reference)

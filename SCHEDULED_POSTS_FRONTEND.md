@@ -1,5 +1,7 @@
 # Frontend Changes Required: Scheduled Posts
 
+Backend doc only — frontend repo should mirror these fragments and enums.
+
 ## New GraphQL Fields
 
 ### `PostGql` now has two extra fields on every post response:

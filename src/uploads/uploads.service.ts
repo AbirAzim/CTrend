@@ -42,6 +42,7 @@ export class UploadsService {
         region: 'auto',
         endpoint: `https://${accountId}.r2.cloudflarestorage.com`,
         credentials: { accessKeyId, secretAccessKey },
+        forcePathStyle: true,
       });
     }
     return this._s3;

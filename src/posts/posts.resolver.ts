@@ -8,7 +8,7 @@ import { OptionalJwtGqlGuard } from '../common/guards/optional-jwt-gql.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
-import { UserRole } from '../common/enums';
+import { PostStatus, UserRole } from '../common/enums';
 import { POST_VOTE_UPDATED, pubsub } from '../pubsub';
 
 type ReqUser = { id: string };
@@ -93,7 +93,29 @@ export class PostsResolver {
   ) {
     const post = await this.postsService.findById(id);
     if (!post) throw new NotFoundException('Post not found');
+    if (
+      post.status === PostStatus.SCHEDULED &&
+      post.createdBy.toHexString() !== user?.id
+    ) {
+      throw new NotFoundException('Post not found');
+    }
     return this.postsService.toGql(post, user?.id);
+  }
+
+  @Query(() => [PostGql])
+  @UseGuards(GqlAuthGuard)
+  async myScheduledPosts(@CurrentUser() user: ReqUser) {
+    const rows = await this.postsService.findScheduledByAuthor(user.id);
+    return Promise.all(rows.map((p) => this.postsService.toGql(p, user.id)));
+  }
+
+  @Mutation(() => Boolean)
+  @UseGuards(GqlAuthGuard)
+  async cancelScheduledPost(
+    @CurrentUser() user: ReqUser,
+    @Args('postId', { type: () => ID }) postId: string,
+  ) {
+    return this.postsService.cancelScheduledPost(user.id, postId);
   }
 
   @Query(() => [PostGql])

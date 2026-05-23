@@ -1,6 +1,6 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
-import { OrgPostReach, PostType, Visibility } from '../common/enums';
+import { OrgPostReach, PostStatus, PostType, Visibility } from '../common/enums';
 
 export type PostOption = { label: string; imageUrl?: string };
 
@@ -61,8 +61,15 @@ export class Post {
 
   @Prop({ type: Date })
   votingEndsAt?: Date;
+
+  @Prop({ type: String, enum: PostStatus, default: PostStatus.PUBLISHED })
+  status: PostStatus;
+
+  @Prop({ type: Date })
+  scheduledAt?: Date;
 }
 
 export const PostSchema = SchemaFactory.createForClass(Post);
 PostSchema.index({ createdAt: -1 });
 PostSchema.index({ feedPriority: -1, voteCount: -1 });
+PostSchema.index({ status: 1, scheduledAt: 1 });

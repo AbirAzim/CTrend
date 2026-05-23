@@ -1,6 +1,7 @@
 import { Field, ID, Int, ObjectType } from '@nestjs/graphql';
 import {
   OrgPostReach,
+  PostStatus,
   PostType,
   Visibility,
 } from '../../common/enums';
@@ -133,4 +134,10 @@ export class PostGql {
 
   @Field()
   createdAt: Date;
+
+  @Field(() => PostStatus)
+  status: PostStatus;
+
+  @Field(() => Date, { nullable: true })
+  scheduledAt?: Date;
 }

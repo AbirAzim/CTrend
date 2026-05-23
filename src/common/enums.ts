@@ -49,6 +49,11 @@ export enum PaymentProvider {
   BKASH = 'bkash',
 }
 
+export enum PostStatus {
+  PUBLISHED = 'published',
+  SCHEDULED = 'scheduled',
+}
+
 registerEnumType(UserRole, { name: 'UserRole' });
 registerEnumType(PostType, { name: 'PostType' });
 registerEnumType(Visibility, { name: 'Visibility' });
@@ -58,3 +63,4 @@ registerEnumType(FeedSort, { name: 'FeedSort' });
 registerEnumType(SubscriptionPlan, { name: 'SubscriptionPlan' });
 registerEnumType(SubscriptionStatus, { name: 'SubscriptionStatus' });
 registerEnumType(PaymentProvider, { name: 'PaymentProvider' });
+registerEnumType(PostStatus, { name: 'PostStatus' });

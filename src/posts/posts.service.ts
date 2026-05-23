@@ -16,6 +16,7 @@ import { SavedPost, SavedPostDocument } from './saved-post.schema';
 import { CreatePostInput } from './dto/create-post.input';
 import {
   OrgPostReach,
+  PostStatus,
   PostType,
   UserRole,
   Visibility,
@@ -64,10 +65,42 @@ export class PostsService {
   async findByAuthor(authorId: string, limit = 50): Promise<PostDocument[]> {
     if (!Types.ObjectId.isValid(authorId)) return [];
     return this.postModel
-      .find({ createdBy: new Types.ObjectId(authorId) })
+      .find({ createdBy: new Types.ObjectId(authorId), status: { $ne: PostStatus.SCHEDULED } })
       .sort({ createdAt: -1 })
       .limit(limit)
       .exec();
+  }
+
+  async findScheduledByAuthor(authorId: string): Promise<PostDocument[]> {
+    if (!Types.ObjectId.isValid(authorId)) return [];
+    return this.postModel
+      .find({ createdBy: new Types.ObjectId(authorId), status: PostStatus.SCHEDULED })
+      .sort({ scheduledAt: 1 })
+      .exec();
+  }
+
+  async publishScheduledPosts(): Promise<void> {
+    const due = await this.postModel
+      .find({ status: PostStatus.SCHEDULED, scheduledAt: { $lte: new Date() } })
+      .exec();
+    for (const post of due) {
+      post.status = PostStatus.PUBLISHED;
+      await post.save();
+      await this.publishNewPost(post._id.toHexString());
+    }
+  }
+
+  async cancelScheduledPost(userId: string, postId: string): Promise<boolean> {
+    const post = await this.findById(postId);
+    if (!post) throw new NotFoundException('Post not found');
+    if (post.createdBy.toHexString() !== userId) {
+      throw new ForbiddenException('Not your post');
+    }
+    if (post.status !== PostStatus.SCHEDULED) {
+      throw new BadRequestException('Post is not scheduled');
+    }
+    await this.postModel.deleteOne({ _id: post._id });
+    return true;
   }
 
   async listSavedPosts(userId: string, limit = 100): Promise<PostDocument[]> {
@@ -157,6 +190,8 @@ export class PostsService {
     const visibility = input.visibility ?? Visibility.PUBLIC;
     const contentText = input.contentText ?? input.caption;
     const votingEndsAt = this.parseFutureDate(input.votingEndsAt, 'votingEndsAt');
+    const scheduledAt = this.parseFutureDate(input.scheduledAt, 'scheduledAt');
+    const status = scheduledAt ? PostStatus.SCHEDULED : PostStatus.PUBLISHED;
     const doc = await this.postModel.create({
       type: PostType.USER,
       contentText,
@@ -173,8 +208,12 @@ export class PostsService {
       commentsDisabled: false,
       likesDisabled: false,
       votingEndsAt,
+      status,
+      scheduledAt,
     });
-    await this.publishNewPost(doc._id.toHexString());
+    if (status === PostStatus.PUBLISHED) {
+      await this.publishNewPost(doc._id.toHexString());
+    }
     return doc;
   }
 
@@ -210,6 +249,8 @@ export class PostsService {
 
     const contentText = input.contentText ?? input.caption;
     const votingEndsAt = this.parseFutureDate(input.votingEndsAt, 'votingEndsAt');
+    const scheduledAt = this.parseFutureDate(input.scheduledAt, 'scheduledAt');
+    const status = scheduledAt ? PostStatus.SCHEDULED : PostStatus.PUBLISHED;
     const doc = await this.postModel.create({
       type: PostType.ORG,
       contentText,
@@ -228,8 +269,12 @@ export class PostsService {
       commentsDisabled: false,
       likesDisabled: false,
       votingEndsAt,
+      status,
+      scheduledAt,
     });
-    await this.publishNewPost(doc._id.toHexString());
+    if (status === PostStatus.PUBLISHED) {
+      await this.publishNewPost(doc._id.toHexString());
+    }
     return doc;
   }
 
@@ -246,6 +291,8 @@ export class PostsService {
 
     const contentText = input.contentText ?? input.caption;
     const votingEndsAt = this.parseFutureDate(input.votingEndsAt, 'votingEndsAt');
+    const scheduledAt = this.parseFutureDate(input.scheduledAt, 'scheduledAt');
+    const status = scheduledAt ? PostStatus.SCHEDULED : PostStatus.PUBLISHED;
     const doc = await this.postModel.create({
       type: PostType.SYSTEM,
       contentText,
@@ -262,8 +309,12 @@ export class PostsService {
       commentsDisabled: false,
       likesDisabled: true,
       votingEndsAt,
+      status,
+      scheduledAt,
     });
-    await this.publishNewPost(doc._id.toHexString());
+    if (status === PostStatus.PUBLISHED) {
+      await this.publishNewPost(doc._id.toHexString());
+    }
     return doc;
   }
 
@@ -397,6 +448,8 @@ export class PostsService {
       votingEndsAt: post.votingEndsAt,
       isVotingOpen,
       createdAt: post.createdAt ?? new Date(),
+      status: post.status ?? PostStatus.PUBLISHED,
+      scheduledAt: post.scheduledAt,
     };
   }
 }

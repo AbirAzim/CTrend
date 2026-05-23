@@ -78,4 +78,10 @@ export class CreatePostInput {
   @Type(() => Date)
   @IsDate()
   votingEndsAt?: Date;
+
+  @Field(() => Date, { nullable: true })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  scheduledAt?: Date;
 }

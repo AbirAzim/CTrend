@@ -6,6 +6,7 @@ import {
   FeedScope,
   FeedSort,
   OrgPostReach,
+  PostStatus,
   PostType,
   Visibility,
 } from '../common/enums';
@@ -33,7 +34,8 @@ export class FeedService {
     take: number,
     viewerId?: string,
   ) {
-    const filter = await this.buildFilter(scope, viewerId);
+    const baseFilter = await this.buildFilter(scope, viewerId);
+    const filter = { ...baseFilter, status: { $ne: PostStatus.SCHEDULED } };
     const sortSpec = this.buildSort(sort);
     const q = this.postModel.find(filter).sort(sortSpec).skip(skip).limit(take);
     const [rows, totalCount] = await Promise.all([

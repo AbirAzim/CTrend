@@ -6,6 +6,7 @@ import { SavedPost, SavedPostSchema } from './saved-post.schema';
 import { Comment, CommentSchema } from '../comments/comment.schema';
 import { PostsService } from './posts.service';
 import { PostsResolver } from './posts.resolver';
+import { PostSchedulerService } from './post-scheduler.service';
 import { CategoriesModule } from '../categories/categories.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { UsersModule } from '../users/users.module';
@@ -26,7 +27,7 @@ import { CommentsModule } from '../comments/comments.module';
     VotesModule,
     CommentsModule,
   ],
-  providers: [PostsService, PostsResolver],
+  providers: [PostsService, PostsResolver, PostSchedulerService],
   exports: [PostsService],
 })
 export class PostsModule {}

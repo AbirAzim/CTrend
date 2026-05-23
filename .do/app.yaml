@@ -1,0 +1,64 @@
+# DigitalOcean App Platform spec (used by digitalocean/app_action/deploy@v2).
+# GitHub Actions injects secrets into ${...} placeholders when deploying.
+#
+# Prerequisites:
+#   - GitHub secret: DIGITALOCEAN_ACCESS_TOKEN
+#   - GitHub secrets: JWT_SECRET, MONGODB_URI (required for CTrend bootstrap)
+#
+# Repo is templated via the runner env GITHUB_REPOSITORY (owner/name).
+#
+# Tune region/instance for cost; see App Platform pricing.
+# https://docs.digitalocean.com/products/app-platform/reference/app-spec/
+
+name: ctrend-api
+region: nyc
+
+services:
+  - name: api
+    github:
+      repo: ${GITHUB_REPOSITORY}
+      branch: main
+      deploy_on_push: false
+    build_command: npm ci --legacy-peer-deps && npm run build
+    run_command: npm run start:prod
+    environment_slug: node-js
+    instance_size_slug: basic-xxs
+    instance_count: 1
+    # App Platform sets PORT automatically; Nest uses process.env.PORT.
+    http_port: 8080
+    envs:
+      - key: NODE_ENV
+        value: production
+        scope: RUN_TIME
+        type: general
+      - key: JWT_SECRET
+        value: ${JWT_SECRET}
+        scope: RUN_TIME
+        type: secret
+      - key: MONGODB_URI
+        value: ${MONGODB_URI}
+        scope: RUN_TIME
+        type: secret
+      # Uncomment and wire matching GitHub Actions `env:` if you use OAuth:
+      # - key: GOOGLE_CLIENT_ID
+      #   value: ${GOOGLE_CLIENT_ID}
+      #   scope: RUN_TIME
+      #   type: secret
+      # Stripe (optional — match secrets in workflow when enabled):
+      # - key: STRIPE_SECRET_KEY
+      #   value: ${STRIPE_SECRET_KEY}
+      #   scope: RUN_TIME
+      #   type: secret
+      # - key: STRIPE_WEBHOOK_SECRET
+      #   value: ${STRIPE_WEBHOOK_SECRET}
+      #   scope: RUN_TIME
+      #   type: secret
+      # Comma-separated origins for your Vercel (or other) frontends:
+      # - key: CORS_ORIGIN
+      #   value: ${CORS_ORIGIN}
+      #   scope: RUN_TIME
+      #   type: secret
+      # - key: FRONTEND_URL
+      #   value: ${FRONTEND_URL}
+      #   scope: RUN_TIME
+      #   type: secret

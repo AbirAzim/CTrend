@@ -5,7 +5,7 @@
 | | Link |
 |---|------|
 | **Live app (frontend)** | [https://c-trend.vercel.app/](https://c-trend.vercel.app/) |
-| **API** | Deploy separately (e.g. Render); GraphQL endpoint is configured per environment |
+| **API** | Deploy separately (e.g. DigitalOcean App Platform); GraphQL endpoint is configured per environment |
 
 > The Vercel URL is the user-facing client. This repo powers the backend: auth, posts, votes, comments, feed, orgs, billing webhooks, and real-time subscriptions.
 
@@ -183,11 +183,9 @@ Do **not** hand-edit `src/schema.gql` for schema changes — it is regenerated f
 ## Deployment & CI
 
 - **CI:** `.github/workflows/ci.yml` — install, build, test on PR/push to `main`
-- **Deploy hook:** `.github/workflows/deploy-render.yml` — optional Render deploy (secret: `RENDER_DEPLOY_HOOK_URL`)
-- **Render:** `render.yaml` blueprint
+- **Deploy:** `.github/workflows/deploy-digitalocean.yml` — DigitalOcean App Platform (`digitalocean/app_action/deploy@v2`); app spec `.do/app.yaml`; repository secrets **`DIGITALOCEAN_ACCESS_TOKEN`**, **`JWT_SECRET`**, **`MONGODB_URI`** (optional env vars are commented in the spec — uncomment and add matching keys to the deploy step `env`)
 
-Frontend (Vercel) and API (Render or similar) are typically **separate services**; point the client at your deployed GraphQL URL and CORS origins.
-
+Frontend (Vercel) and this API are typically **separate services**; point the client at your deployed GraphQL URL and set **`CORS_ORIGIN`** appropriately.
 ---
 
 ## Repository layout (quick reference)
@@ -198,6 +196,8 @@ src/
   main.ts                # HTTP bootstrap
   pubsub.ts              # Subscription event hub
   */                     # One Nest module per domain (posts, votes, …)
+.do/
+  app.yaml               # DigitalOcean App Platform spec (deploy-digitalocean workflow)
 docs/
   frontend-post-engagement-api.md
 ```

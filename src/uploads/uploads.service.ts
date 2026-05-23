@@ -65,9 +65,13 @@ export class UploadsService {
       Bucket: this._bucket!,
       Key: key,
       ContentType: contentType,
+      ChecksumAlgorithm: undefined,
     });
 
-    const uploadUrl = await getSignedUrl(s3, command, { expiresIn: 300 });
+    const uploadUrl = await getSignedUrl(s3, command, {
+      expiresIn: 300,
+      unhoistableHeaders: new Set(['x-amz-checksum-crc32']),
+    });
 
     return {
       uploadUrl,

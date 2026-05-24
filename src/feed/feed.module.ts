@@ -7,6 +7,7 @@ import { NewPostsResolver } from './new-posts.resolver';
 import { PostsModule } from '../posts/posts.module';
 import { FollowsModule } from '../follows/follows.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { OrganizationsModule } from '../organizations/organizations.module';
     PostsModule,
     FollowsModule,
     OrganizationsModule,
+    UsersModule,
   ],
   providers: [FeedService, FeedResolver, NewPostsResolver],
 })

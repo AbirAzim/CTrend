@@ -99,8 +99,8 @@ export class SeedDummyPostsService implements OnModuleInit {
             !!existing.options[1].imageUrl?.includes('Portrait_of_Lionel_Messi'));
 
         if (needsUpdate) {
-          existing.type = PostType.SYSTEM;
-          existing.feedPriority = 10;
+          existing.type = PostType.USER;
+          existing.feedPriority = 0;
           existing.status = PostStatus.PUBLISHED;
           existing.imageUrls = [t.aImage, t.bImage];
           existing.options = [
@@ -108,7 +108,7 @@ export class SeedDummyPostsService implements OnModuleInit {
             { label: existing.options[1]?.label ?? t.b, imageUrl: t.bImage },
           ];
           await existing.save();
-          this.logger.log(`Updated seed post to SYSTEM: ${t.a} vs ${t.b}`);
+          this.logger.log(`Updated seed post to USER: ${t.a} vs ${t.b}`);
         }
         continue;
       }
@@ -120,7 +120,7 @@ export class SeedDummyPostsService implements OnModuleInit {
       }
 
       await this.postModel.create({
-        type: PostType.SYSTEM,
+        type: PostType.USER,
         contentText: t.contentText,
         imageUrls: [t.aImage, t.bImage],
         options: [
@@ -129,13 +129,13 @@ export class SeedDummyPostsService implements OnModuleInit {
         ],
         categoryId: cat._id,
         createdBy: authorId,
-        feedPriority: 10,
+        feedPriority: 0,
         voteCount: 0,
         commentsDisabled: false,
         likesDisabled: false,
         status: PostStatus.PUBLISHED,
       });
-      this.logger.log(`Seeded SYSTEM post: ${t.a} vs ${t.b}`);
+      this.logger.log(`Seeded USER post: ${t.a} vs ${t.b}`);
     }
   }
 

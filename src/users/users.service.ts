@@ -141,6 +141,14 @@ export class UsersService {
   async countUsers(): Promise<number> {
     return this.userModel.countDocuments().exec();
   }
+
+  async findIdsByRole(role: UserRole): Promise<Types.ObjectId[]> {
+    const docs = await this.userModel
+      .find({ $or: [{ role }, { roles: role }] }, { _id: 1 })
+      .lean()
+      .exec();
+    return docs.map((d) => d._id as Types.ObjectId);
+  }
 }
 
 export function normalizeEmail(email: string): string {

@@ -24,8 +24,7 @@ export class FeedResolver {
     take: number,
     @CurrentUser() user?: ReqUser,
   ) {
-    const viewerId = user?.id;
-    return this.feedService.getFeed(scope, sort, skip, take, viewerId, user?.role);
+    return this.feedService.getFeed(scope, sort, skip, take, user?.id, user?.role);
   }
 
   /**
@@ -45,13 +44,12 @@ export class FeedResolver {
     take: number,
     @CurrentUser() user?: ReqUser,
   ) {
-    const viewerId = user?.id;
     const result = await this.feedService.getFeed(
       scope,
       sort,
       skip,
       take,
-      viewerId,
+      user?.id,
       user?.role,
     );
     return result.nodes;

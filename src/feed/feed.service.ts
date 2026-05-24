@@ -8,10 +8,12 @@ import {
   OrgPostReach,
   PostStatus,
   PostType,
+  UserRole,
 } from '../common/enums';
 import { PostsService } from '../posts/posts.service';
 import { FollowsService } from '../follows/follows.service';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class FeedService {
@@ -22,6 +24,7 @@ export class FeedService {
     private postsService: PostsService,
     private followsService: FollowsService,
     private organizationsService: OrganizationsService,
+    private usersService: UsersService,
   ) {}
 
   async getFeed(
@@ -70,14 +73,16 @@ export class FeedService {
 
     const notScheduled = { status: { $ne: PostStatus.SCHEDULED } };
 
-    // Unauthenticated: only platform-wide content.
+    // Unauthenticated: SYSTEM posts and posts created by admin users only.
     if (!viewerId) {
-      return {
-        $or: [
-          { type: PostType.SYSTEM, ...notScheduled },
-          { type: PostType.ORG, orgReach: OrgPostReach.GLOBAL, ...notScheduled },
-        ],
-      };
+      const adminIds = await this.usersService.findIdsByRole(UserRole.ADMIN);
+      const parts: Record<string, unknown>[] = [
+        { type: PostType.SYSTEM, ...notScheduled },
+      ];
+      if (adminIds.length > 0) {
+        parts.push({ createdBy: { $in: adminIds }, ...notScheduled });
+      }
+      return { $or: parts };
     }
 
     // Authenticated user: own posts (any status) + friends' posts + SYSTEM + org posts.

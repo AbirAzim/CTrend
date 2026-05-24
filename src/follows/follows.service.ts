@@ -99,6 +99,13 @@ export class FollowsService {
         _id: {
           $nin: Array.from(excludedIds).map((id) => new Types.ObjectId(id)),
         },
+        // Only show users who hold the user role.
+        // Pure admin-only accounts (no user role) are excluded.
+        $or: [
+          { roles: 'user' },           // has user role in the array (includes dual-role)
+          { roles: { $exists: false } }, // legacy docs without roles field
+          { roles: { $size: 0 } },      // edge case: empty roles array
+        ],
       })
       .sort({ createdAt: -1 })
       .limit(Math.max(1, Math.min(limit, 100)))

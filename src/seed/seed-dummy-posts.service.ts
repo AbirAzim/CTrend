@@ -5,7 +5,7 @@ import * as bcrypt from 'bcrypt';
 import { Post, PostDocument } from '../posts/post.schema';
 import { User, UserDocument } from '../users/user.schema';
 import { CategoriesService } from '../categories/categories.service';
-import { PostType, Visibility } from '../common/enums';
+import { PostStatus, PostType } from '../common/enums';
 
 const DEMO_USER_EMAIL = 'ctrend.demo@seed.local';
 const DEMO_USERNAME = 'ctrend_demo_feed';
@@ -90,29 +90,25 @@ export class SeedDummyPostsService implements OnModuleInit {
         'options.1.label': t.b,
       });
       if (existing) {
-        const postImageCount = existing.imageUrls?.length ?? 0;
-        const needsTwoPostImages = postImageCount < 2;
-        const needsOptionImages =
-          !existing.options?.[0]?.imageUrl || !existing.options?.[1]?.imageUrl;
-        const hadLegacyMessiPortrait =
-          existing.options?.[1]?.label === 'Lionel Messi' &&
-          !!existing.options[1].imageUrl?.includes('Portrait_of_Lionel_Messi');
-        if (needsTwoPostImages || needsOptionImages || hadLegacyMessiPortrait) {
+        const needsUpdate =
+          existing.type !== PostType.SYSTEM ||
+          (existing.imageUrls?.length ?? 0) < 2 ||
+          !existing.options?.[0]?.imageUrl ||
+          !existing.options?.[1]?.imageUrl ||
+          (existing.options?.[1]?.label === 'Lionel Messi' &&
+            !!existing.options[1].imageUrl?.includes('Portrait_of_Lionel_Messi'));
+
+        if (needsUpdate) {
+          existing.type = PostType.SYSTEM;
+          existing.feedPriority = 10;
+          existing.status = PostStatus.PUBLISHED;
           existing.imageUrls = [t.aImage, t.bImage];
           existing.options = [
-            {
-              ...existing.options[0],
-              label: existing.options[0]?.label ?? t.a,
-              imageUrl: t.aImage,
-            },
-            {
-              ...existing.options[1],
-              label: existing.options[1]?.label ?? t.b,
-              imageUrl: t.bImage,
-            },
+            { label: existing.options[0]?.label ?? t.a, imageUrl: t.aImage },
+            { label: existing.options[1]?.label ?? t.b, imageUrl: t.bImage },
           ];
           await existing.save();
-          this.logger.log(`Updated images for seed post: ${t.a} vs ${t.b}`);
+          this.logger.log(`Updated seed post to SYSTEM: ${t.a} vs ${t.b}`);
         }
         continue;
       }
@@ -124,7 +120,7 @@ export class SeedDummyPostsService implements OnModuleInit {
       }
 
       await this.postModel.create({
-        type: PostType.USER,
+        type: PostType.SYSTEM,
         contentText: t.contentText,
         imageUrls: [t.aImage, t.bImage],
         options: [
@@ -132,14 +128,14 @@ export class SeedDummyPostsService implements OnModuleInit {
           { label: t.b, imageUrl: t.bImage },
         ],
         categoryId: cat._id,
-        visibility: Visibility.PUBLIC,
         createdBy: authorId,
-        feedPriority: 0,
+        feedPriority: 10,
         voteCount: 0,
         commentsDisabled: false,
         likesDisabled: false,
+        status: PostStatus.PUBLISHED,
       });
-      this.logger.log(`Seeded vote post: ${t.a} vs ${t.b}`);
+      this.logger.log(`Seeded SYSTEM post: ${t.a} vs ${t.b}`);
     }
   }
 

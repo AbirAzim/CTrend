@@ -24,7 +24,14 @@ export class FeedResolver {
     take: number,
     @CurrentUser() user?: ReqUser,
   ) {
-    return this.feedService.getFeed(scope, sort, skip, take, user?.id, user?.role);
+    return this.feedService.getFeed(
+      scope,
+      sort,
+      skip,
+      take,
+      user?.id,
+      user?.role,
+    );
   }
 
   /**

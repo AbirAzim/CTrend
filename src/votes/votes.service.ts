@@ -100,12 +100,20 @@ export class VotesService {
     };
   }
 
-  async listVoters(postId: string, optionIndex?: number): Promise<PostVoterGql[]> {
-    const query: Record<string, unknown> = { postId: new Types.ObjectId(postId) };
+  async listVoters(
+    postId: string,
+    optionIndex?: number,
+  ): Promise<PostVoterGql[]> {
+    const query: Record<string, unknown> = {
+      postId: new Types.ObjectId(postId),
+    };
     if (optionIndex !== undefined) {
       query.selectedOptionIndex = optionIndex;
     }
-    const rows = await this.voteModel.find(query).sort({ updatedAt: -1 }).exec();
+    const rows = await this.voteModel
+      .find(query)
+      .sort({ updatedAt: -1 })
+      .exec();
     const out: PostVoterGql[] = [];
     for (const row of rows) {
       const isAnonymous = !!row.anonymous;

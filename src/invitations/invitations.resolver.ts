@@ -14,20 +14,24 @@ export class InvitationsResolver {
   /** Any authenticated user can invite others as regular users. */
   @Mutation(() => Boolean)
   @UseGuards(GqlAuthGuard)
-  inviteUser(
-    @CurrentUser() user: ReqUser,
-    @Args('email') email: string,
-  ) {
-    return this.invitationsService.invite(user.id, user.role, email, UserRole.USER);
+  inviteUser(@CurrentUser() user: ReqUser, @Args('email') email: string) {
+    return this.invitationsService.invite(
+      user.id,
+      user.role,
+      email,
+      UserRole.USER,
+    );
   }
 
   /** Only admins can invite other admins. */
   @Mutation(() => Boolean)
   @UseGuards(GqlAuthGuard)
-  inviteAdmin(
-    @CurrentUser() user: ReqUser,
-    @Args('email') email: string,
-  ) {
-    return this.invitationsService.invite(user.id, user.role, email, UserRole.ADMIN);
+  inviteAdmin(@CurrentUser() user: ReqUser, @Args('email') email: string) {
+    return this.invitationsService.invite(
+      user.id,
+      user.role,
+      email,
+      UserRole.ADMIN,
+    );
   }
 }

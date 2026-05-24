@@ -21,7 +21,11 @@ export class Invitation {
   @Prop({ type: String, enum: UserRole, default: UserRole.USER })
   role: UserRole;
 
-  @Prop({ type: String, enum: InvitationStatus, default: InvitationStatus.PENDING })
+  @Prop({
+    type: String,
+    enum: InvitationStatus,
+    default: InvitationStatus.PENDING,
+  })
   status: InvitationStatus;
 
   @Prop({ required: true })

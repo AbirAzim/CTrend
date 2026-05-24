@@ -65,7 +65,10 @@ export class PostsService {
   async findByAuthor(authorId: string, limit = 50): Promise<PostDocument[]> {
     if (!Types.ObjectId.isValid(authorId)) return [];
     return this.postModel
-      .find({ createdBy: new Types.ObjectId(authorId), status: { $ne: PostStatus.SCHEDULED } })
+      .find({
+        createdBy: new Types.ObjectId(authorId),
+        status: { $ne: PostStatus.SCHEDULED },
+      })
       .sort({ createdAt: -1 })
       .limit(limit)
       .exec();
@@ -74,7 +77,10 @@ export class PostsService {
   async findScheduledByAuthor(authorId: string): Promise<PostDocument[]> {
     if (!Types.ObjectId.isValid(authorId)) return [];
     return this.postModel
-      .find({ createdBy: new Types.ObjectId(authorId), status: PostStatus.SCHEDULED })
+      .find({
+        createdBy: new Types.ObjectId(authorId),
+        status: PostStatus.SCHEDULED,
+      })
       .sort({ scheduledAt: 1 })
       .exec();
   }
@@ -123,7 +129,11 @@ export class PostsService {
     return ordered;
   }
 
-  async setSaved(userId: string, postId: string, keep: boolean): Promise<boolean> {
+  async setSaved(
+    userId: string,
+    postId: string,
+    keep: boolean,
+  ): Promise<boolean> {
     const post = await this.findById(postId);
     if (!post) throw new NotFoundException('Post not found');
     const uid = new Types.ObjectId(userId);
@@ -164,7 +174,10 @@ export class PostsService {
     await this.postReactionModel.deleteOne({ userId: uid, postId: pid, kind });
   }
 
-  async create(authorId: string, input: CreatePostInput): Promise<PostDocument> {
+  async create(
+    authorId: string,
+    input: CreatePostInput,
+  ): Promise<PostDocument> {
     const type = input.type ?? PostType.USER;
     const category = await this.categoriesService.findById(input.categoryId);
     if (!category) throw new BadRequestException('Invalid category');
@@ -189,7 +202,10 @@ export class PostsService {
 
     const visibility = input.visibility ?? Visibility.PUBLIC;
     const contentText = input.contentText ?? input.caption;
-    const votingEndsAt = this.parseFutureDate(input.votingEndsAt, 'votingEndsAt');
+    const votingEndsAt = this.parseFutureDate(
+      input.votingEndsAt,
+      'votingEndsAt',
+    );
     const scheduledAt = this.parseFutureDate(input.scheduledAt, 'scheduledAt');
     const status = scheduledAt ? PostStatus.SCHEDULED : PostStatus.PUBLISHED;
     const doc = await this.postModel.create({
@@ -248,7 +264,10 @@ export class PostsService {
     }
 
     const contentText = input.contentText ?? input.caption;
-    const votingEndsAt = this.parseFutureDate(input.votingEndsAt, 'votingEndsAt');
+    const votingEndsAt = this.parseFutureDate(
+      input.votingEndsAt,
+      'votingEndsAt',
+    );
     const scheduledAt = this.parseFutureDate(input.scheduledAt, 'scheduledAt');
     const status = scheduledAt ? PostStatus.SCHEDULED : PostStatus.PUBLISHED;
     const doc = await this.postModel.create({
@@ -290,7 +309,10 @@ export class PostsService {
     if (!category) throw new BadRequestException('Invalid category');
 
     const contentText = input.contentText ?? input.caption;
-    const votingEndsAt = this.parseFutureDate(input.votingEndsAt, 'votingEndsAt');
+    const votingEndsAt = this.parseFutureDate(
+      input.votingEndsAt,
+      'votingEndsAt',
+    );
     const scheduledAt = this.parseFutureDate(input.scheduledAt, 'scheduledAt');
     const status = scheduledAt ? PostStatus.SCHEDULED : PostStatus.PUBLISHED;
     const doc = await this.postModel.create({
@@ -329,7 +351,9 @@ export class PostsService {
     if (!value) return undefined;
     const parsed = value instanceof Date ? value : new Date(value);
     if (Number.isNaN(parsed.getTime())) {
-      throw new BadRequestException(`${fieldName} must be a valid ISO date-time`);
+      throw new BadRequestException(
+        `${fieldName} must be a valid ISO date-time`,
+      );
     }
     if (parsed.getTime() <= Date.now()) {
       throw new BadRequestException(`${fieldName} must be a future date-time`);
@@ -345,7 +369,9 @@ export class PostsService {
     const post = await this.findById(postId);
     if (!post) throw new NotFoundException('Post not found');
     if (post.createdBy.toHexString() !== actorUserId) {
-      throw new ForbiddenException('Only the post author can extend voting time');
+      throw new ForbiddenException(
+        'Only the post author can extend voting time',
+      );
     }
     const nextEndAt = this.parseFutureDate(newVotingEndsAt, 'newVotingEndsAt');
     if (!nextEndAt) {
@@ -364,23 +390,20 @@ export class PostsService {
     return post;
   }
 
-  async toGql(
-    post: PostDocument,
-    viewerId?: string,
-  ): Promise<PostGql> {
+  async toGql(post: PostDocument, viewerId?: string): Promise<PostGql> {
     const [category, author, commentCount, likeCount, hypeCount, saveCount] =
       await Promise.all([
-      this.categoriesService.findById(post.categoryId.toString()),
-      this.usersService.findById(post.createdBy.toString()),
-      this.commentModel.countDocuments({ postId: post._id }).exec(),
-      this.postReactionModel
-        .countDocuments({ postId: post._id, kind: 'like' })
-        .exec(),
-      this.postReactionModel
-        .countDocuments({ postId: post._id, kind: 'hype' })
-        .exec(),
-      this.savedPostModel.countDocuments({ postId: post._id }).exec(),
-    ]);
+        this.categoriesService.findById(post.categoryId.toString()),
+        this.usersService.findById(post.createdBy.toString()),
+        this.commentModel.countDocuments({ postId: post._id }).exec(),
+        this.postReactionModel
+          .countDocuments({ postId: post._id, kind: 'like' })
+          .exec(),
+        this.postReactionModel
+          .countDocuments({ postId: post._id, kind: 'hype' })
+          .exec(),
+        this.savedPostModel.countDocuments({ postId: post._id }).exec(),
+      ]);
     if (!category || !author) {
       throw new NotFoundException('Related data missing');
     }
@@ -407,7 +430,11 @@ export class PostsService {
             .exists({ userId: new Types.ObjectId(viewerId), postId: post._id })
             .exec()
         : Promise.resolve(null),
-      this.commentsService.listMostRecentByPost(post._id.toHexString(), 2, viewerId),
+      this.commentsService.listMostRecentByPost(
+        post._id.toHexString(),
+        2,
+        viewerId,
+      ),
     ]);
     const now = Date.now();
     const isVotingOpen =

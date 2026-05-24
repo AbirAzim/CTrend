@@ -5,10 +5,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import {
-  Organization,
-  OrganizationDocument,
-} from './organization.schema';
+import { Organization, OrganizationDocument } from './organization.schema';
 import { UserRole, SubscriptionPlan } from '../common/enums';
 import { UsersService } from '../users/users.service';
 import { OrganizationGql } from './graphql/org.types';
@@ -52,7 +49,8 @@ export class OrganizationsService {
     if (!user) throw new NotFoundException('User not found');
     if (user.role === UserRole.ORG) {
       const existing = await this.findByOwnerUserId(ownerUserId);
-      if (existing) throw new BadRequestException('Organization already exists');
+      if (existing)
+        throw new BadRequestException('Organization already exists');
     }
     const org = await this.orgModel.create({
       name,
@@ -108,9 +106,7 @@ export class OrganizationsService {
       .lean();
     const ids = postIds.map((p) => p._id);
     const [votes, comments] = await Promise.all([
-      ids.length
-        ? this.voteModel.countDocuments({ postId: { $in: ids } })
-        : 0,
+      ids.length ? this.voteModel.countDocuments({ postId: { $in: ids } }) : 0,
       ids.length
         ? this.commentModel.countDocuments({ postId: { $in: ids } })
         : 0,

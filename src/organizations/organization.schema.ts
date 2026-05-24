@@ -12,7 +12,11 @@ export class Organization {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   ownerUserId: Types.ObjectId;
 
-  @Prop({ type: String, enum: SubscriptionPlan, default: SubscriptionPlan.FREE })
+  @Prop({
+    type: String,
+    enum: SubscriptionPlan,
+    default: SubscriptionPlan.FREE,
+  })
   subscriptionPlan: SubscriptionPlan;
 
   @Prop({ default: 0 })

@@ -22,7 +22,11 @@ export class SubscriptionRecord {
   @Prop({ type: String, enum: SubscriptionPlan, required: true })
   plan: SubscriptionPlan;
 
-  @Prop({ type: String, enum: SubscriptionStatus, default: SubscriptionStatus.ACTIVE })
+  @Prop({
+    type: String,
+    enum: SubscriptionStatus,
+    default: SubscriptionStatus.ACTIVE,
+  })
   status: SubscriptionStatus;
 
   @Prop()

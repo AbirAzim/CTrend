@@ -1,5 +1,9 @@
 import { Args, ID, Int, Mutation, Query, Resolver } from '@nestjs/graphql';
-import { ForbiddenException, NotFoundException, UseGuards } from '@nestjs/common';
+import {
+  ForbiddenException,
+  NotFoundException,
+  UseGuards,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { UsersService } from './users.service';
 import { UserGql } from './graphql/user.types';
@@ -59,7 +63,8 @@ export class UsersResolver {
     @Args('skip', { type: () => Int, defaultValue: 0 }) skip: number,
     @Args('take', { type: () => Int, defaultValue: 50 }) take: number,
   ): Promise<UserGql[]> {
-    if (actor.role !== UserRole.ADMIN) throw new ForbiddenException('Admin only');
+    if (actor.role !== UserRole.ADMIN)
+      throw new ForbiddenException('Admin only');
     const users = await this.usersService.listUsers(skip, Math.min(take, 200));
     return users.map((u) => this.usersService.toGql(u));
   }
@@ -71,7 +76,8 @@ export class UsersResolver {
     @CurrentUser() actor: ReqUser,
     @Args('email') email: string,
   ): Promise<UserGql> {
-    if (actor.role !== UserRole.ADMIN) throw new ForbiddenException('Admin only');
+    if (actor.role !== UserRole.ADMIN)
+      throw new ForbiddenException('Admin only');
     const target = await this.usersService.findByEmail(email);
     if (!target) throw new NotFoundException('User not found');
     const updated = await this.usersService.promoteToAdmin(email);
@@ -86,12 +92,15 @@ export class UsersResolver {
     @CurrentUser() actor: ReqUser,
     @Args('email') email: string,
   ): Promise<boolean> {
-    if (actor.role !== UserRole.ADMIN) throw new ForbiddenException('Admin only');
+    if (actor.role !== UserRole.ADMIN)
+      throw new ForbiddenException('Admin only');
     const target = await this.usersService.findByEmail(email);
     if (!target) throw new NotFoundException('User not found');
     const roles = this.usersService.resolveRoles(target);
     if (roles.includes(UserRole.ADMIN)) {
-      throw new ForbiddenException('Use removeAdmin to revoke admin access first');
+      throw new ForbiddenException(
+        'Use removeAdmin to revoke admin access first',
+      );
     }
     return this.usersService.removeByEmail(email);
   }
@@ -106,10 +115,13 @@ export class UsersResolver {
     @CurrentUser() actor: ReqUser,
     @Args('email') email: string,
   ): Promise<UserGql> {
-    if (actor.role !== UserRole.ADMIN) throw new ForbiddenException('Admin only');
+    if (actor.role !== UserRole.ADMIN)
+      throw new ForbiddenException('Admin only');
     const sysAdminEmail = this.config.get<string>('SYSTEM_ADMIN_EMAIL', '');
     if (email.trim().toLowerCase() === sysAdminEmail.toLowerCase()) {
-      throw new ForbiddenException('The system admin account cannot be modified');
+      throw new ForbiddenException(
+        'The system admin account cannot be modified',
+      );
     }
     const target = await this.usersService.findByEmail(email);
     if (!target) throw new NotFoundException('User not found');

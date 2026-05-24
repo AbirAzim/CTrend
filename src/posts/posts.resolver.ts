@@ -1,4 +1,11 @@
-import { Args, ID, Mutation, Query, Resolver, Subscription } from '@nestjs/graphql';
+import {
+  Args,
+  ID,
+  Mutation,
+  Query,
+  Resolver,
+  Subscription,
+} from '@nestjs/graphql';
 import { NotFoundException, UseGuards } from '@nestjs/common';
 import { PostsService } from './posts.service';
 import { PostGql } from './graphql/post.types';
@@ -125,9 +132,7 @@ export class PostsResolver {
     @CurrentUser() user?: ReqUser,
   ) {
     const rows = await this.postsService.findByAuthor(userId);
-    return Promise.all(
-      rows.map((p) => this.postsService.toGql(p, user?.id)),
-    );
+    return Promise.all(rows.map((p) => this.postsService.toGql(p, user?.id)));
   }
 
   @Query(() => [PostGql])
@@ -148,7 +153,9 @@ export class PostsResolver {
       _variables: { postId: string },
       context: { req?: { user?: ReqUser } },
     ) {
-      const post = await this.postsService.findById(payload.postVoteUpdated.postId);
+      const post = await this.postsService.findById(
+        payload.postVoteUpdated.postId,
+      );
       if (!post) throw new NotFoundException('Post not found');
       return this.postsService.toGql(post, context.req?.user?.id);
     },

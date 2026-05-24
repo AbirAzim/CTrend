@@ -94,7 +94,8 @@ import { InvitationsModule } from './invitations/invitations.module';
                 const roles = usersService.resolveRoles(user);
                 // Use the JWT-embedded activeRole if the user still holds it.
                 const activeRole =
-                  payload.activeRole && roles.includes(payload.activeRole as never)
+                  payload.activeRole &&
+                  roles.includes(payload.activeRole as never)
                     ? payload.activeRole
                     : roles.includes(UserRole.ADMIN)
                       ? UserRole.ADMIN

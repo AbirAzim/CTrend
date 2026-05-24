@@ -23,7 +23,8 @@ function sha256(value: string): string {
 @Injectable()
 export class InvitationsService {
   constructor(
-    @InjectModel(Invitation.name) private invitationModel: Model<InvitationDocument>,
+    @InjectModel(Invitation.name)
+    private invitationModel: Model<InvitationDocument>,
     private usersService: UsersService,
     private mailService: MailService,
     private config: ConfigService,
@@ -67,10 +68,18 @@ export class InvitationsService {
     });
 
     const inviter = await this.usersService.findById(inviterId);
-    const inviterName = inviter?.displayName ?? inviter?.username ?? 'A CTrend user';
-    const frontend = this.config.get<string>('FRONTEND_URL', 'http://localhost:3000');
+    const inviterName =
+      inviter?.displayName ?? inviter?.username ?? 'A CTrend user';
+    const frontend = this.config.get<string>(
+      'FRONTEND_URL',
+      'http://localhost:3000',
+    );
     const inviteUrl = `${frontend}/accept-invitation?token=${rawToken}`;
-    await this.mailService.sendInvitationEmail(normalized, inviteUrl, inviterName);
+    await this.mailService.sendInvitationEmail(
+      normalized,
+      inviteUrl,
+      inviterName,
+    );
 
     return true;
   }

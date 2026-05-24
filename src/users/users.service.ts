@@ -18,7 +18,9 @@ export class UsersService {
 
   toGql(doc: UserDocument, activeRole?: UserRole): UserGql {
     const roles = this.resolveRoles(doc);
-    const primaryRole = roles.includes(UserRole.ADMIN) ? UserRole.ADMIN : UserRole.USER;
+    const primaryRole = roles.includes(UserRole.ADMIN)
+      ? UserRole.ADMIN
+      : UserRole.USER;
     return {
       id: doc._id.toHexString(),
       email: doc.email,
@@ -32,7 +34,9 @@ export class UsersService {
     };
   }
 
-  async findByPasswordResetToken(tokenHash: string): Promise<UserDocument | null> {
+  async findByPasswordResetToken(
+    tokenHash: string,
+  ): Promise<UserDocument | null> {
     return this.userModel.findOne({ passwordResetToken: tokenHash }).exec();
   }
 
@@ -50,7 +54,9 @@ export class UsersService {
     emailVerified?: boolean;
   }): Promise<UserDocument> {
     const roles = data.roles ?? (data.role ? [data.role] : [UserRole.USER]);
-    const primaryRole = roles.includes(UserRole.ADMIN) ? UserRole.ADMIN : UserRole.USER;
+    const primaryRole = roles.includes(UserRole.ADMIN)
+      ? UserRole.ADMIN
+      : UserRole.USER;
     const user = new this.userModel({
       ...data,
       email: normalizeEmail(data.email),
@@ -102,7 +108,11 @@ export class UsersService {
 
   async setRole(userId: string, role: UserRole): Promise<UserDocument | null> {
     return this.userModel
-      .findByIdAndUpdate(userId, { $set: { role, roles: [role] } }, { new: true })
+      .findByIdAndUpdate(
+        userId,
+        { $set: { role, roles: [role] } },
+        { new: true },
+      )
       .exec();
   }
 
@@ -111,7 +121,10 @@ export class UsersService {
     return this.userModel
       .findOneAndUpdate(
         { email: normalized },
-        { $addToSet: { roles: UserRole.ADMIN }, $set: { role: UserRole.ADMIN } },
+        {
+          $addToSet: { roles: UserRole.ADMIN },
+          $set: { role: UserRole.ADMIN },
+        },
         { new: true },
       )
       .exec();
@@ -130,12 +143,19 @@ export class UsersService {
   }
 
   async removeByEmail(email: string): Promise<boolean> {
-    const result = await this.userModel.deleteOne({ email: normalizeEmail(email) }).exec();
+    const result = await this.userModel
+      .deleteOne({ email: normalizeEmail(email) })
+      .exec();
     return result.deletedCount > 0;
   }
 
   async listUsers(skip = 0, take = 50): Promise<UserDocument[]> {
-    return this.userModel.find().skip(skip).limit(take).sort({ createdAt: -1 }).exec();
+    return this.userModel
+      .find()
+      .skip(skip)
+      .limit(take)
+      .sort({ createdAt: -1 })
+      .exec();
   }
 
   async countUsers(): Promise<number> {

@@ -97,13 +97,16 @@ export class AuthService {
     const normalized = normalizeEmail(email);
     const user = await this.usersService.findByEmail(normalized);
     if (!user) throw new BadRequestException('Invalid or expired code');
-    if (user.emailVerified) throw new BadRequestException('Email already verified');
+    if (user.emailVerified)
+      throw new BadRequestException('Email already verified');
     if (
       !user.emailVerificationCode ||
       !user.emailVerificationExpiry ||
       user.emailVerificationExpiry < new Date()
     ) {
-      throw new BadRequestException('Verification code expired — request a new one');
+      throw new BadRequestException(
+        'Verification code expired — request a new one',
+      );
     }
     const match = await bcrypt.compare(code, user.emailVerificationCode);
     if (!match) throw new BadRequestException('Invalid or expired code');
@@ -135,7 +138,10 @@ export class AuthService {
     user.passwordResetExpiry = new Date(Date.now() + RESET_TTL_MS);
     await user.save();
 
-    const frontend = this.config.get<string>('FRONTEND_URL', 'http://localhost:3000');
+    const frontend = this.config.get<string>(
+      'FRONTEND_URL',
+      'http://localhost:3000',
+    );
     const resetUrl = `${frontend}/reset-password?token=${token}`;
     await this.mailService.sendPasswordResetLink(normalized, resetUrl);
     return true;
@@ -145,8 +151,14 @@ export class AuthService {
     if (newPassword.length < 8) {
       throw new BadRequestException('Password must be at least 8 characters');
     }
-    const user = await this.usersService.findByPasswordResetToken(sha256(token));
-    if (!user || !user.passwordResetExpiry || user.passwordResetExpiry < new Date()) {
+    const user = await this.usersService.findByPasswordResetToken(
+      sha256(token),
+    );
+    if (
+      !user ||
+      !user.passwordResetExpiry ||
+      user.passwordResetExpiry < new Date()
+    ) {
       throw new BadRequestException('Invalid or expired reset token');
     }
     user.password = await bcrypt.hash(newPassword, 10);
@@ -196,7 +208,7 @@ export class AuthService {
     const sub = payload.sub;
     const email = normalizeEmail(payload.email);
 
-    let user = await this.usersService.findByGoogleSub(sub);
+    const user = await this.usersService.findByGoogleSub(sub);
     if (user) {
       await this.syncGoogleProfile(user, payload.name, payload.picture);
       const fresh = await this.usersService.findById(user._id.toHexString());
@@ -206,7 +218,9 @@ export class AuthService {
     const byEmail = await this.usersService.findByEmail(email);
     if (byEmail) {
       if (byEmail.googleSub && byEmail.googleSub !== sub) {
-        throw new ConflictException('Account exists with a different Google login');
+        throw new ConflictException(
+          'Account exists with a different Google login',
+        );
       }
       byEmail.googleSub = sub;
       byEmail.emailVerified = true;
@@ -232,19 +246,27 @@ export class AuthService {
     return this.toAuthPayload(created);
   }
 
-  async acceptInvitation(rawToken: string, password: string, displayName?: string) {
+  async acceptInvitation(
+    rawToken: string,
+    password: string,
+    displayName?: string,
+  ) {
     const invitation = await this.invitationsService.findByRawToken(rawToken);
-    if (!invitation) throw new BadRequestException('Invalid or expired invitation link');
+    if (!invitation)
+      throw new BadRequestException('Invalid or expired invitation link');
 
     const existing = await this.usersService.findByEmail(invitation.email);
-    if (existing) throw new ConflictException('An account with this email already exists');
+    if (existing)
+      throw new ConflictException('An account with this email already exists');
 
     if (password.length < 8) {
       throw new BadRequestException('Password must be at least 8 characters');
     }
 
     const local = invitation.email.split('@')[0] || 'user';
-    const username = await this.usersService.ensureUniqueUsername(displayName || local);
+    const username = await this.usersService.ensureUniqueUsername(
+      displayName || local,
+    );
     const hash = await bcrypt.hash(password, 10);
 
     // Invited admins get both roles so they can switch between admin and user mode.
@@ -271,7 +293,9 @@ export class AuthService {
     if (!user) throw new UnauthorizedException();
     const roles = this.usersService.resolveRoles(user);
     if (!roles.includes(role)) {
-      throw new ForbiddenException(`Your account does not have the ${role} role`);
+      throw new ForbiddenException(
+        `Your account does not have the ${role} role`,
+      );
     }
     return this.toAuthPayload(user, role);
   }

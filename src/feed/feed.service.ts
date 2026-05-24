@@ -36,7 +36,9 @@ export class FeedService {
     viewerRole?: string,
   ) {
     const baseFilter = await this.buildFilter(scope, viewerId, viewerRole);
-    this.logger.log(`[DEBUG] getFeed viewerId=${viewerId} viewerRole=${viewerRole} filter=${JSON.stringify(baseFilter)}`);
+    this.logger.log(
+      `[DEBUG] getFeed viewerId=${viewerId} viewerRole=${viewerRole} filter=${JSON.stringify(baseFilter)}`,
+    );
     const filter = baseFilter;
     const sortSpec = this.buildSort(sort);
     const q = this.postModel.find(filter).sort(sortSpec).skip(skip).limit(take);
@@ -87,19 +89,28 @@ export class FeedService {
 
     // Authenticated user: own posts (any status) + friends' posts + SYSTEM + org posts.
     const viewerOid = new Types.ObjectId(viewerId);
-    const ownCount = await this.postModel.countDocuments({ type: PostType.USER, createdBy: viewerOid });
-    this.logger.log(`[DEBUG] viewerOid=${viewerOid} own USER posts in DB: ${ownCount}`);
+    const ownCount = await this.postModel.countDocuments({
+      type: PostType.USER,
+      createdBy: viewerOid,
+    });
+    this.logger.log(
+      `[DEBUG] viewerOid=${viewerOid} own USER posts in DB: ${ownCount}`,
+    );
     const followingIds = await this.followsService.getFollowingIds(viewerId);
     const followingOids = followingIds.map((id) => new Types.ObjectId(id));
     const orgConnectedIds = await this.orgIdsForFollowedOwners(followingIds);
 
     const parts: Record<string, unknown>[] = [
       { type: PostType.SYSTEM, ...notScheduled },
-      { type: PostType.USER, createdBy: viewerOid },  // own posts: no status restriction
+      { type: PostType.USER, createdBy: viewerOid }, // own posts: no status restriction
     ];
 
     if (followingOids.length > 0) {
-      parts.push({ type: PostType.USER, createdBy: { $in: followingOids }, ...notScheduled });
+      parts.push({
+        type: PostType.USER,
+        createdBy: { $in: followingOids },
+        ...notScheduled,
+      });
     }
 
     if (orgConnectedIds.length > 0) {
@@ -111,7 +122,11 @@ export class FeedService {
       });
     }
 
-    parts.push({ type: PostType.ORG, orgReach: OrgPostReach.GLOBAL, ...notScheduled });
+    parts.push({
+      type: PostType.ORG,
+      orgReach: OrgPostReach.GLOBAL,
+      ...notScheduled,
+    });
 
     return { $or: parts };
   }

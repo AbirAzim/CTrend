@@ -1,10 +1,7 @@
 import { ForbiddenException, UseGuards } from '@nestjs/common';
 import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { OrganizationsService } from './organizations.service';
-import {
-  OrganizationDashboardGql,
-  OrganizationGql,
-} from './graphql/org.types';
+import { OrganizationDashboardGql, OrganizationGql } from './graphql/org.types';
 import { GqlAuthGuard } from '../common/guards/gql-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UserRole } from '../common/enums';

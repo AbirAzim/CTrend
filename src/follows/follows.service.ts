@@ -78,7 +78,10 @@ export class FollowsService {
     return friends.map((u) => this.usersService.toGql(u));
   }
 
-  async getFriendSuggestions(userId: string, limit: number): Promise<UserGql[]> {
+  async getFriendSuggestions(
+    userId: string,
+    limit: number,
+  ): Promise<UserGql[]> {
     const relatedRows = await this.followModel
       .find({
         $or: [
@@ -102,9 +105,9 @@ export class FollowsService {
         // Only show users who hold the user role.
         // Pure admin-only accounts (no user role) are excluded.
         $or: [
-          { roles: 'user' },           // has user role in the array (includes dual-role)
+          { roles: 'user' }, // has user role in the array (includes dual-role)
           { roles: { $exists: false } }, // legacy docs without roles field
-          { roles: { $size: 0 } },      // edge case: empty roles array
+          { roles: { $size: 0 } }, // edge case: empty roles array
         ],
       })
       .sort({ createdAt: -1 })
@@ -113,7 +116,10 @@ export class FollowsService {
     return candidates.map((u) => this.usersService.toGql(u));
   }
 
-  async addFriendRequest(requesterId: string, targetUserId: string): Promise<string> {
+  async addFriendRequest(
+    requesterId: string,
+    targetUserId: string,
+  ): Promise<string> {
     if (requesterId === targetUserId) {
       throw new BadRequestException('Cannot send friend request to yourself');
     }

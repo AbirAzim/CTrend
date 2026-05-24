@@ -18,7 +18,9 @@ export class AdminSeedService implements OnModuleInit {
     const password = this.config.get<string>('SYSTEM_ADMIN_PASSWORD');
 
     if (!email || !password) {
-      this.logger.warn('SYSTEM_ADMIN_EMAIL or SYSTEM_ADMIN_PASSWORD not set — skipping system admin seed');
+      this.logger.warn(
+        'SYSTEM_ADMIN_EMAIL or SYSTEM_ADMIN_PASSWORD not set — skipping system admin seed',
+      );
       return;
     }
 
@@ -26,8 +28,11 @@ export class AdminSeedService implements OnModuleInit {
       const existing = await this.usersService.findByEmail(email);
       if (existing) {
         const existingRoles = this.usersService.resolveRoles(existing);
-      if (!existingRoles.includes(UserRole.ADMIN)) {
-          await this.usersService.setRole(existing._id.toHexString(), UserRole.ADMIN);
+        if (!existingRoles.includes(UserRole.ADMIN)) {
+          await this.usersService.setRole(
+            existing._id.toHexString(),
+            UserRole.ADMIN,
+          );
           this.logger.log(`System admin role enforced for ${email}`);
         }
         return;
@@ -44,7 +49,10 @@ export class AdminSeedService implements OnModuleInit {
       });
       this.logger.log(`System admin created: ${email}`);
     } catch (e) {
-      this.logger.error('System admin seed failed', e instanceof Error ? e.stack : String(e));
+      this.logger.error(
+        'System admin seed failed',
+        e instanceof Error ? e.stack : String(e),
+      );
     }
   }
 }

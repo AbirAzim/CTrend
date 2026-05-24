@@ -52,7 +52,10 @@ export class BillingService {
       };
     }
     await this.organizationsService.assertOrgOwnedBy(organizationId, userId);
-    const frontend = this.config.get<string>('FRONTEND_URL', 'http://localhost:3000');
+    const frontend = this.config.get<string>(
+      'FRONTEND_URL',
+      'http://localhost:3000',
+    );
     if (!this.stripe) {
       return {
         url: undefined,
@@ -97,7 +100,9 @@ export class BillingService {
   }
 
   async cancelSubscription(userId: string, organizationId?: string) {
-    const filter: Record<string, unknown> = { userId: new Types.ObjectId(userId) };
+    const filter: Record<string, unknown> = {
+      userId: new Types.ObjectId(userId),
+    };
     if (organizationId) {
       filter.organizationId = new Types.ObjectId(organizationId);
     }
@@ -118,7 +123,9 @@ export class BillingService {
     await this.organizationsService.setPremiumFromWebhook(
       orgId,
       typeof session.customer === 'string' ? session.customer : undefined,
-      typeof session.subscription === 'string' ? session.subscription : undefined,
+      typeof session.subscription === 'string'
+        ? session.subscription
+        : undefined,
     );
     await this.subModel.create({
       organizationId: new Types.ObjectId(orgId),

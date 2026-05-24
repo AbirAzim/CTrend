@@ -45,9 +45,7 @@ export class UploadsController {
   ) {
     if (!file) throw new BadRequestException('No file provided');
     if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
-      throw new BadRequestException(
-        `Unsupported file type: ${file.mimetype}`,
-      );
+      throw new BadRequestException(`Unsupported file type: ${file.mimetype}`);
     }
 
     const { buffer, mimeType } = await this.uploadsService.compressImage(

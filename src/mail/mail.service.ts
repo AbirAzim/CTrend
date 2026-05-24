@@ -112,7 +112,11 @@ export class MailService {
     });
   }
 
-  async sendInvitationEmail(to: string, inviteUrl: string, inviterName: string): Promise<void> {
+  async sendInvitationEmail(
+    to: string,
+    inviteUrl: string,
+    inviterName: string,
+  ): Promise<void> {
     const html = this.baseTemplate(`
       <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1A1A2E;text-align:center;">
         You're invited to CTrend

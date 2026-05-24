@@ -96,7 +96,9 @@ export class SeedDummyPostsService implements OnModuleInit {
           !existing.options?.[0]?.imageUrl ||
           !existing.options?.[1]?.imageUrl ||
           (existing.options?.[1]?.label === 'Lionel Messi' &&
-            !!existing.options[1].imageUrl?.includes('Portrait_of_Lionel_Messi'));
+            !!existing.options[1].imageUrl?.includes(
+              'Portrait_of_Lionel_Messi',
+            ));
 
         if (needsUpdate) {
           existing.type = PostType.USER;
@@ -115,7 +117,9 @@ export class SeedDummyPostsService implements OnModuleInit {
 
       const cat = await this.categoriesService.findBySlug(t.categorySlug);
       if (!cat) {
-        this.logger.warn(`Category ${t.categorySlug} missing, skip: ${t.a} vs ${t.b}`);
+        this.logger.warn(
+          `Category ${t.categorySlug} missing, skip: ${t.a} vs ${t.b}`,
+        );
         continue;
       }
 

@@ -1,6 +1,11 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
-import { OrgPostReach, PostStatus, PostType, Visibility } from '../common/enums';
+import {
+  OrgPostReach,
+  PostStatus,
+  PostType,
+  Visibility,
+} from '../common/enums';
 
 export type PostOption = { label: string; imageUrl?: string };
 

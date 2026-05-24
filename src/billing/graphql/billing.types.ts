@@ -1,5 +1,9 @@
 import { Field, ID, ObjectType } from '@nestjs/graphql';
-import { PaymentProvider, SubscriptionPlan, SubscriptionStatus } from '../../common/enums';
+import {
+  PaymentProvider,
+  SubscriptionPlan,
+  SubscriptionStatus,
+} from '../../common/enums';
 
 @ObjectType()
 export class CheckoutSessionGql {

@@ -25,10 +25,7 @@ export class AuthResolver {
   }
 
   @Mutation(() => AuthPayloadGql)
-  login(
-    @Args('email') email: string,
-    @Args('password') password: string,
-  ) {
+  login(@Args('email') email: string, @Args('password') password: string) {
     return this.authService.login(email, password);
   }
 
@@ -46,10 +43,7 @@ export class AuthResolver {
   }
 
   @Mutation(() => AuthPayloadGql)
-  verifyEmail(
-    @Args('email') email: string,
-    @Args('code') code: string,
-  ) {
+  verifyEmail(@Args('email') email: string, @Args('code') code: string) {
     return this.authService.verifyEmail(email, code);
   }
 
@@ -83,7 +77,11 @@ export class AuthResolver {
     @Args('password') password: string,
     @Args('displayName', { nullable: true }) displayName?: string,
   ) {
-    return this.authService.acceptInvitation(token, password, displayName ?? undefined);
+    return this.authService.acceptInvitation(
+      token,
+      password,
+      displayName ?? undefined,
+    );
   }
 
   /**

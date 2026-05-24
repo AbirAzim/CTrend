@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -13,6 +14,7 @@ import { UserDocument } from '../users/user.schema';
 import { UsersService, normalizeEmail } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
 import { InvitationsService } from '../invitations/invitations.service';
+import { UserRole } from '../common/enums';
 
 const OTP_TTL_MS = 15 * 60 * 1000;
 
@@ -244,17 +246,34 @@ export class AuthService {
     const local = invitation.email.split('@')[0] || 'user';
     const username = await this.usersService.ensureUniqueUsername(displayName || local);
     const hash = await bcrypt.hash(password, 10);
+
+    // Invited admins get both roles so they can switch between admin and user mode.
+    const roles =
+      invitation.role === UserRole.ADMIN
+        ? [UserRole.USER, UserRole.ADMIN]
+        : [UserRole.USER];
+
     const user = await this.usersService.create({
       username,
       email: invitation.email,
       password: hash,
       displayName: displayName?.trim() || undefined,
-      role: invitation.role,
+      roles,
       emailVerified: true,
     });
 
     await this.invitationsService.markAccepted(invitation._id.toHexString());
     return this.toAuthPayload(user);
+  }
+
+  async switchActiveRole(userId: string, role: UserRole) {
+    const user = await this.usersService.findById(userId);
+    if (!user) throw new UnauthorizedException();
+    const roles = this.usersService.resolveRoles(user);
+    if (!roles.includes(role)) {
+      throw new ForbiddenException(`Your account does not have the ${role} role`);
+    }
+    return this.toAuthPayload(user, role);
   }
 
   private async sendOtp(user: UserDocument): Promise<void> {
@@ -283,11 +302,21 @@ export class AuthService {
     if (dirty) await user.save();
   }
 
-  private toAuthPayload(user: UserDocument) {
+  private toAuthPayload(user: UserDocument, activeRole?: UserRole) {
+    const roles = this.usersService.resolveRoles(user);
+    const resolvedRole =
+      activeRole && roles.includes(activeRole)
+        ? activeRole
+        : roles.includes(UserRole.ADMIN)
+          ? UserRole.ADMIN
+          : UserRole.USER;
     return {
-      accessToken: this.jwtService.sign({ sub: user._id.toHexString() }),
+      accessToken: this.jwtService.sign({
+        sub: user._id.toHexString(),
+        activeRole: resolvedRole,
+      }),
       refreshToken: null as string | null,
-      user: this.usersService.toGql(user),
+      user: this.usersService.toGql(user, resolvedRole),
     };
   }
 }

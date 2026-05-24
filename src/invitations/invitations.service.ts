@@ -41,7 +41,14 @@ export class InvitationsService {
 
     const normalized = email.trim().toLowerCase();
     const existing = await this.usersService.findByEmail(normalized);
-    if (existing) throw new ConflictException('A user with this email already exists');
+    if (existing) {
+      if (targetRole === UserRole.ADMIN) {
+        throw new ConflictException(
+          'This user already has an account. Use promoteToAdmin to grant them admin access.',
+        );
+      }
+      throw new ConflictException('A user with this email already exists');
+    }
 
     // Cancel any existing pending invitation for this email to avoid duplicates.
     await this.invitationModel.deleteMany({

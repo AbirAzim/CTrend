@@ -97,8 +97,9 @@ type Mutation {
   inviteAdmin(email: String!): Boolean!
   inviteUser(email: String!): Boolean!
   login(email: String!, password: String!): AuthPayloadGql!
+  promoteToAdmin(email: String!): UserGql!
   register(input: RegisterInput!): AuthPayloadGql!
-  removeAdmin(email: String!): Boolean!
+  removeAdmin(email: String!): UserGql!
   removeUser(email: String!): Boolean!
   requestPasswordReset(email: String!): Boolean!
   resendVerificationEmail(email: String!): Boolean!
@@ -109,6 +110,7 @@ type Mutation {
   setPostKeep(keep: Boolean!, postId: ID!): Boolean!
   setPostLike(active: Boolean!, postId: ID!): Boolean!
   signup(displayName: String, email: String!, password: String!): Boolean!
+  switchActiveRole(role: UserRole!): AuthPayloadGql!
   updateProfile(input: UpdateProfileInput!): UserGql!
   verifyBkashPayment(payload: String!): BkashVerificationGql!
   verifyEmail(code: String!, email: String!): AuthPayloadGql!
@@ -268,6 +270,7 @@ type UserGql {
   interests: [String!]!
   profileImageUrl: String
   role: UserRole!
+  roles: [UserRole!]!
   username: String!
 }
 

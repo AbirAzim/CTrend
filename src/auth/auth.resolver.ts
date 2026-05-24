@@ -1,7 +1,13 @@
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
+import { UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { RegisterInput } from './dto/auth.inputs';
 import { AuthPayloadGql } from './graphql/auth.types';
+import { GqlAuthGuard } from '../common/guards/gql-auth.guard';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { UserRole } from '../common/enums';
+
+type ReqUser = { id: string };
 
 @Resolver()
 export class AuthResolver {
@@ -78,5 +84,19 @@ export class AuthResolver {
     @Args('displayName', { nullable: true }) displayName?: string,
   ) {
     return this.authService.acceptInvitation(token, password, displayName ?? undefined);
+  }
+
+  /**
+   * Switch the active role for this session.
+   * Returns a new JWT with the chosen role embedded.
+   * Only valid if the authenticated user actually holds that role.
+   */
+  @Mutation(() => AuthPayloadGql)
+  @UseGuards(GqlAuthGuard)
+  switchActiveRole(
+    @CurrentUser() user: ReqUser,
+    @Args('role', { type: () => UserRole }) role: UserRole,
+  ) {
+    return this.authService.switchActiveRole(user.id, role);
   }
 }

@@ -8,6 +8,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 import { join } from 'path';
 import { GqlThrottlerGuard } from './common/guards/gql-throttler.guard';
+import { UserRole } from './common/enums';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from './users/users.service';
 import { UsersModule } from './users/users.module';
@@ -84,12 +85,24 @@ import { InvitationsModule } from './invitations/invitations.module';
             : undefined;
           if (token) {
             try {
-              const payload = await jwtService.verifyAsync<{ sub: string }>(token);
+              const payload = await jwtService.verifyAsync<{
+                sub: string;
+                activeRole?: string;
+              }>(token);
               const user = await usersService.findById(payload.sub);
               if (user) {
+                const roles = usersService.resolveRoles(user);
+                // Use the JWT-embedded activeRole if the user still holds it.
+                const activeRole =
+                  payload.activeRole && roles.includes(payload.activeRole as never)
+                    ? payload.activeRole
+                    : roles.includes(UserRole.ADMIN)
+                      ? UserRole.ADMIN
+                      : UserRole.USER;
                 ctxReq.user = {
                   id: user._id.toHexString(),
-                  role: user.role,
+                  role: activeRole,
+                  roles,
                   email: user.email,
                   username: user.username,
                   interests: user.interests ?? [],

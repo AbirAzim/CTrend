@@ -25,8 +25,13 @@ export class User {
   @Prop({ type: [String], default: [] })
   interests: string[];
 
+  /** Legacy single-role field — kept for backward compat with existing documents. */
   @Prop({ type: String, enum: UserRole, default: UserRole.USER })
   role: UserRole;
+
+  /** All roles this user holds. Supersedes `role` when present. */
+  @Prop({ type: [String], enum: UserRole, default: [UserRole.USER] })
+  roles: UserRole[];
 
   @Prop({ trim: true })
   bio?: string;

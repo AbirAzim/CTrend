@@ -85,6 +85,23 @@ export class UsersService {
     }
     return `${slug}${randomInt(100000, 999999)}`;
   }
+
+  async setRole(userId: string, role: UserRole): Promise<UserDocument | null> {
+    return this.userModel.findByIdAndUpdate(userId, { $set: { role } }, { new: true }).exec();
+  }
+
+  async removeByEmail(email: string): Promise<boolean> {
+    const result = await this.userModel.deleteOne({ email: normalizeEmail(email) }).exec();
+    return result.deletedCount > 0;
+  }
+
+  async listUsers(skip = 0, take = 50): Promise<UserDocument[]> {
+    return this.userModel.find().skip(skip).limit(take).sort({ createdAt: -1 }).exec();
+  }
+
+  async countUsers(): Promise<number> {
+    return this.userModel.countDocuments().exec();
+  }
 }
 
 export function normalizeEmail(email: string): string {

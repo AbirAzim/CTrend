@@ -54,7 +54,13 @@ export enum PostStatus {
   SCHEDULED = 'scheduled',
 }
 
+export enum InvitationStatus {
+  PENDING = 'pending',
+  ACCEPTED = 'accepted',
+}
+
 registerEnumType(UserRole, { name: 'UserRole' });
+registerEnumType(InvitationStatus, { name: 'InvitationStatus' });
 registerEnumType(PostType, { name: 'PostType' });
 registerEnumType(Visibility, { name: 'Visibility' });
 registerEnumType(OrgPostReach, { name: 'OrgPostReach' });

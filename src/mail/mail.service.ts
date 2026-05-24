@@ -112,6 +112,35 @@ export class MailService {
     });
   }
 
+  async sendInvitationEmail(to: string, inviteUrl: string, inviterName: string): Promise<void> {
+    const html = this.baseTemplate(`
+      <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1A1A2E;text-align:center;">
+        You're invited to CTrend
+      </h2>
+      ${this.logoImgTag(48, '20px')}
+      <p style="margin:0 0 28px;font-size:15px;color:#555;line-height:1.6;text-align:center;">
+        <strong>${inviterName}</strong> has invited you to join CTrend —<br>
+        the platform where you compare, vote, and see the trend.<br>
+        This invitation expires in <strong>7 days</strong>.
+      </p>
+      <p style="text-align:center;margin:0 0 28px;">
+        <a href="${inviteUrl}"
+          style="display:inline-block;background:#1A1A2E;color:#fff;
+            text-decoration:none;border-radius:10px;padding:14px 36px;
+            font-size:16px;font-weight:600;">
+          Accept Invitation
+        </a>
+      </p>
+      <p style="margin:0;font-size:13px;color:#999;text-align:center;">
+        If you weren't expecting this invitation, you can safely ignore this email.
+      </p>
+    `);
+
+    await this.send(to, `${inviterName} invited you to CTrend`, html, {
+      text: `${inviterName} has invited you to join CTrend.\n\nAccept your invitation:\n${inviteUrl}\n\nThis invitation expires in 7 days. If you weren't expecting this, ignore it.`,
+    });
+  }
+
   async sendPasswordResetLink(to: string, resetUrl: string): Promise<void> {
     const html = this.baseTemplate(`
       <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1A1A2E;">

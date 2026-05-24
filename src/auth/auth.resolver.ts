@@ -69,4 +69,14 @@ export class AuthResolver {
   googleLogin(@Args('idToken') idToken: string) {
     return this.authService.googleLogin(idToken);
   }
+
+  /** Accept an email invitation and create an account. Returns tokens immediately. */
+  @Mutation(() => AuthPayloadGql)
+  acceptInvitation(
+    @Args('token') token: string,
+    @Args('password') password: string,
+    @Args('displayName', { nullable: true }) displayName?: string,
+  ) {
+    return this.authService.acceptInvitation(token, password, displayName ?? undefined);
+  }
 }

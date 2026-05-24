@@ -8,23 +8,18 @@ import {
   OrgPostReach,
   PostStatus,
   PostType,
-  Visibility,
 } from '../common/enums';
 import { PostsService } from '../posts/posts.service';
-import { CategoriesService } from '../categories/categories.service';
 import { FollowsService } from '../follows/follows.service';
 import { OrganizationsService } from '../organizations/organizations.service';
-import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class FeedService {
   constructor(
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
     private postsService: PostsService,
-    private categoriesService: CategoriesService,
     private followsService: FollowsService,
     private organizationsService: OrganizationsService,
-    private usersService: UsersService,
   ) {}
 
   async getFeed(
@@ -65,72 +60,43 @@ export class FeedService {
     scope: FeedScope,
     viewerId?: string,
   ): Promise<Record<string, unknown>> {
-    const globalPublic: Record<string, unknown>[] = [
+    // Normal user posts are friends-only; only SYSTEM and global ORG posts are public.
+    const platformWide: Record<string, unknown>[] = [
       { type: PostType.SYSTEM },
-      { type: PostType.USER, visibility: Visibility.PUBLIC },
-      {
-        type: PostType.ORG,
-        orgReach: OrgPostReach.GLOBAL,
-      },
+      { type: PostType.ORG, orgReach: OrgPostReach.GLOBAL },
     ];
 
-    if (scope === FeedScope.GLOBAL) {
-      return { $or: globalPublic };
-    }
-
-    if (!viewerId) {
-      return { $or: globalPublic };
+    if (scope === FeedScope.GLOBAL || !viewerId) {
+      return { $or: platformWide };
     }
 
     const viewerOid = new Types.ObjectId(viewerId);
     const followingIds = await this.followsService.getFollowingIds(viewerId);
     const followingOids = followingIds.map((id) => new Types.ObjectId(id));
 
-    const interestCategoryIds = await this.resolveInterestCategoryIds(viewerId);
-
-    const privateFromFollowed =
-      followingOids.length > 0
-        ? {
-            type: PostType.USER,
-            visibility: Visibility.PRIVATE,
-            createdBy: { $in: followingOids },
-          }
-        : null;
-
     const orgConnectedIds = await this.orgIdsForFollowedOwners(followingIds);
-    const orgConnected =
-      orgConnectedIds.length > 0
-        ? {
-            type: PostType.ORG,
-            orgReach: OrgPostReach.CONNECTED,
-            organizationId: { $in: orgConnectedIds },
-          }
-        : null;
 
     const parts: Record<string, unknown>[] = [
       { type: PostType.SYSTEM },
-      { createdBy: viewerOid },
+      { type: PostType.USER, createdBy: viewerOid }, // own posts
     ];
-    if (interestCategoryIds.length) {
-      parts.push({ categoryId: { $in: interestCategoryIds } });
-    }
-    if (privateFromFollowed) parts.push(privateFromFollowed);
-    if (orgConnected) parts.push(orgConnected);
-    parts.push(...globalPublic);
-    return { $or: parts };
-  }
 
-  private async resolveInterestCategoryIds(
-    viewerId: string,
-  ): Promise<Types.ObjectId[]> {
-    const user = await this.usersService.findById(viewerId);
-    if (!user?.interests?.length) return [];
-    const ids: Types.ObjectId[] = [];
-    for (const slug of user.interests) {
-      const cat = await this.categoriesService.findBySlug(slug);
-      if (cat) ids.push(cat._id);
+    // All posts (public and private) from followed users.
+    if (followingOids.length > 0) {
+      parts.push({ type: PostType.USER, createdBy: { $in: followingOids } });
     }
-    return ids;
+
+    if (orgConnectedIds.length > 0) {
+      parts.push({
+        type: PostType.ORG,
+        orgReach: OrgPostReach.CONNECTED,
+        organizationId: { $in: orgConnectedIds },
+      });
+    }
+
+    parts.push({ type: PostType.ORG, orgReach: OrgPostReach.GLOBAL });
+
+    return { $or: parts };
   }
 
   private async orgIdsForFollowedOwners(

@@ -23,6 +23,7 @@ import { BillingModule } from './billing/billing.module';
 import { SeedModule } from './seed/seed.module';
 import { MailModule } from './mail/mail.module';
 import { UploadsModule } from './uploads/uploads.module';
+import { InvitationsModule } from './invitations/invitations.module';
 
 @Module({
   imports: [
@@ -119,6 +120,7 @@ import { UploadsModule } from './uploads/uploads.module';
     BillingModule,
     SeedModule,
     UploadsModule,
+    InvitationsModule,
   ],
   providers: [
     {

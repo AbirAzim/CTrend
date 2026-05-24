@@ -12,6 +12,7 @@ import { createHash, randomBytes, randomInt } from 'crypto';
 import { UserDocument } from '../users/user.schema';
 import { UsersService, normalizeEmail } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
+import { InvitationsService } from '../invitations/invitations.service';
 
 const OTP_TTL_MS = 15 * 60 * 1000;
 
@@ -27,6 +28,7 @@ export class AuthService {
     private jwtService: JwtService,
     private config: ConfigService,
     private mailService: MailService,
+    private invitationsService: InvitationsService,
   ) {}
 
   /** Legacy signup: username + email + password. Returns tokens immediately. */
@@ -158,7 +160,11 @@ export class AuthService {
     if (!user) throw new UnauthorizedException('Invalid email or password');
     const ok = await bcrypt.compare(password, user.password);
     if (!ok) throw new UnauthorizedException('Invalid email or password');
-    if (!user.emailVerified) {
+
+    const sysAdminEmail = this.config.get<string>('SYSTEM_ADMIN_EMAIL', '');
+    const isSystemAdmin = normalized === sysAdminEmail.toLowerCase().trim();
+
+    if (!user.emailVerified && !isSystemAdmin) {
       throw new UnauthorizedException(
         'Please verify your email before logging in',
       );
@@ -222,6 +228,33 @@ export class AuthService {
       emailVerified: true,
     });
     return this.toAuthPayload(created);
+  }
+
+  async acceptInvitation(rawToken: string, password: string, displayName?: string) {
+    const invitation = await this.invitationsService.findByRawToken(rawToken);
+    if (!invitation) throw new BadRequestException('Invalid or expired invitation link');
+
+    const existing = await this.usersService.findByEmail(invitation.email);
+    if (existing) throw new ConflictException('An account with this email already exists');
+
+    if (password.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters');
+    }
+
+    const local = invitation.email.split('@')[0] || 'user';
+    const username = await this.usersService.ensureUniqueUsername(displayName || local);
+    const hash = await bcrypt.hash(password, 10);
+    const user = await this.usersService.create({
+      username,
+      email: invitation.email,
+      password: hash,
+      displayName: displayName?.trim() || undefined,
+      role: invitation.role,
+      emailVerified: true,
+    });
+
+    await this.invitationsService.markAccepted(invitation._id.toHexString());
+    return this.toAuthPayload(user);
   }
 
   private async sendOtp(user: UserDocument): Promise<void> {

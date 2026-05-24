@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Post, PostDocument } from '../posts/post.schema';
@@ -15,6 +15,8 @@ import { OrganizationsService } from '../organizations/organizations.service';
 
 @Injectable()
 export class FeedService {
+  private readonly logger = new Logger(FeedService.name);
+
   constructor(
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
     private postsService: PostsService,
@@ -31,7 +33,8 @@ export class FeedService {
     viewerRole?: string,
   ) {
     const baseFilter = await this.buildFilter(scope, viewerId, viewerRole);
-    const filter = { ...baseFilter, status: { $ne: PostStatus.SCHEDULED } };
+    this.logger.log(`[DEBUG] getFeed viewerId=${viewerId} viewerRole=${viewerRole} filter=${JSON.stringify(baseFilter)}`);
+    const filter = baseFilter;
     const sortSpec = this.buildSort(sort);
     const q = this.postModel.find(filter).sort(sortSpec).skip(skip).limit(take);
     const [rows, totalCount] = await Promise.all([
@@ -58,37 +61,40 @@ export class FeedService {
   }
 
   private async buildFilter(
-    scope: FeedScope,
+    _scope: FeedScope,
     viewerId?: string,
     viewerRole?: string,
   ): Promise<Record<string, unknown>> {
-    // Admins see everything.
+    // Admins see every post on the platform.
     if (viewerRole === 'admin') return {};
 
-    // Normal user posts are friends-only; only SYSTEM and global ORG posts are public.
-    const platformWide: Record<string, unknown>[] = [
-      { type: PostType.SYSTEM },
-      { type: PostType.ORG, orgReach: OrgPostReach.GLOBAL },
-    ];
+    const notScheduled = { status: { $ne: PostStatus.SCHEDULED } };
 
-    if (scope === FeedScope.GLOBAL || !viewerId) {
-      return { $or: platformWide };
+    // Unauthenticated: only platform-wide content.
+    if (!viewerId) {
+      return {
+        $or: [
+          { type: PostType.SYSTEM, ...notScheduled },
+          { type: PostType.ORG, orgReach: OrgPostReach.GLOBAL, ...notScheduled },
+        ],
+      };
     }
 
+    // Authenticated user: own posts (any status) + friends' posts + SYSTEM + org posts.
     const viewerOid = new Types.ObjectId(viewerId);
+    const ownCount = await this.postModel.countDocuments({ type: PostType.USER, createdBy: viewerOid });
+    this.logger.log(`[DEBUG] viewerOid=${viewerOid} own USER posts in DB: ${ownCount}`);
     const followingIds = await this.followsService.getFollowingIds(viewerId);
     const followingOids = followingIds.map((id) => new Types.ObjectId(id));
-
     const orgConnectedIds = await this.orgIdsForFollowedOwners(followingIds);
 
     const parts: Record<string, unknown>[] = [
-      { type: PostType.SYSTEM },
-      { type: PostType.USER, createdBy: viewerOid }, // own posts
+      { type: PostType.SYSTEM, ...notScheduled },
+      { type: PostType.USER, createdBy: viewerOid },  // own posts: no status restriction
     ];
 
-    // All posts (public and private) from followed users.
     if (followingOids.length > 0) {
-      parts.push({ type: PostType.USER, createdBy: { $in: followingOids } });
+      parts.push({ type: PostType.USER, createdBy: { $in: followingOids }, ...notScheduled });
     }
 
     if (orgConnectedIds.length > 0) {
@@ -96,10 +102,11 @@ export class FeedService {
         type: PostType.ORG,
         orgReach: OrgPostReach.CONNECTED,
         organizationId: { $in: orgConnectedIds },
+        ...notScheduled,
       });
     }
 
-    parts.push({ type: PostType.ORG, orgReach: OrgPostReach.GLOBAL });
+    parts.push({ type: PostType.ORG, orgReach: OrgPostReach.GLOBAL, ...notScheduled });
 
     return { $or: parts };
   }

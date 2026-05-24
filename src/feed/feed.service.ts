@@ -28,8 +28,9 @@ export class FeedService {
     skip: number,
     take: number,
     viewerId?: string,
+    viewerRole?: string,
   ) {
-    const baseFilter = await this.buildFilter(scope, viewerId);
+    const baseFilter = await this.buildFilter(scope, viewerId, viewerRole);
     const filter = { ...baseFilter, status: { $ne: PostStatus.SCHEDULED } };
     const sortSpec = this.buildSort(sort);
     const q = this.postModel.find(filter).sort(sortSpec).skip(skip).limit(take);
@@ -59,7 +60,11 @@ export class FeedService {
   private async buildFilter(
     scope: FeedScope,
     viewerId?: string,
+    viewerRole?: string,
   ): Promise<Record<string, unknown>> {
+    // Admins see everything.
+    if (viewerRole === 'admin') return {};
+
     // Normal user posts are friends-only; only SYSTEM and global ORG posts are public.
     const platformWide: Record<string, unknown>[] = [
       { type: PostType.SYSTEM },

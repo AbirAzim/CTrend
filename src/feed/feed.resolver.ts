@@ -7,7 +7,7 @@ import { OptionalJwtGqlGuard } from '../common/guards/optional-jwt-gql.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PostGql } from '../posts/graphql/post.types';
 
-type ReqUser = { id: string };
+type ReqUser = { id: string; role: string };
 
 @Resolver()
 export class FeedResolver {
@@ -25,7 +25,7 @@ export class FeedResolver {
     @CurrentUser() user?: ReqUser,
   ) {
     const viewerId = user?.id;
-    return this.feedService.getFeed(scope, sort, skip, take, viewerId);
+    return this.feedService.getFeed(scope, sort, skip, take, viewerId, user?.role);
   }
 
   /**
@@ -52,6 +52,7 @@ export class FeedResolver {
       skip,
       take,
       viewerId,
+      user?.role,
     );
     return result.nodes;
   }

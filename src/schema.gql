@@ -48,6 +48,7 @@ input CreatePostInput {
   imageUrls: [String!]!
   options: [PostOptionInput!]!
   orgReach: OrgPostReach
+  scheduledAt: DateTime
   type: PostType
   visibility: Visibility
   votingEndsAt: DateTime
@@ -80,7 +81,9 @@ type FriendRequestsGql {
 }
 
 type Mutation {
+  acceptInvitation(displayName: String, password: String!, token: String!): AuthPayloadGql!
   addFriend(userId: ID!): String!
+  cancelScheduledPost(postId: ID!): Boolean!
   cancelSubscription(organizationId: ID): Boolean!
   commentPost(input: CommentPostInput!, postId: ID!): CommentGql!
   createOrganization(name: String!): OrganizationGql!
@@ -89,9 +92,14 @@ type Mutation {
   createSystemPost(input: CreatePostInput!): PostGql!
   extendPostVoting(newVotingEndsAt: DateTime!, postId: ID!): PostGql!
   followUser(userId: ID!): Boolean!
+  getImageUploadUrl(contentType: String!, filename: String!): PresignedUploadUrl!
   googleLogin(idToken: String!): AuthPayloadGql!
+  inviteAdmin(email: String!): Boolean!
+  inviteUser(email: String!): Boolean!
   login(email: String!, password: String!): AuthPayloadGql!
   register(input: RegisterInput!): AuthPayloadGql!
+  removeAdmin(email: String!): Boolean!
+  removeUser(email: String!): Boolean!
   requestPasswordReset(email: String!): Boolean!
   resendVerificationEmail(email: String!): Boolean!
   resetPassword(newPassword: String!, token: String!): Boolean!
@@ -158,6 +166,8 @@ type PostGql {
   orgReach: OrgPostReach
   recentComments: [CommentGql!]!
   saveCount: Int!
+  scheduledAt: DateTime
+  status: PostStatus!
   totalVotes: Int!
   type: PostType!
   upvoteCount: Int!
@@ -177,6 +187,11 @@ input PostOptionInput {
   label: String!
 }
 
+enum PostStatus {
+  PUBLISHED
+  SCHEDULED
+}
+
 enum PostType {
   ORG
   SYSTEM
@@ -192,6 +207,12 @@ type PostVoterGql {
   voteId: ID!
 }
 
+type PresignedUploadUrl {
+  key: String!
+  publicUrl: String!
+  uploadUrl: String!
+}
+
 type Query {
   categories: [CategoryGql!]!
   commentsByPost(postId: ID!): [CommentGql!]!
@@ -204,10 +225,12 @@ type Query {
   getPostsByUser(userId: ID!): [PostGql!]!
   getUserProfile(userId: ID!): UserGql!
   incomingFriendRequests: [UserGql!]!
+  listUsers(skip: Int! = 0, take: Int! = 50): [UserGql!]!
   me: UserGql!
   myFriends: [UserGql!]!
   myOrganization: OrganizationGql
   mySavedPosts: [PostGql!]!
+  myScheduledPosts: [PostGql!]!
   organizationDashboard(organizationId: String!): OrganizationDashboardGql!
   votersByPost(optionIndex: Int, postId: ID!): [PostVoterGql!]!
 }

@@ -25,8 +25,8 @@ export class AdminSeedService implements OnModuleInit {
     try {
       const existing = await this.usersService.findByEmail(email);
       if (existing) {
-        if (existing.role !== UserRole.ADMIN) {
-          // Ensure the stored user has admin role in case DB was modified.
+        const existingRoles = this.usersService.resolveRoles(existing);
+      if (!existingRoles.includes(UserRole.ADMIN)) {
           await this.usersService.setRole(existing._id.toHexString(), UserRole.ADMIN);
           this.logger.log(`System admin role enforced for ${email}`);
         }
@@ -39,7 +39,7 @@ export class AdminSeedService implements OnModuleInit {
         email,
         password: hash,
         displayName: 'System Admin',
-        role: UserRole.ADMIN,
+        roles: [UserRole.ADMIN],
         emailVerified: true,
       });
       this.logger.log(`System admin created: ${email}`);

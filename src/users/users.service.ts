@@ -10,14 +10,23 @@ import { UserRole } from '../common/enums';
 export class UsersService {
   constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
 
-  toGql(doc: UserDocument): UserGql {
+  /** Resolve the canonical roles array, falling back to the legacy `role` field. */
+  resolveRoles(doc: UserDocument): UserRole[] {
+    if (doc.roles?.length) return doc.roles;
+    return [doc.role ?? UserRole.USER];
+  }
+
+  toGql(doc: UserDocument, activeRole?: UserRole): UserGql {
+    const roles = this.resolveRoles(doc);
+    const primaryRole = roles.includes(UserRole.ADMIN) ? UserRole.ADMIN : UserRole.USER;
     return {
       id: doc._id.toHexString(),
       email: doc.email,
       displayName: doc.displayName ?? null,
       username: doc.username,
       interests: doc.interests ?? [],
-      role: doc.role,
+      role: activeRole ?? primaryRole,
+      roles,
       bio: doc.bio,
       profileImageUrl: doc.profileImageUrl,
     };
@@ -35,14 +44,19 @@ export class UsersService {
     googleSub?: string;
     profileImageUrl?: string;
     interests?: string[];
+    roles?: UserRole[];
+    /** @deprecated use roles */
     role?: UserRole;
     emailVerified?: boolean;
   }): Promise<UserDocument> {
+    const roles = data.roles ?? (data.role ? [data.role] : [UserRole.USER]);
+    const primaryRole = roles.includes(UserRole.ADMIN) ? UserRole.ADMIN : UserRole.USER;
     const user = new this.userModel({
       ...data,
       email: normalizeEmail(data.email),
       interests: data.interests ?? [],
-      role: data.role ?? UserRole.USER,
+      role: primaryRole,
+      roles,
       emailVerified: data.emailVerified ?? false,
     });
     return user.save();
@@ -87,7 +101,32 @@ export class UsersService {
   }
 
   async setRole(userId: string, role: UserRole): Promise<UserDocument | null> {
-    return this.userModel.findByIdAndUpdate(userId, { $set: { role } }, { new: true }).exec();
+    return this.userModel
+      .findByIdAndUpdate(userId, { $set: { role, roles: [role] } }, { new: true })
+      .exec();
+  }
+
+  async promoteToAdmin(email: string): Promise<UserDocument | null> {
+    const normalized = normalizeEmail(email);
+    return this.userModel
+      .findOneAndUpdate(
+        { email: normalized },
+        { $addToSet: { roles: UserRole.ADMIN }, $set: { role: UserRole.ADMIN } },
+        { new: true },
+      )
+      .exec();
+  }
+
+  /** Remove admin role from a user. Ensures USER role remains so account is still valid. */
+  async demoteFromAdmin(email: string): Promise<UserDocument | null> {
+    const normalized = normalizeEmail(email);
+    return this.userModel
+      .findOneAndUpdate(
+        { email: normalized },
+        { $pull: { roles: UserRole.ADMIN }, $set: { role: UserRole.USER } },
+        { new: true },
+      )
+      .exec();
   }
 
   async removeByEmail(email: string): Promise<boolean> {

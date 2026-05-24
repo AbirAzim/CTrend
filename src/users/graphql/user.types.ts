@@ -19,8 +19,13 @@ export class UserGql {
   @Field(() => [String])
   interests: string[];
 
+  /** Active role for this session (matches the JWT activeRole). */
   @Field(() => UserRole)
   role: UserRole;
+
+  /** All roles this account holds. */
+  @Field(() => [UserRole])
+  roles: UserRole[];
 
   @Field({ nullable: true })
   bio?: string;

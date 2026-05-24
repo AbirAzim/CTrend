@@ -28,7 +28,8 @@ export class UsersResolver {
   me(@CurrentUser() user: ReqUser) {
     return this.usersService.findById(user.id).then((u) => {
       if (!u) throw new NotFoundException();
-      return this.usersService.toGql(u);
+      // Pass the activeRole from the JWT so `role` reflects the current session mode.
+      return this.usersService.toGql(u, user.role as UserRole);
     });
   }
 
@@ -63,7 +64,22 @@ export class UsersResolver {
     return users.map((u) => this.usersService.toGql(u));
   }
 
-  /** Admin: remove a regular user by email. Cannot remove admins or the system admin. */
+  /** Admin: promote an existing user to also hold the admin role. */
+  @Mutation(() => UserGql)
+  @UseGuards(GqlAuthGuard)
+  async promoteToAdmin(
+    @CurrentUser() actor: ReqUser,
+    @Args('email') email: string,
+  ): Promise<UserGql> {
+    if (actor.role !== UserRole.ADMIN) throw new ForbiddenException('Admin only');
+    const target = await this.usersService.findByEmail(email);
+    if (!target) throw new NotFoundException('User not found');
+    const updated = await this.usersService.promoteToAdmin(email);
+    if (!updated) throw new NotFoundException('User not found');
+    return this.usersService.toGql(updated);
+  }
+
+  /** Admin: remove a regular user by email. Fails if the target holds an admin role. */
   @Mutation(() => Boolean)
   @UseGuards(GqlAuthGuard)
   async removeUser(
@@ -73,29 +89,36 @@ export class UsersResolver {
     if (actor.role !== UserRole.ADMIN) throw new ForbiddenException('Admin only');
     const target = await this.usersService.findByEmail(email);
     if (!target) throw new NotFoundException('User not found');
-    if (target.role === UserRole.ADMIN) {
-      throw new ForbiddenException('Use removeAdmin to remove admin users');
+    const roles = this.usersService.resolveRoles(target);
+    if (roles.includes(UserRole.ADMIN)) {
+      throw new ForbiddenException('Use removeAdmin to revoke admin access first');
     }
     return this.usersService.removeByEmail(email);
   }
 
-  /** Admin: remove another admin by email. Cannot remove the system admin. */
-  @Mutation(() => Boolean)
+  /**
+   * Admin: revoke admin role from a user (demote — account is kept with user role).
+   * Cannot target the system admin.
+   */
+  @Mutation(() => UserGql)
   @UseGuards(GqlAuthGuard)
   async removeAdmin(
     @CurrentUser() actor: ReqUser,
     @Args('email') email: string,
-  ): Promise<boolean> {
+  ): Promise<UserGql> {
     if (actor.role !== UserRole.ADMIN) throw new ForbiddenException('Admin only');
     const sysAdminEmail = this.config.get<string>('SYSTEM_ADMIN_EMAIL', '');
     if (email.trim().toLowerCase() === sysAdminEmail.toLowerCase()) {
-      throw new ForbiddenException('The system admin account cannot be removed');
+      throw new ForbiddenException('The system admin account cannot be modified');
     }
     const target = await this.usersService.findByEmail(email);
     if (!target) throw new NotFoundException('User not found');
-    if (target.role !== UserRole.ADMIN) {
-      throw new ForbiddenException('Target is not an admin');
+    const roles = this.usersService.resolveRoles(target);
+    if (!roles.includes(UserRole.ADMIN)) {
+      throw new ForbiddenException('Target does not have admin role');
     }
-    return this.usersService.removeByEmail(email);
+    const updated = await this.usersService.demoteFromAdmin(email);
+    if (!updated) throw new NotFoundException('User not found');
+    return this.usersService.toGql(updated);
   }
 }

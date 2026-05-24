@@ -20,4 +20,9 @@ export class OptionalJwtGqlGuard extends AuthGuard('jwt') {
     }
     return super.canActivate(context);
   }
+
+  handleRequest(_err: any, user: any) {
+    // Invalid or expired token → treat as unauthenticated, never throw
+    return user ?? undefined;
+  }
 }

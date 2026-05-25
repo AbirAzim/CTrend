@@ -202,6 +202,7 @@ type Mutation {
   switchActiveRole(role: UserRole!): AuthPayloadGql!
   syncWorldCupFixtures: Boolean!
   toggleCampaign(id: ID!, isActive: Boolean!): CampaignGql!
+  unfriend(userId: ID!): Boolean!
   updateCampaign(id: ID!, input: UpdateCampaignInput!): CampaignGql!
   updateProfile(input: UpdateProfileInput!): UserGql!
   verifyBkashPayment(payload: String!): BkashVerificationGql!
@@ -318,6 +319,7 @@ type Query {
   feedPosts(scope: FeedScope, skip: Int = 0, sort: FeedSort, take: Int = 20): [PostGql!]!
   friendRequests: FriendRequestsGql!
   friendSuggestions(limit: Int): [UserGql!]!
+  friendshipStatus(userId: ID!): String!
   getAllCategories: [CategoryGql!]!
   getFeed(scope: FeedScope!, skip: Int = 0, sort: FeedSort!, take: Int = 20): FeedConnectionGql!
   getPostById(id: ID!): PostGql!

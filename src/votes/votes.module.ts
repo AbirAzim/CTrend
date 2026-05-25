@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Vote, VoteSchema } from './vote.schema';
 import { Post, PostSchema } from '../posts/post.schema';
+import { Follow, FollowSchema } from '../follows/follow.schema';
 import { VotesService } from './votes.service';
 import { VotesResolver } from './votes.resolver';
 import { UsersModule } from '../users/users.module';
@@ -11,6 +12,7 @@ import { UsersModule } from '../users/users.module';
     MongooseModule.forFeature([
       { name: Vote.name, schema: VoteSchema },
       { name: Post.name, schema: PostSchema },
+      { name: Follow.name, schema: FollowSchema },
     ]),
     UsersModule,
   ],

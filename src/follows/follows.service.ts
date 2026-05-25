@@ -179,6 +179,34 @@ export class FollowsService {
     return users.map((u) => this.usersService.toGql(u));
   }
 
+  async unfriend(userId: string, targetId: string): Promise<void> {
+    const a = new Types.ObjectId(userId);
+    const b = new Types.ObjectId(targetId);
+    await this.followModel.deleteMany({
+      $or: [
+        { followerId: a, followingId: b },
+        { followerId: b, followingId: a },
+      ],
+    }).exec();
+  }
+
+  async getFriendshipStatus(
+    viewerId: string,
+    targetId: string,
+  ): Promise<'FRIEND' | 'PENDING_SENT' | 'PENDING_RECEIVED' | 'NONE'> {
+    if (viewerId === targetId) return 'NONE';
+    const vid = new Types.ObjectId(viewerId);
+    const tid = new Types.ObjectId(targetId);
+    const [v2t, t2v] = await Promise.all([
+      this.followModel.findOne({ followerId: vid, followingId: tid }).lean().exec(),
+      this.followModel.findOne({ followerId: tid, followingId: vid }).lean().exec(),
+    ]);
+    if (v2t?.status === FollowStatus.ACCEPTED && t2v?.status === FollowStatus.ACCEPTED) return 'FRIEND';
+    if (v2t?.status === FollowStatus.PENDING) return 'PENDING_SENT';
+    if (t2v?.status === FollowStatus.PENDING) return 'PENDING_RECEIVED';
+    return 'NONE';
+  }
+
   async respondToFriendRequest(
     userId: string,
     requesterId: string,

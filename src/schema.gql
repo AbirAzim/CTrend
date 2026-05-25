@@ -13,6 +13,38 @@ type BkashVerificationGql {
   success: Boolean!
 }
 
+type CampaignGql {
+  bannerImageUrl: String
+  bannerText: String!
+  createdAt: DateTime!
+  ctaLabel: String!
+  ctaUrl: String!
+  description: String
+  endDate: DateTime
+  fixturesEnabled: Boolean!
+  id: ID!
+  isActive: Boolean!
+  name: String!
+  prizePerWinner: Int!
+  rules: String
+  rulesBn: String
+  slug: String!
+  startDate: DateTime
+}
+
+type CampaignWinnerGql {
+  campaignId: ID
+  createdAt: DateTime!
+  fixtureId: ID!
+  id: ID!
+  note: String
+  paid: Boolean!
+  postId: ID!
+  prize: Int!
+  user: UserGql
+  winningOption: Int
+}
+
 type CategoryGql {
   id: ID!
   name: String!
@@ -39,6 +71,22 @@ type CommentGql {
 input CommentPostInput {
   content: String!
   parentId: ID
+}
+
+input CreateCampaignInput {
+  bannerImageUrl: String
+  bannerText: String!
+  ctaLabel: String!
+  ctaUrl: String!
+  description: String
+  endDate: DateTime
+  fixturesEnabled: Boolean
+  name: String!
+  prizePerWinner: Int
+  rules: String
+  rulesBn: String
+  slug: String!
+  startDate: DateTime
 }
 
 input CreatePostInput {
@@ -75,6 +123,43 @@ enum FeedSort {
   TRENDING
 }
 
+input FixtureFilterInput {
+  group: String
+  stage: String
+}
+
+type FixtureGql {
+  awayTeam: FixtureTeamGql!
+  campaignPostId: ID
+  externalId: Int!
+  group: String
+  homeTeam: FixtureTeamGql!
+  id: ID!
+  kickoff: DateTime!
+  matchday: Int
+  score: FixtureScoreGql!
+  stage: String!
+  status: String!
+  venue: FixtureVenueGql
+}
+
+type FixtureScoreGql {
+  away: Int
+  home: Int
+  winner: String
+}
+
+type FixtureTeamGql {
+  crest: String
+  name: String
+  shortName: String
+}
+
+type FixtureVenueGql {
+  city: String!
+  name: String!
+}
+
 type FriendRequestsGql {
   requestedByMe: [UserGql!]!
   requestedMe: [UserGql!]!
@@ -86,10 +171,12 @@ type Mutation {
   cancelScheduledPost(postId: ID!): Boolean!
   cancelSubscription(organizationId: ID): Boolean!
   commentPost(input: CommentPostInput!, postId: ID!): CommentGql!
+  createCampaign(input: CreateCampaignInput!): CampaignGql!
   createOrganization(name: String!): OrganizationGql!
   createPost(input: CreatePostInput!): PostGql!
   createStripeCheckoutSession(organizationId: ID, plan: SubscriptionPlan!): CheckoutSessionGql!
   createSystemPost(input: CreatePostInput!): PostGql!
+  createWorldCupCampaignPost(fixtureId: ID!): PostGql!
   extendPostVoting(newVotingEndsAt: DateTime!, postId: ID!): PostGql!
   followUser(userId: ID!): Boolean!
   getImageUploadUrl(contentType: String!, filename: String!): PresignedUploadUrl!
@@ -97,6 +184,8 @@ type Mutation {
   inviteAdmin(email: String!): Boolean!
   inviteUser(email: String!): Boolean!
   login(email: String!, password: String!): AuthPayloadGql!
+  markCampaignPrizePaid(winnerId: ID!): CampaignWinnerGql!
+  processMatchResult(campaignId: ID, fixtureId: ID!): CampaignWinnerGql!
   promoteToAdmin(email: String!): UserGql!
   register(input: RegisterInput!): AuthPayloadGql!
   removeAdmin(email: String!): UserGql!
@@ -111,6 +200,10 @@ type Mutation {
   setPostLike(active: Boolean!, postId: ID!): Boolean!
   signup(displayName: String, email: String!, password: String!): Boolean!
   switchActiveRole(role: UserRole!): AuthPayloadGql!
+  syncWorldCupFixtures: Boolean!
+  toggleCampaign(id: ID!, isActive: Boolean!): CampaignGql!
+  unfriend(userId: ID!): Boolean!
+  updateCampaign(id: ID!, input: UpdateCampaignInput!): CampaignGql!
   updateProfile(input: UpdateProfileInput!): UserGql!
   verifyBkashPayment(payload: String!): BkashVerificationGql!
   verifyEmail(code: String!, email: String!): AuthPayloadGql!
@@ -216,11 +309,17 @@ type PresignedUploadUrl {
 }
 
 type Query {
+  activeCampaigns: [CampaignGql!]!
+  campaign(slug: String!): CampaignGql
+  campaignWinner(fixtureId: ID!): CampaignWinnerGql
+  campaignWinners: [CampaignWinnerGql!]!
+  campaigns: [CampaignGql!]!
   categories: [CategoryGql!]!
   commentsByPost(postId: ID!): [CommentGql!]!
   feedPosts(scope: FeedScope, skip: Int = 0, sort: FeedSort, take: Int = 20): [PostGql!]!
   friendRequests: FriendRequestsGql!
   friendSuggestions(limit: Int): [UserGql!]!
+  friendshipStatus(userId: ID!): String!
   getAllCategories: [CategoryGql!]!
   getFeed(scope: FeedScope!, skip: Int = 0, sort: FeedSort!, take: Int = 20): FeedConnectionGql!
   getPostById(id: ID!): PostGql!
@@ -235,6 +334,8 @@ type Query {
   myScheduledPosts: [PostGql!]!
   organizationDashboard(organizationId: String!): OrganizationDashboardGql!
   votersByPost(optionIndex: Int, postId: ID!): [PostVoterGql!]!
+  worldCupFixture(id: ID!): FixtureGql
+  worldCupFixtures(filter: FixtureFilterInput): [FixtureGql!]!
 }
 
 input RegisterInput {
@@ -253,6 +354,21 @@ type Subscription {
 enum SubscriptionPlan {
   FREE
   PREMIUM
+}
+
+input UpdateCampaignInput {
+  bannerImageUrl: String
+  bannerText: String
+  ctaLabel: String
+  ctaUrl: String
+  endDate: DateTime
+  fixturesEnabled: Boolean
+  isActive: Boolean
+  name: String
+  prizePerWinner: Int
+  rules: String
+  rulesBn: String
+  startDate: DateTime
 }
 
 input UpdateProfileInput {

@@ -25,6 +25,9 @@ import { SeedModule } from './seed/seed.module';
 import { MailModule } from './mail/mail.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { InvitationsModule } from './invitations/invitations.module';
+import { FixturesModule } from './fixtures/fixtures.module';
+import { WorldCupCampaignModule } from './world-cup-campaign/world-cup-campaign.module';
+import { CampaignsModule } from './campaigns/campaigns.module';
 
 @Module({
   imports: [
@@ -135,6 +138,9 @@ import { InvitationsModule } from './invitations/invitations.module';
     SeedModule,
     UploadsModule,
     InvitationsModule,
+    FixturesModule,
+    WorldCupCampaignModule,
+    CampaignsModule,
   ],
   providers: [
     {

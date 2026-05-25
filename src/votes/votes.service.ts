@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -7,8 +8,10 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Vote, VoteDocument } from './vote.schema';
 import { Post, PostDocument } from '../posts/post.schema';
+import { Follow, FollowDocument, FollowStatus } from '../follows/follow.schema';
 import { POST_VOTE_UPDATED, pubsub, VOTE_UPDATED } from '../pubsub';
 import { UsersService } from '../users/users.service';
+import { PostType } from '../common/enums';
 import { PostVoterGql } from './graphql/vote.types';
 
 @Injectable()
@@ -16,6 +19,7 @@ export class VotesService {
   constructor(
     @InjectModel(Vote.name) private voteModel: Model<VoteDocument>,
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
+    @InjectModel(Follow.name) private followModel: Model<FollowDocument>,
     private usersService: UsersService,
   ) {}
 
@@ -62,6 +66,19 @@ export class VotesService {
     }
     if (selectedOptionIndex < 0 || selectedOptionIndex >= post.options.length) {
       throw new BadRequestException('Invalid option');
+    }
+
+    // Friendship gate: USER and ORG posts require mutual friendship with the author
+    if (post.type !== PostType.SYSTEM && post.createdBy.toString() !== userId) {
+      const vid = new Types.ObjectId(userId);
+      const aid = post.createdBy;
+      const [v2a, a2v] = await Promise.all([
+        this.followModel.countDocuments({ followerId: vid, followingId: aid, status: FollowStatus.ACCEPTED }),
+        this.followModel.countDocuments({ followerId: aid, followingId: vid, status: FollowStatus.ACCEPTED }),
+      ]);
+      if (!v2a || !a2v) {
+        throw new ForbiddenException('You must be friends with the post author to vote');
+      }
     }
     const uid = new Types.ObjectId(userId);
     const pid = new Types.ObjectId(postId);

@@ -5,8 +5,10 @@ import { Post, PostSchema } from '../posts/post.schema';
 import { User, UserSchema } from '../users/user.schema';
 import { CategoriesModule } from '../categories/categories.module';
 import { UsersModule } from '../users/users.module';
+import { CampaignsModule } from '../campaigns/campaigns.module';
 import { SeedDummyPostsService } from './seed-dummy-posts.service';
 import { AdminSeedService } from './admin-seed.service';
+import { CampaignSeedService } from './campaign-seed.service';
 
 @Module({
   imports: [
@@ -17,7 +19,8 @@ import { AdminSeedService } from './admin-seed.service';
     ]),
     CategoriesModule,
     UsersModule,
+    CampaignsModule,
   ],
-  providers: [SeedDummyPostsService, AdminSeedService],
+  providers: [SeedDummyPostsService, AdminSeedService, CampaignSeedService],
 })
 export class SeedModule {}

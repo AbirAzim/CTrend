@@ -73,6 +73,25 @@ export class FollowsResolver {
 
   @Mutation(() => Boolean)
   @UseGuards(GqlAuthGuard)
+  async unfriend(
+    @CurrentUser() user: ReqUser,
+    @Args('userId', { type: () => ID }) userId: string,
+  ) {
+    await this.followsService.unfriend(user.id, userId);
+    return true;
+  }
+
+  @Query(() => String)
+  @UseGuards(GqlAuthGuard)
+  async friendshipStatus(
+    @CurrentUser() user: ReqUser,
+    @Args('userId', { type: () => ID }) userId: string,
+  ) {
+    return this.followsService.getFriendshipStatus(user.id, userId);
+  }
+
+  @Mutation(() => Boolean)
+  @UseGuards(GqlAuthGuard)
   async respondFriendRequest(
     @CurrentUser() user: ReqUser,
     @Args('requesterId', { type: () => ID }) requesterId: string,

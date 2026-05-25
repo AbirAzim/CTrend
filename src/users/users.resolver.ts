@@ -11,6 +11,7 @@ import { GqlAuthGuard } from '../common/guards/gql-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UpdateProfileInput } from './dto/update-profile.input';
 import { UserRole } from '../common/enums';
+import { PromotionTokensService } from '../promotion-tokens/promotion-tokens.service';
 
 type ReqUser = {
   id: string;
@@ -25,6 +26,7 @@ export class UsersResolver {
   constructor(
     private usersService: UsersService,
     private config: ConfigService,
+    private promotionTokensService: PromotionTokensService,
   ) {}
 
   @Query(() => UserGql)
@@ -55,17 +57,19 @@ export class UsersResolver {
     return this.usersService.toGql(u);
   }
 
-  /** Admin: list all platform users. */
+  /** Admin: list all platform users, optionally filtered by role. */
   @Query(() => [UserGql])
   @UseGuards(GqlAuthGuard)
   async listUsers(
     @CurrentUser() actor: ReqUser,
     @Args('skip', { type: () => Int, defaultValue: 0 }) skip: number,
     @Args('take', { type: () => Int, defaultValue: 50 }) take: number,
+    @Args('role', { type: () => String, nullable: true }) role?: string,
   ): Promise<UserGql[]> {
     if (actor.role !== UserRole.ADMIN)
       throw new ForbiddenException('Admin only');
-    const users = await this.usersService.listUsers(skip, Math.min(take, 200));
+    const roleFilter = role ? (role as UserRole) : undefined;
+    const users = await this.usersService.listUsers(skip, Math.min(take, 200), roleFilter);
     return users.map((u) => this.usersService.toGql(u));
   }
 
@@ -82,7 +86,22 @@ export class UsersResolver {
     if (!target) throw new NotFoundException('User not found');
     const updated = await this.usersService.promoteToAdmin(email);
     if (!updated) throw new NotFoundException('User not found');
+    // Send notification email with rejection link + record in invitations for audit trail
+    await this.promotionTokensService.createAndSend(
+      updated._id.toHexString(),
+      actor.id,
+    );
+    await this.promotionTokensService.recordPromotion(actor.id, updated.email);
     return this.usersService.toGql(updated);
+  }
+
+  /** Anyone with a valid promotion token can reject (decline) their admin promotion. */
+  @Mutation(() => Boolean)
+  async rejectAdminPromotion(
+    @Args('token') token: string,
+  ): Promise<boolean> {
+    await this.promotionTokensService.reject(token);
+    return true;
   }
 
   /** Admin: remove a regular user by email. Fails if the target holds an admin role. */

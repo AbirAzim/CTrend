@@ -72,6 +72,11 @@ export class UsersService {
     return this.userModel.findOne({ email: normalizeEmail(email) }).exec();
   }
 
+  async findByEmails(emails: string[]): Promise<UserDocument[]> {
+    const normalized = emails.map(normalizeEmail);
+    return this.userModel.find({ email: { $in: normalized } }).exec();
+  }
+
   async findByGoogleSub(sub: string): Promise<UserDocument | null> {
     return this.userModel.findOne({ googleSub: sub }).exec();
   }
@@ -149,9 +154,14 @@ export class UsersService {
     return result.deletedCount > 0;
   }
 
-  async listUsers(skip = 0, take = 50): Promise<UserDocument[]> {
+  async listUsers(
+    skip = 0,
+    take = 50,
+    role?: UserRole,
+  ): Promise<UserDocument[]> {
+    const filter = role ? { roles: role } : {};
     return this.userModel
-      .find()
+      .find(filter)
       .skip(skip)
       .limit(take)
       .sort({ createdAt: -1 })

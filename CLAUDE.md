@@ -145,4 +145,56 @@ FRONTEND_URL=            # used for Stripe redirect URLs
 CORS_ORIGIN=             # comma-separated allowed origins
 PORT=                    # default 4000
 NODE_ENV=                # set to "production" to disable GraphQL playground
+FOOTBALL_DATA_API_KEY=   # football-data.org free API key for World Cup fixtures
 ```
+
+## Campaign System
+
+### Overview
+
+CTrend supports promotional campaigns that run alongside the normal feed. Multiple campaigns can be active simultaneously (2-3 at a time). Each campaign shows a promotional banner on the main feed page for all users.
+
+### Generic Campaign Model (`src/campaigns/`)
+
+`Campaign` schema fields: `name`, `slug` (unique), `description`, `bannerText`, `bannerImageUrl`, `ctaLabel`, `ctaUrl`, `isActive`, `prizePerWinner` (BDT), `startDate`, `endDate`.
+
+- `activeCampaigns` — public query; returns all campaigns with `isActive: true`. Used by the frontend to render feed banners.
+- Admin mutations: `createCampaign`, `updateCampaign`, `toggleCampaign`.
+
+### World Cup Fever 2026 Campaign (`src/fixtures/` + `src/world-cup-campaign/`)
+
+A specific campaign type tied to FIFA World Cup 2026 match data from **football-data.org** (free tier, 10 req/min).
+
+**Fixture sync:** Admin calls `syncWorldCupFixtures` mutation → fetches all WC matches, upserts into `fixtures` collection. Fixtures store: teams (name, shortName, crest/flag URL), kickoff UTC, status, stage, group, score, and `campaignPostId`.
+
+**Campaign post flow (per match):**
+1. Admin calls `createWorldCupCampaignPost(fixtureId)`.
+2. A SYSTEM post is created with options `[HomeTeam, AwayTeam]`, `feedPriority: 100`.
+3. `scheduledAt` = kickoff − 24 h → auto-published by the existing `PostSchedulerService` (runs every minute).
+4. `votingEndsAt` = kickoff → votes close exactly when the match starts.
+5. The fixture's `campaignPostId` is set to this post's ID.
+
+**Result & prize draw (per match):**
+1. Admin calls `processMatchResult(fixtureId, campaignId?)`.
+2. Fetches the final score from football-data.org (`/matches/{externalId}`).
+3. Updates fixture score/status in DB.
+4. Determines winning option index: `HOME_TEAM` → 0, `AWAY_TEAM` → 1.
+5. Queries non-anonymous votes for the winning option.
+6. Randomly selects 1 voter → creates `CampaignWinner` record (prize: 100 BDT, `paid: false`).
+7. Admin sees winner in Admin → World Cup tab, clicks "Mark Paid" after sending bKash payment.
+8. **Edge cases:** Draw → no winner, note "Match ended in a draw"; no correct votes → note "No users voted for the winning side". Idempotent — calling twice returns the existing record.
+
+**Winner schema (`CampaignWinner`):** `campaignId?`, `fixtureId` (unique), `postId`, `userId?`, `prize`, `winningOption?`, `paid`, `note?`.
+
+### Frontend Campaign Banners
+
+- `CampaignBanners` component is placed at the top of the feed (`FeedPage`).
+- Queries `activeCampaigns` (cache-and-network); renders a card per campaign.
+- Each card shows: campaign name, bannerText, prize chip, CTA button linking to `ctaUrl`.
+- Campaigns are **not** hardcoded in the nav bar — they surface only through the feed banner.
+- The World Cup fixtures page lives at `/world-cup` (`WorldCupPage`).
+
+### Admin Panel
+
+Admin → **Campaigns tab**: create/activate/deactivate any campaign.
+Admin → **🏆 World Cup tab**: sync fixtures, create campaign posts per fixture, draw winners, mark prizes as paid.

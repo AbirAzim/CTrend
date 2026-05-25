@@ -72,6 +72,11 @@ export class UsersService {
     return this.userModel.findOne({ email: normalizeEmail(email) }).exec();
   }
 
+  async findByEmails(emails: string[]): Promise<UserDocument[]> {
+    const normalized = emails.map(normalizeEmail);
+    return this.userModel.find({ email: { $in: normalized } }).exec();
+  }
+
   async findByGoogleSub(sub: string): Promise<UserDocument | null> {
     return this.userModel.findOne({ googleSub: sub }).exec();
   }

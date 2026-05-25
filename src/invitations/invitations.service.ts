@@ -84,6 +84,15 @@ export class InvitationsService {
     return true;
   }
 
+  async isPendingFor(email: string): Promise<boolean> {
+    const n = await this.invitationModel.countDocuments({
+      email: email.trim().toLowerCase(),
+      status: InvitationStatus.PENDING,
+      expiresAt: { $gt: new Date() },
+    });
+    return n > 0;
+  }
+
   async findByRawToken(rawToken: string): Promise<InvitationDocument | null> {
     return this.invitationModel.findOne({
       tokenHash: sha256(rawToken),

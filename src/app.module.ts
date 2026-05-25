@@ -25,6 +25,7 @@ import { SeedModule } from './seed/seed.module';
 import { MailModule } from './mail/mail.module';
 import { UploadsModule } from './uploads/uploads.module';
 import { InvitationsModule } from './invitations/invitations.module';
+import { PromotionTokensModule } from './promotion-tokens/promotion-tokens.module';
 import { FixturesModule } from './fixtures/fixtures.module';
 import { WorldCupCampaignModule } from './world-cup-campaign/world-cup-campaign.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
@@ -138,6 +139,7 @@ import { CampaignsModule } from './campaigns/campaigns.module';
     SeedModule,
     UploadsModule,
     InvitationsModule,
+    PromotionTokensModule,
     FixturesModule,
     WorldCupCampaignModule,
     CampaignsModule,

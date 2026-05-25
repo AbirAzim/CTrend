@@ -106,4 +106,47 @@ export class InvitationsService {
       status: InvitationStatus.ACCEPTED,
     });
   }
+
+  async listAll(status?: InvitationStatus): Promise<InvitationDocument[]> {
+    const filter = status ? { status } : {};
+    return this.invitationModel
+      .find(filter)
+      .sort({ createdAt: -1 })
+      .exec();
+  }
+
+
+  async cancel(id: string): Promise<void> {
+    const result = await this.invitationModel.findByIdAndDelete(id).exec();
+    if (!result) throw new NotFoundException('Invitation not found');
+  }
+
+  async resend(id: string): Promise<void> {
+    const invitation = await this.invitationModel.findById(id).exec();
+    if (!invitation) throw new NotFoundException('Invitation not found');
+    if (invitation.status !== InvitationStatus.PENDING) {
+      throw new BadRequestException('Only pending invitations can be resent');
+    }
+
+    const rawToken = randomBytes(32).toString('hex');
+    invitation.tokenHash = sha256(rawToken);
+    invitation.expiresAt = new Date(Date.now() + INVITE_TTL_MS);
+    await invitation.save();
+
+    const inviter = await this.usersService.findById(
+      invitation.invitedBy.toHexString(),
+    );
+    const inviterName =
+      inviter?.displayName ?? inviter?.username ?? 'A CTrend user';
+    const frontend = this.config.get<string>(
+      'FRONTEND_URL',
+      'http://localhost:5173',
+    );
+    const inviteUrl = `${frontend}/accept-invitation?token=${rawToken}`;
+    await this.mailService.sendInvitationEmail(
+      invitation.email,
+      inviteUrl,
+      inviterName,
+    );
+  }
 }

@@ -165,6 +165,21 @@ type FriendRequestsGql {
   requestedMe: [UserGql!]!
 }
 
+type InvitationGql {
+  createdAt: DateTime!
+  email: String!
+  expiresAt: DateTime!
+  id: ID!
+  invitedBy: UserGql
+  role: String!
+  status: String!
+}
+
+enum InvitationStatus {
+  ACCEPTED
+  PENDING
+}
+
 type InvitePreviewGql {
   email: String!
   existingUser: UserGql
@@ -180,6 +195,7 @@ type InviteResultGql {
 type Mutation {
   acceptInvitation(displayName: String, password: String!, token: String!): AuthPayloadGql!
   addFriend(userId: ID!): String!
+  cancelInvitation(id: ID!): Boolean!
   cancelScheduledPost(postId: ID!): Boolean!
   cancelSubscription(organizationId: ID): Boolean!
   commentPost(input: CommentPostInput!, postId: ID!): CommentGql!
@@ -201,9 +217,11 @@ type Mutation {
   processMatchResult(campaignId: ID, fixtureId: ID!): CampaignWinnerGql!
   promoteToAdmin(email: String!): UserGql!
   register(input: RegisterInput!): AuthPayloadGql!
+  rejectAdminPromotion(token: String!): Boolean!
   removeAdmin(email: String!): UserGql!
   removeUser(email: String!): Boolean!
   requestPasswordReset(email: String!): Boolean!
+  resendInvitation(id: ID!): Boolean!
   resendVerificationEmail(email: String!): Boolean!
   resetPassword(newPassword: String!, token: String!): Boolean!
   respondFriendRequest(accept: Boolean!, requesterId: ID!): Boolean!
@@ -339,7 +357,8 @@ type Query {
   getPostsByUser(userId: ID!): [PostGql!]!
   getUserProfile(userId: ID!): UserGql!
   incomingFriendRequests: [UserGql!]!
-  listUsers(skip: Int! = 0, take: Int! = 50): [UserGql!]!
+  listInvitations(status: InvitationStatus): [InvitationGql!]!
+  listUsers(role: String, skip: Int! = 0, take: Int! = 50): [UserGql!]!
   me: UserGql!
   myFriends: [UserGql!]!
   myOrganization: OrganizationGql

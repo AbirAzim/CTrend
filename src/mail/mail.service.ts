@@ -1,19 +1,20 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { existsSync, readFileSync } from 'fs';
 import * as nodemailer from 'nodemailer';
 import { join } from 'path';
+import sharp from 'sharp';
 
 const LOGO_PATH = join(process.cwd(), 'logo.png');
 
 @Injectable()
-export class MailService {
+export class MailService implements OnModuleInit {
   private readonly logger = new Logger(MailService.name);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private transporter: any = null;
   private from: string;
   /** data:image/png;base64,... for inline email images (no attachment) */
-  private readonly logoDataUrl: string | null;
+  private logoDataUrl: string | null = null;
 
   constructor(private config: ConfigService) {
     const host = this.config.get<string>('SMTP_HOST') || process.env.SMTP_HOST;
@@ -23,8 +24,6 @@ export class MailService {
       this.config.get<string>('SMTP_FROM') ||
       process.env.SMTP_FROM ||
       'CTrend <no-reply@ctrend.app>';
-
-    this.logoDataUrl = this.loadLogoDataUrl();
 
     this.logger.log(
       `SMTP config — host:${host ?? 'MISSING'} user:${user ?? 'MISSING'} pass:${pass ? 'SET' : 'MISSING'}`,
@@ -51,17 +50,25 @@ export class MailService {
     }
   }
 
-  private loadLogoDataUrl(): string | null {
+  async onModuleInit() {
+    this.logoDataUrl = await this.loadLogoDataUrl();
+  }
+
+  private async loadLogoDataUrl(): Promise<string | null> {
     try {
       if (!existsSync(LOGO_PATH)) {
         this.logger.warn(`logo.png not found at ${LOGO_PATH}`);
         return null;
       }
-      const buf = readFileSync(LOGO_PATH);
-      return `data:image/png;base64,${buf.toString('base64')}`;
+      // Resize to 80x80 before base64-encoding — keeps email HTML well under Gmail's 102KB clip limit
+      const resized = await sharp(readFileSync(LOGO_PATH))
+        .resize(80, 80, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+        .png({ compressionLevel: 9 })
+        .toBuffer();
+      return `data:image/png;base64,${resized.toString('base64')}`;
     } catch (e) {
       this.logger.warn(
-        `Could not read logo.png: ${e instanceof Error ? e.message : String(e)}`,
+        `Could not load logo.png: ${e instanceof Error ? e.message : String(e)}`,
       );
       return null;
     }
@@ -143,6 +150,52 @@ export class MailService {
     await this.send(to, `${inviterName} invited you to CTrend`, html, {
       text: `${inviterName} has invited you to join CTrend.\n\nAccept your invitation:\n${inviteUrl}\n\nThis invitation expires in 7 days. If you weren't expecting this, ignore it.`,
     });
+  }
+
+  async sendPromotionEmail(
+    to: string,
+    rejectUrl: string,
+    promoterName: string,
+    recipientName: string,
+  ): Promise<void> {
+    const html = this.baseTemplate(`
+      <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1A1A2E;text-align:center;">
+        You've been promoted to Admin 🎉
+      </h2>
+      ${this.logoImgTag(48, '20px')}
+      <p style="margin:0 0 20px;font-size:15px;color:#555;line-height:1.6;text-align:center;">
+        Hi <strong>${recipientName}</strong>,<br><br>
+        <strong>${promoterName}</strong> has granted you <strong>Admin access</strong> on CTrend.<br>
+        You now have admin privileges — no action is needed to accept.
+      </p>
+      <div style="background:#f8fafc;border-radius:10px;padding:16px 20px;margin:0 0 24px;text-align:center;">
+        <p style="margin:0 0 6px;font-size:13px;color:#888;">Don't want admin access?</p>
+        <p style="margin:0;font-size:13px;color:#555;line-height:1.5;">
+          If you'd prefer not to be an admin, click the button below within <strong>7 days</strong>.<br>
+          Your account will remain active as a regular user.
+        </p>
+      </div>
+      <p style="text-align:center;margin:0 0 24px;">
+        <a href="${rejectUrl}"
+          style="display:inline-block;background:#dc2626;color:#fff;
+            text-decoration:none;border-radius:10px;padding:12px 30px;
+            font-size:15px;font-weight:600;">
+          Decline Admin Access
+        </a>
+      </p>
+      <p style="margin:0;font-size:12px;color:#999;text-align:center;">
+        If you're happy being an admin, simply ignore this email.
+      </p>
+    `);
+
+    await this.send(
+      to,
+      `You've been promoted to Admin on CTrend`,
+      html,
+      {
+        text: `Hi ${recipientName},\n\n${promoterName} has granted you Admin access on CTrend. No action is needed to accept.\n\nIf you'd like to decline, visit this link within 7 days:\n${rejectUrl}\n\nIf you're happy being an admin, ignore this email.`,
+      },
+    );
   }
 
   async sendPasswordResetLink(to: string, resetUrl: string): Promise<void> {

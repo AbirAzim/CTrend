@@ -23,7 +23,7 @@ export class MailService implements OnModuleInit {
     this.from =
       this.config.get<string>('SMTP_FROM') ||
       process.env.SMTP_FROM ||
-      'CTrend <no-reply@ctrend.app>';
+      'Ke Jitbe <no-reply@kejitbe.app>';
 
     this.logger.log(
       `SMTP config — host:${host ?? 'MISSING'} user:${user ?? 'MISSING'} pass:${pass ? 'SET' : 'MISSING'}`,
@@ -76,7 +76,7 @@ export class MailService implements OnModuleInit {
 
   private logoImgTag(width: number, marginBottom: string): string {
     if (!this.logoDataUrl) return '';
-    return `<img src="${this.logoDataUrl}" alt="CTrend" width="${width}" height="${width}" style="border-radius:12px;display:block;margin:0 auto ${marginBottom};">`;
+    return `<img src="${this.logoDataUrl}" alt="Ke Jitbe" width="${width}" height="${width}" style="border-radius:12px;display:block;margin:0 auto ${marginBottom};">`;
   }
 
   async sendVerificationCode(to: string, code: string): Promise<void> {
@@ -86,7 +86,7 @@ export class MailService implements OnModuleInit {
       </h2>
       ${this.logoImgTag(48, '20px')}
       <p style="margin:0 0 28px;font-size:15px;color:#555;line-height:1.6;text-align:center;">
-        Enter this code in the CTrend app to complete your sign-up.<br>
+        Enter this code in the Ke Jitbe app to complete your sign-up.<br>
         It expires in <strong>15 minutes</strong>.
       </p>
 
@@ -114,8 +114,8 @@ export class MailService implements OnModuleInit {
       </p>
     `);
 
-    await this.send(to, 'Your CTrend verification code', html, {
-      text: `Your CTrend verification code is: ${code}\n\nIt expires in 15 minutes.`,
+    await this.send(to, 'Your Ke Jitbe verification code', html, {
+      text: `Your Ke Jitbe verification code is: ${code}\n\nIt expires in 15 minutes.`,
     });
   }
 
@@ -126,11 +126,11 @@ export class MailService implements OnModuleInit {
   ): Promise<void> {
     const html = this.baseTemplate(`
       <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1A1A2E;text-align:center;">
-        You're invited to CTrend
+        You're invited to Ke Jitbe
       </h2>
       ${this.logoImgTag(48, '20px')}
       <p style="margin:0 0 28px;font-size:15px;color:#555;line-height:1.6;text-align:center;">
-        <strong>${inviterName}</strong> has invited you to join CTrend —<br>
+        <strong>${inviterName}</strong> has invited you to join Ke Jitbe —<br>
         the platform where you compare, vote, and see the trend.<br>
         This invitation expires in <strong>7 days</strong>.
       </p>
@@ -147,8 +147,8 @@ export class MailService implements OnModuleInit {
       </p>
     `);
 
-    await this.send(to, `${inviterName} invited you to CTrend`, html, {
-      text: `${inviterName} has invited you to join CTrend.\n\nAccept your invitation:\n${inviteUrl}\n\nThis invitation expires in 7 days. If you weren't expecting this, ignore it.`,
+    await this.send(to, `${inviterName} invited you to Ke Jitbe`, html, {
+      text: `${inviterName} has invited you to join Ke Jitbe.\n\nAccept your invitation:\n${inviteUrl}\n\nThis invitation expires in 7 days. If you weren't expecting this, ignore it.`,
     });
   }
 
@@ -165,7 +165,7 @@ export class MailService implements OnModuleInit {
       ${this.logoImgTag(48, '20px')}
       <p style="margin:0 0 20px;font-size:15px;color:#555;line-height:1.6;text-align:center;">
         Hi <strong>${recipientName}</strong>,<br><br>
-        <strong>${promoterName}</strong> has granted you <strong>Admin access</strong> on CTrend.<br>
+        <strong>${promoterName}</strong> has granted you <strong>Admin access</strong> on Ke Jitbe.<br>
         You now have admin privileges — no action is needed to accept.
       </p>
       <div style="background:#f8fafc;border-radius:10px;padding:16px 20px;margin:0 0 24px;text-align:center;">
@@ -190,10 +190,10 @@ export class MailService implements OnModuleInit {
 
     await this.send(
       to,
-      `You've been promoted to Admin on CTrend`,
+      `You've been promoted to Admin on Ke Jitbe`,
       html,
       {
-        text: `Hi ${recipientName},\n\n${promoterName} has granted you Admin access on CTrend. No action is needed to accept.\n\nIf you'd like to decline, visit this link within 7 days:\n${rejectUrl}\n\nIf you're happy being an admin, ignore this email.`,
+        text: `Hi ${recipientName},\n\n${promoterName} has granted you Admin access on Ke Jitbe. No action is needed to accept.\n\nIf you'd like to decline, visit this link within 7 days:\n${rejectUrl}\n\nIf you're happy being an admin, ignore this email.`,
       },
     );
   }
@@ -204,7 +204,7 @@ export class MailService implements OnModuleInit {
         Reset your password
       </h2>
       <p style="margin:0 0 28px;font-size:15px;color:#555;line-height:1.6;">
-        We received a request to reset your CTrend password.<br>
+        We received a request to reset your Ke Jitbe password.<br>
         This link expires in <strong>1 hour</strong>.
       </p>
       <p style="text-align:center;margin:0 0 28px;">
@@ -220,8 +220,8 @@ export class MailService implements OnModuleInit {
       </p>
     `);
 
-    await this.send(to, 'Reset your CTrend password', html, {
-      text: `Reset your CTrend password:\n\n${resetUrl}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.`,
+    await this.send(to, 'Reset your Ke Jitbe password', html, {
+      text: `Reset your Ke Jitbe password:\n\n${resetUrl}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.`,
     });
   }
 
@@ -242,7 +242,7 @@ export class MailService implements OnModuleInit {
           <tr>
             <td style="background:#1A1A2E;padding:28px 36px;text-align:center;">
               ${headerLogo}
-              <span style="color:#fff;font-size:20px;font-weight:700;letter-spacing:0.5px;display:block;${headerLogo ? 'margin-top:10px;' : ''}">CTrend</span>
+              <span style="color:#fff;font-size:20px;font-weight:700;letter-spacing:0.5px;display:block;${headerLogo ? 'margin-top:10px;' : ''}">Ke Jitbe</span>
             </td>
           </tr>
 
@@ -258,7 +258,7 @@ export class MailService implements OnModuleInit {
             <td style="background:#F8F8FB;padding:20px 36px;text-align:center;
               border-top:1px solid #EBEBF0;">
               <p style="margin:0;font-size:12px;color:#AAA;">
-                © ${new Date().getFullYear()} CTrend · Compare. Vote. See the Trend.
+                © ${new Date().getFullYear()} Ke Jitbe · Compare. Vote. See the Trend.
               </p>
             </td>
           </tr>

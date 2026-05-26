@@ -205,6 +205,7 @@ type Mutation {
   createStripeCheckoutSession(organizationId: ID, plan: SubscriptionPlan!): CheckoutSessionGql!
   createSystemPost(input: CreatePostInput!): PostGql!
   createWorldCupCampaignPost(fixtureId: ID!): PostGql!
+  deletePost(postId: ID!): Boolean!
   extendPostVoting(newVotingEndsAt: DateTime!, postId: ID!): PostGql!
   followUser(userId: ID!): Boolean!
   getImageUploadUrl(contentType: String!, filename: String!): PresignedUploadUrl!
@@ -271,6 +272,7 @@ type PostGql {
   author: UserGql!
   authorDisplayName: String
   authorEmail: String!
+  authorId: ID!
   authorUsername: String!
   caption: String
   category: CategoryGql!

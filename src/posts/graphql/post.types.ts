@@ -59,6 +59,10 @@ export class PostGql {
   @Field(() => UserGql)
   author: UserGql;
 
+  /** Legacy frontend alias: author.id */
+  @Field(() => ID)
+  authorId: string;
+
   /** Legacy frontend alias: author.username */
   @Field()
   authorUsername: string;

@@ -18,7 +18,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { PostStatus, UserRole } from '../common/enums';
 import { POST_VOTE_UPDATED, pubsub } from '../pubsub';
 
-type ReqUser = { id: string };
+type ReqUser = { id: string; role: string };
 
 @Resolver(() => PostGql)
 export class PostsResolver {
@@ -123,6 +123,15 @@ export class PostsResolver {
     @Args('postId', { type: () => ID }) postId: string,
   ) {
     return this.postsService.cancelScheduledPost(user.id, postId);
+  }
+
+  @Mutation(() => Boolean)
+  @UseGuards(GqlAuthGuard)
+  async deletePost(
+    @CurrentUser() user: ReqUser,
+    @Args('postId', { type: () => ID }) postId: string,
+  ) {
+    return this.postsService.deletePost(user.id, user.role, postId);
   }
 
   @Query(() => [PostGql])

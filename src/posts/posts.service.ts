@@ -109,6 +109,31 @@ export class PostsService {
     return true;
   }
 
+  async deletePost(
+    requesterId: string,
+    requesterRole: string,
+    postId: string,
+  ): Promise<boolean> {
+    const post = await this.findById(postId);
+    if (!post) throw new NotFoundException('Post not found');
+
+    const isAdmin = requesterRole === UserRole.ADMIN || requesterRole === 'admin';
+    const isOwner = post.createdBy.toHexString() === requesterId;
+
+    if (!isAdmin && !isOwner) {
+      throw new ForbiddenException('You can only delete your own posts');
+    }
+
+    const pid = post._id;
+    await Promise.all([
+      this.postModel.deleteOne({ _id: pid }),
+      this.savedPostModel.deleteMany({ postId: pid }),
+      this.postReactionModel.deleteMany({ postId: pid }),
+      this.commentModel.deleteMany({ postId: pid }),
+    ]);
+    return true;
+  }
+
   async listSavedPosts(userId: string, limit = 100): Promise<PostDocument[]> {
     if (!Types.ObjectId.isValid(userId)) return [];
     const saves = await this.savedPostModel
@@ -453,6 +478,7 @@ export class PostsService {
       category: this.categoriesService.toGql(category),
       visibility: post.visibility,
       author: this.usersService.toGql(author as UserDocument),
+      authorId: (author as UserDocument)._id.toHexString(),
       authorUsername: author.username,
       authorDisplayName: author.displayName ?? null,
       authorEmail: author.email,

@@ -179,6 +179,11 @@ export class UsersService {
       .exec();
     return docs.map((d) => d._id as Types.ObjectId);
   }
+
+  async findAllIds(): Promise<string[]> {
+    const docs = await this.userModel.find({}, { _id: 1 }).lean().exec();
+    return docs.map((d) => (d._id as Types.ObjectId).toHexString());
+  }
 }
 
 export function normalizeEmail(email: string): string {

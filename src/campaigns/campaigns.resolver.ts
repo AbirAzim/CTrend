@@ -17,9 +17,7 @@ export class CampaignsResolver {
 
   /** Public — single campaign detail page by slug */
   @Query(() => CampaignGql, { nullable: true })
-  async campaign(
-    @Args('slug') slug: string,
-  ): Promise<CampaignGql | null> {
+  async campaign(@Args('slug') slug: string): Promise<CampaignGql | null> {
     const doc = await this.campaignsService.findBySlug(slug);
     return doc ? this.campaignsService.toGql(doc) : null;
   }

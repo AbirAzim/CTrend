@@ -1,9 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import {
-  CampaignWinner,
-  CampaignWinnerSchema,
-} from './campaign-winner.schema';
+import { CampaignWinner, CampaignWinnerSchema } from './campaign-winner.schema';
 import { Fixture, FixtureSchema } from '../fixtures/fixture.schema';
 import { Vote, VoteSchema } from '../votes/vote.schema';
 import { WorldCupCampaignService } from './world-cup-campaign.service';

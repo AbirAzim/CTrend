@@ -109,12 +109,8 @@ export class InvitationsService {
 
   async listAll(status?: InvitationStatus): Promise<InvitationDocument[]> {
     const filter = status ? { status } : {};
-    return this.invitationModel
-      .find(filter)
-      .sort({ createdAt: -1 })
-      .exec();
+    return this.invitationModel.find(filter).sort({ createdAt: -1 }).exec();
   }
-
 
   async cancel(id: string): Promise<void> {
     const result = await this.invitationModel.findByIdAndDelete(id).exec();

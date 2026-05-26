@@ -40,7 +40,8 @@ export class CampaignSeedService implements OnModuleInit {
       // Always keep rules, text and URLs up to date
       await this.campaignsService.update(existing._id.toHexString(), {
         name: 'World Cup Fever 2026',
-        bannerText: 'Predict match winners and win 100 BDT! Vote before kickoff.',
+        bannerText:
+          'Predict match winners and win 100 BDT! Vote before kickoff.',
         ctaLabel: 'World Cup 2026',
         ctaUrl: '/campaign/world-cup-2026',
         rules: this.WC_RULES,
@@ -70,9 +71,13 @@ export class CampaignSeedService implements OnModuleInit {
     // Auto-activate in non-production environments so the banner shows immediately
     if (process.env.NODE_ENV !== 'production') {
       await this.campaignsService.toggle(doc._id.toHexString(), true);
-      this.logger.log('World Cup Fever 2026 campaign seeded and activated (dev)');
+      this.logger.log(
+        'World Cup Fever 2026 campaign seeded and activated (dev)',
+      );
     } else {
-      this.logger.log('World Cup Fever 2026 campaign seeded (activate via Admin → Campaigns)');
+      this.logger.log(
+        'World Cup Fever 2026 campaign seeded (activate via Admin → Campaigns)',
+      );
     }
   }
 }

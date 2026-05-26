@@ -1,4 +1,9 @@
-import { Inject, Injectable, NotFoundException, forwardRef } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  NotFoundException,
+  forwardRef,
+} from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
 import { Model, Types } from 'mongoose';
@@ -55,10 +60,7 @@ export class PromotionTokensService {
     );
   }
 
-  async createAndSend(
-    userId: string,
-    promotedById: string,
-  ): Promise<void> {
+  async createAndSend(userId: string, promotedById: string): Promise<void> {
     // Remove any previous un-rejected token for this user
     await this.model.deleteMany({
       userId: new Types.ObjectId(userId),

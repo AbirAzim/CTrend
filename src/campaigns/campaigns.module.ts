@@ -6,7 +6,9 @@ import { CampaignsResolver } from './campaigns.resolver';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([{ name: Campaign.name, schema: CampaignSchema }]),
+    MongooseModule.forFeature([
+      { name: Campaign.name, schema: CampaignSchema },
+    ]),
   ],
   providers: [CampaignsService, CampaignsResolver],
   exports: [CampaignsService],

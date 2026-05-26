@@ -49,7 +49,9 @@ export class OrganizationsService {
   ): Promise<OrganizationDocument[]> {
     if (!ownerUserIds.length) return [];
     return this.orgModel
-      .find({ ownerUserId: { $in: ownerUserIds.map((id) => new Types.ObjectId(id)) } })
+      .find({
+        ownerUserId: { $in: ownerUserIds.map((id) => new Types.ObjectId(id)) },
+      })
       .exec();
   }
 

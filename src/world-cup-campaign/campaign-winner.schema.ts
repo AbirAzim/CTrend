@@ -38,4 +38,5 @@ export class CampaignWinner {
   note?: string;
 }
 
-export const CampaignWinnerSchema = SchemaFactory.createForClass(CampaignWinner);
+export const CampaignWinnerSchema =
+  SchemaFactory.createForClass(CampaignWinner);

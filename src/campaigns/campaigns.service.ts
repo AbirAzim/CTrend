@@ -19,7 +19,10 @@ export class CampaignsService {
   ) {}
 
   async findActive(): Promise<CampaignDocument[]> {
-    return this.campaignModel.find({ isActive: true }).sort({ createdAt: -1 }).exec();
+    return this.campaignModel
+      .find({ isActive: true })
+      .sort({ createdAt: -1 })
+      .exec();
   }
 
   async findAll(): Promise<CampaignDocument[]> {
@@ -38,7 +41,9 @@ export class CampaignsService {
   async create(input: CreateCampaignInput): Promise<CampaignDocument> {
     const existing = await this.findBySlug(input.slug);
     if (existing) {
-      throw new BadRequestException(`Campaign with slug "${input.slug}" already exists`);
+      throw new BadRequestException(
+        `Campaign with slug "${input.slug}" already exists`,
+      );
     }
     return this.campaignModel.create({
       name: input.name,
@@ -58,7 +63,10 @@ export class CampaignsService {
     });
   }
 
-  async update(id: string, input: UpdateCampaignInput): Promise<CampaignDocument> {
+  async update(
+    id: string,
+    input: UpdateCampaignInput,
+  ): Promise<CampaignDocument> {
     const doc = await this.findById(id);
     if (!doc) throw new NotFoundException('Campaign not found');
     Object.assign(doc, input);

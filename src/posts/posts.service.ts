@@ -117,7 +117,8 @@ export class PostsService {
     const post = await this.findById(postId);
     if (!post) throw new NotFoundException('Post not found');
 
-    const isAdmin = requesterRole === UserRole.ADMIN || requesterRole === 'admin';
+    const isAdmin =
+      requesterRole === UserRole.ADMIN || requesterRole === 'admin';
     const isOwner = post.createdBy.toHexString() === requesterId;
 
     if (!isAdmin && !isOwner) {

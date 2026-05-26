@@ -73,6 +73,18 @@ input CommentPostInput {
   parentId: ID
 }
 
+type ConversationGql {
+  createdAt: DateTime!
+  id: ID!
+  lastMessageAt: DateTime
+  lastMessageText: String
+  name: String
+  participantIds: [ID!]!
+  participants: [ParticipantGql!]!
+  type: String!
+  unreadCount: Int!
+}
+
 input CreateCampaignInput {
   bannerImageUrl: String
   bannerText: String!
@@ -192,6 +204,17 @@ type InviteResultGql {
   status: String!
 }
 
+type MessageGql {
+  conversationId: ID!
+  createdAt: DateTime!
+  id: ID!
+  readBy: [ReadReceiptGql!]!
+  senderAvatar: String
+  senderId: ID!
+  senderName: String!
+  text: String!
+}
+
 type Mutation {
   acceptInvitation(displayName: String, password: String!, token: String!): AuthPayloadGql!
   addFriend(userId: ID!): String!
@@ -200,6 +223,7 @@ type Mutation {
   cancelSubscription(organizationId: ID): Boolean!
   commentPost(input: CommentPostInput!, postId: ID!): CommentGql!
   createCampaign(input: CreateCampaignInput!): CampaignGql!
+  createGroupConversation(memberIds: [ID!]!, name: String!): ConversationGql!
   createOrganization(name: String!): OrganizationGql!
   createPost(input: CreatePostInput!): PostGql!
   createStripeCheckoutSession(organizationId: ID, plan: SubscriptionPlan!): CheckoutSessionGql!
@@ -214,7 +238,10 @@ type Mutation {
   inviteUser(email: String!): Boolean!
   inviteUsers(emails: [String!]!): [InviteResultGql!]!
   login(email: String!, password: String!): AuthPayloadGql!
+  markAllNotificationsRead: Boolean!
   markCampaignPrizePaid(winnerId: ID!): CampaignWinnerGql!
+  markConversationRead(conversationId: ID!): Boolean!
+  markNotificationRead(id: ID!): Boolean!
   processMatchResult(campaignId: ID, fixtureId: ID!): CampaignWinnerGql!
   promoteToAdmin(email: String!): UserGql!
   register(input: RegisterInput!): AuthPayloadGql!
@@ -226,11 +253,15 @@ type Mutation {
   resendVerificationEmail(email: String!): Boolean!
   resetPassword(newPassword: String!, token: String!): Boolean!
   respondFriendRequest(accept: Boolean!, requesterId: ID!): Boolean!
+  sendAdminBroadcast(body: String!, title: String!): Int!
+  sendMessage(conversationId: ID!, text: String!): MessageGql!
   setCommentLike(commentId: ID!, liked: Boolean!): CommentGql!
   setPostHype(active: Boolean!, postId: ID!): Boolean!
   setPostKeep(keep: Boolean!, postId: ID!): Boolean!
   setPostLike(active: Boolean!, postId: ID!): Boolean!
+  setTyping(conversationId: ID!, isTyping: Boolean!): Boolean!
   signup(displayName: String, email: String!, password: String!): Boolean!
+  startDirectConversation(userId: ID!): ConversationGql!
   switchActiveRole(role: UserRole!): AuthPayloadGql!
   syncWorldCupFixtures: Boolean!
   toggleCampaign(id: ID!, isActive: Boolean!): CampaignGql!
@@ -244,6 +275,23 @@ type Mutation {
 
 type NewPostGql {
   postId: ID!
+}
+
+type NotificationGql {
+  body: String!
+  createdAt: DateTime!
+  id: ID!
+  read: Boolean!
+  referenceId: String
+  referenceType: String
+  title: String!
+  type: String!
+}
+
+type NotificationsPageGql {
+  items: [NotificationGql!]!
+  totalCount: Int!
+  unreadCount: Int!
 }
 
 enum OrgPostReach {
@@ -266,6 +314,13 @@ type OrganizationGql {
   postLimit: Int!
   postsUsed: Int!
   subscriptionPlan: SubscriptionPlan!
+}
+
+type ParticipantGql {
+  avatarUrl: String
+  displayName: String!
+  id: ID!
+  online: Boolean!
 }
 
 type PostGql {
@@ -335,6 +390,11 @@ type PostVoterGql {
   voteId: ID!
 }
 
+type PresenceChangedGql {
+  online: Boolean!
+  userId: ID!
+}
+
 type PresignedUploadUrl {
   key: String!
   publicUrl: String!
@@ -362,15 +422,25 @@ type Query {
   listInvitations(status: InvitationStatus): [InvitationGql!]!
   listUsers(role: String, skip: Int! = 0, take: Int! = 50): [UserGql!]!
   me: UserGql!
+  messages(conversationId: ID!, skip: Int! = 0, take: Int! = 30): [MessageGql!]!
+  myConversations: [ConversationGql!]!
   myFriends: [UserGql!]!
+  myNotifications(skip: Int! = 0, take: Int! = 20): NotificationsPageGql!
   myOrganization: OrganizationGql
   mySavedPosts: [PostGql!]!
   myScheduledPosts: [PostGql!]!
+  onlineUserIds: [String!]!
   organizationDashboard(organizationId: String!): OrganizationDashboardGql!
   previewInvites(emails: [String!]!): [InvitePreviewGql!]!
+  unreadNotificationCount: Int!
   votersByPost(optionIndex: Int, postId: ID!): [PostVoterGql!]!
   worldCupFixture(id: ID!): FixtureGql
   worldCupFixtures(filter: FixtureFilterInput): [FixtureGql!]!
+}
+
+type ReadReceiptGql {
+  readAt: DateTime!
+  userId: ID!
 }
 
 input RegisterInput {
@@ -381,14 +451,24 @@ input RegisterInput {
 }
 
 type Subscription {
+  messageReceived: MessageGql!
+  newNotification: NotificationGql!
   newPosts: NewPostGql!
   postVoteUpdated(postId: ID!): PostGql!
+  presenceChanged: PresenceChangedGql!
+  typingIndicator(conversationId: ID!): TypingIndicatorGql!
   voteUpdates(postId: ID!): VoteUpdateGql!
 }
 
 enum SubscriptionPlan {
   FREE
   PREMIUM
+}
+
+type TypingIndicatorGql {
+  conversationId: ID!
+  isTyping: Boolean!
+  userId: ID!
 }
 
 input UpdateCampaignInput {

@@ -32,7 +32,10 @@ export class WorldCupCampaignService {
     this.apiKey = this.configService.get<string>('FOOTBALL_DATA_API_KEY') ?? '';
   }
 
-  async processMatchResult(fixtureId: string, campaignId?: string): Promise<CampaignWinnerGql> {
+  async processMatchResult(
+    fixtureId: string,
+    campaignId?: string,
+  ): Promise<CampaignWinnerGql> {
     if (!Types.ObjectId.isValid(fixtureId)) {
       throw new NotFoundException('Fixture not found');
     }

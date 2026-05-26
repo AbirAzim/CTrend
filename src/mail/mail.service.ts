@@ -62,7 +62,10 @@ export class MailService implements OnModuleInit {
       }
       // Resize to 80x80 before base64-encoding — keeps email HTML well under Gmail's 102KB clip limit
       const resized = await sharp(readFileSync(LOGO_PATH))
-        .resize(80, 80, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+        .resize(80, 80, {
+          fit: 'contain',
+          background: { r: 0, g: 0, b: 0, alpha: 0 },
+        })
         .png({ compressionLevel: 9 })
         .toBuffer();
       return `data:image/png;base64,${resized.toString('base64')}`;
@@ -188,14 +191,9 @@ export class MailService implements OnModuleInit {
       </p>
     `);
 
-    await this.send(
-      to,
-      `You've been promoted to Admin on Ke Jitbe`,
-      html,
-      {
-        text: `Hi ${recipientName},\n\n${promoterName} has granted you Admin access on Ke Jitbe. No action is needed to accept.\n\nIf you'd like to decline, visit this link within 7 days:\n${rejectUrl}\n\nIf you're happy being an admin, ignore this email.`,
-      },
-    );
+    await this.send(to, `You've been promoted to Admin on Ke Jitbe`, html, {
+      text: `Hi ${recipientName},\n\n${promoterName} has granted you Admin access on Ke Jitbe. No action is needed to accept.\n\nIf you'd like to decline, visit this link within 7 days:\n${rejectUrl}\n\nIf you're happy being an admin, ignore this email.`,
+    });
   }
 
   async sendPasswordResetLink(to: string, resetUrl: string): Promise<void> {

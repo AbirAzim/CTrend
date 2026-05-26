@@ -9,6 +9,7 @@
     "node": "20.x"
   },
   "scripts": {
+    "prebuild": "rimraf dist",
     "build": "nest build",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "npm run start:prod",
@@ -67,6 +68,7 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/sharp": "^0.31.1",
     "@types/supertest": "^6.0.0",
+    "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "eslint": "^8.0.0",

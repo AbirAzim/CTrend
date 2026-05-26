@@ -2,7 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Post, PostDocument } from '../posts/post.schema';
-import { FeedScope, FeedSort, OrgPostReach, PostStatus, PostType } from '../common/enums';
+import {
+  FeedScope,
+  FeedSort,
+  OrgPostReach,
+  PostStatus,
+  PostType,
+} from '../common/enums';
 import { PostsService } from '../posts/posts.service';
 import { FollowsService } from '../follows/follows.service';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -109,7 +115,8 @@ export class FeedService {
     followingUserIds: string[],
   ): Promise<Types.ObjectId[]> {
     if (!followingUserIds.length) return [];
-    const orgs = await this.organizationsService.findManyByOwnerUserIds(followingUserIds);
+    const orgs =
+      await this.organizationsService.findManyByOwnerUserIds(followingUserIds);
     return orgs.map((org) => org._id);
   }
 }

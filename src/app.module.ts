@@ -29,6 +29,10 @@ import { PromotionTokensModule } from './promotion-tokens/promotion-tokens.modul
 import { FixturesModule } from './fixtures/fixtures.module';
 import { WorldCupCampaignModule } from './world-cup-campaign/world-cup-campaign.module';
 import { CampaignsModule } from './campaigns/campaigns.module';
+import { MessagesModule } from './messages/messages.module';
+import { NotificationsModule } from './notifications/notifications.module';
+import { PresenceModule } from './presence/presence.module';
+import { PresenceService } from './presence/presence.service';
 
 @Module({
   imports: [
@@ -49,12 +53,13 @@ import { CampaignsModule } from './campaigns/campaigns.module';
     ]),
     GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
-      imports: [ConfigModule, UsersModule, AuthModule],
-      inject: [ConfigService, JwtService, UsersService],
+      imports: [ConfigModule, UsersModule, AuthModule, PresenceModule],
+      inject: [ConfigService, JwtService, UsersService, PresenceService],
       useFactory: (
         config: ConfigService,
         jwtService: JwtService,
         usersService: UsersService,
+        presenceService: PresenceService,
       ) => ({
         autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
         sortSchema: true,
@@ -84,6 +89,14 @@ import { CampaignsModule } from './campaigns/campaigns.module';
                 ? connectionParams.authorization
                 : undefined;
           const bearer = tokenFromHeader ?? tokenFromWsParams;
+          // For WS subscriptions there is no HTTP req, so ctxReq.headers has no
+          // Authorization header.  Passport's fromAuthHeaderAsBearerToken() only
+          // reads from req.headers.authorization, so we back-fill it here so that
+          // GqlAuthGuard (which delegates to the JWT passport strategy) can
+          // extract the token the same way it does for HTTP requests.
+          if (bearer && !ctxReq.headers?.authorization) {
+            (ctxReq.headers as Record<string, string>).authorization = bearer;
+          }
           const token = bearer?.startsWith('Bearer ')
             ? bearer.slice('Bearer '.length)
             : undefined;
@@ -120,7 +133,38 @@ import { CampaignsModule } from './campaigns/campaigns.module';
           return { req: ctxReq, res };
         },
         subscriptions: {
-          'graphql-ws': true,
+          'graphql-ws': {
+            keepAlive: 10_000, // ping clients every 10 s — keeps Safari from dropping idle WS connections
+            onConnect: async (ctx) => {
+              const params = (ctx.connectionParams ?? {}) as Record<
+                string,
+                string
+              >;
+              const bearer =
+                params['Authorization'] ?? params['authorization'] ?? '';
+              const token = bearer.startsWith('Bearer ')
+                ? bearer.slice(7)
+                : bearer;
+              if (token) {
+                try {
+                  const payload = await jwtService.verifyAsync<{ sub: string }>(
+                    token,
+                  );
+                  const socket = (ctx.extra as { socket: unknown }).socket;
+                  presenceService.markOnline(
+                    socket as import('ws').WebSocket,
+                    payload.sub,
+                  );
+                } catch {
+                  /* invalid token */
+                }
+              }
+            },
+            onDisconnect: (ctx) => {
+              const socket = (ctx.extra as { socket: unknown }).socket;
+              presenceService.markOffline(socket as import('ws').WebSocket);
+            },
+          },
         },
         playground: config.get('NODE_ENV') !== 'production',
       }),
@@ -143,6 +187,9 @@ import { CampaignsModule } from './campaigns/campaigns.module';
     FixturesModule,
     WorldCupCampaignModule,
     CampaignsModule,
+    PresenceModule,
+    NotificationsModule,
+    MessagesModule,
   ],
   providers: [
     {

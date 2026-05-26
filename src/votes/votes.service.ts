@@ -24,10 +24,12 @@ export class VotesService {
   ) {}
 
   async getStats(postId: string, optionCount: number) {
-    const rows = await this.voteModel.aggregate<{ _id: number; count: number }>([
-      { $match: { postId: new Types.ObjectId(postId) } },
-      { $group: { _id: '$selectedOptionIndex', count: { $sum: 1 } } },
-    ]);
+    const rows = await this.voteModel.aggregate<{ _id: number; count: number }>(
+      [
+        { $match: { postId: new Types.ObjectId(postId) } },
+        { $group: { _id: '$selectedOptionIndex', count: { $sum: 1 } } },
+      ],
+    );
     const counts = Array.from({ length: optionCount }, () => 0);
     for (const row of rows) {
       const i = row._id;
@@ -73,11 +75,21 @@ export class VotesService {
       const vid = new Types.ObjectId(userId);
       const aid = post.createdBy;
       const [v2a, a2v] = await Promise.all([
-        this.followModel.countDocuments({ followerId: vid, followingId: aid, status: FollowStatus.ACCEPTED }),
-        this.followModel.countDocuments({ followerId: aid, followingId: vid, status: FollowStatus.ACCEPTED }),
+        this.followModel.countDocuments({
+          followerId: vid,
+          followingId: aid,
+          status: FollowStatus.ACCEPTED,
+        }),
+        this.followModel.countDocuments({
+          followerId: aid,
+          followingId: vid,
+          status: FollowStatus.ACCEPTED,
+        }),
       ]);
       if (!v2a || !a2v) {
-        throw new ForbiddenException('You must be friends with the post author to vote');
+        throw new ForbiddenException(
+          'You must be friends with the post author to vote',
+        );
       }
     }
     const uid = new Types.ObjectId(userId);

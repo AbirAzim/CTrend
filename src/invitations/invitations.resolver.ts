@@ -117,7 +117,10 @@ export class InvitationsResolver {
         results.push({ email, status: 'invited' });
       } catch (err: unknown) {
         const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes('already exists') || msg.includes('already registered')) {
+        if (
+          msg.includes('already exists') ||
+          msg.includes('already registered')
+        ) {
           results.push({ email, status: 'already_exists', message: msg });
         } else {
           results.push({ email, status: 'error', message: msg });
@@ -184,7 +187,9 @@ export class InvitationsResolver {
   async previewInvites(
     @Args('emails', { type: () => [String] }) emails: string[],
   ): Promise<InvitePreviewGql[]> {
-    const clean = [...new Set(emails.map((e) => e.trim().toLowerCase()))].filter(Boolean);
+    const clean = [
+      ...new Set(emails.map((e) => e.trim().toLowerCase())),
+    ].filter(Boolean);
     if (!clean.length) return [];
 
     const existingUsers = await this.usersService.findByEmails(clean);

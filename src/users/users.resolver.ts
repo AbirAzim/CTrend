@@ -69,7 +69,11 @@ export class UsersResolver {
     if (actor.role !== UserRole.ADMIN)
       throw new ForbiddenException('Admin only');
     const roleFilter = role ? (role as UserRole) : undefined;
-    const users = await this.usersService.listUsers(skip, Math.min(take, 200), roleFilter);
+    const users = await this.usersService.listUsers(
+      skip,
+      Math.min(take, 200),
+      roleFilter,
+    );
     return users.map((u) => this.usersService.toGql(u));
   }
 
@@ -97,9 +101,7 @@ export class UsersResolver {
 
   /** Anyone with a valid promotion token can reject (decline) their admin promotion. */
   @Mutation(() => Boolean)
-  async rejectAdminPromotion(
-    @Args('token') token: string,
-  ): Promise<boolean> {
+  async rejectAdminPromotion(@Args('token') token: string): Promise<boolean> {
     await this.promotionTokensService.reject(token);
     return true;
   }

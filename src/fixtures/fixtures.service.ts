@@ -147,7 +147,9 @@ export class FixturesService {
     }
 
     const kickoff = fixture.kickoff;
-    const twentyFourHoursBefore = new Date(kickoff.getTime() - 24 * 60 * 60 * 1000);
+    const twentyFourHoursBefore = new Date(
+      kickoff.getTime() - 24 * 60 * 60 * 1000,
+    );
     const now = new Date();
 
     const isScheduled = twentyFourHoursBefore > now;
@@ -178,7 +180,9 @@ export class FixturesService {
     await fixture.save();
 
     if (status === PostStatus.PUBLISHED) {
-      await pubsub.publish(NEW_POST, { newPost: { postId: post._id.toHexString() } });
+      await pubsub.publish(NEW_POST, {
+        newPost: { postId: post._id.toHexString() },
+      });
     }
 
     return post;

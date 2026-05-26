@@ -2,18 +2,10 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Post, PostDocument } from '../posts/post.schema';
-import {
-  FeedScope,
-  FeedSort,
-  OrgPostReach,
-  PostStatus,
-  PostType,
-  UserRole,
-} from '../common/enums';
+import { FeedScope, FeedSort, OrgPostReach, PostStatus, PostType } from '../common/enums';
 import { PostsService } from '../posts/posts.service';
 import { FollowsService } from '../follows/follows.service';
 import { OrganizationsService } from '../organizations/organizations.service';
-import { UsersService } from '../users/users.service';
 
 @Injectable()
 export class FeedService {
@@ -24,7 +16,6 @@ export class FeedService {
     private postsService: PostsService,
     private followsService: FollowsService,
     private organizationsService: OrganizationsService,
-    private usersService: UsersService,
   ) {}
 
   async getFeed(
@@ -71,16 +62,10 @@ export class FeedService {
 
     const notScheduled = { status: { $ne: PostStatus.SCHEDULED } };
 
-    // Unauthenticated: SYSTEM posts and posts created by admin users only.
+    // Unauthenticated: only SYSTEM posts (explicitly platform-wide by admin choice).
+    // Regular USER posts by admins are friends-only, same as any other user.
     if (!viewerId) {
-      const adminIds = await this.usersService.findIdsByRole(UserRole.ADMIN);
-      const parts: Record<string, unknown>[] = [
-        { type: PostType.SYSTEM, ...notScheduled },
-      ];
-      if (adminIds.length > 0) {
-        parts.push({ createdBy: { $in: adminIds }, ...notScheduled });
-      }
-      return { $or: parts };
+      return { type: PostType.SYSTEM, ...notScheduled };
     }
 
     // Authenticated user: own posts (any status) + friends' posts + SYSTEM + org posts.

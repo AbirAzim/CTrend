@@ -44,6 +44,15 @@ export class OrganizationsService {
       .exec();
   }
 
+  async findManyByOwnerUserIds(
+    ownerUserIds: string[],
+  ): Promise<OrganizationDocument[]> {
+    if (!ownerUserIds.length) return [];
+    return this.orgModel
+      .find({ ownerUserId: { $in: ownerUserIds.map((id) => new Types.ObjectId(id)) } })
+      .exec();
+  }
+
   async createOrganization(ownerUserId: string, name: string) {
     const user = await this.usersService.findById(ownerUserId);
     if (!user) throw new NotFoundException('User not found');

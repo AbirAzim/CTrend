@@ -23,3 +23,4 @@ export class Vote {
 
 export const VoteSchema = SchemaFactory.createForClass(Vote);
 VoteSchema.index({ userId: 1, postId: 1 }, { unique: true });
+VoteSchema.index({ postId: 1 }); // getStats: find all votes by postId

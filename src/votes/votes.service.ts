@@ -24,16 +24,16 @@ export class VotesService {
   ) {}
 
   async getStats(postId: string, optionCount: number) {
-    const votes = await this.voteModel
-      .find({ postId: new Types.ObjectId(postId) })
-      .lean()
-      .exec();
+    const rows = await this.voteModel.aggregate<{ _id: number; count: number }>([
+      { $match: { postId: new Types.ObjectId(postId) } },
+      { $group: { _id: '$selectedOptionIndex', count: { $sum: 1 } } },
+    ]);
     const counts = Array.from({ length: optionCount }, () => 0);
-    for (const v of votes) {
-      const i = v.selectedOptionIndex;
-      if (i >= 0 && i < optionCount) counts[i]++;
+    for (const row of rows) {
+      const i = row._id;
+      if (i >= 0 && i < optionCount) counts[i] = row.count;
     }
-    const total = votes.length;
+    const total = counts.reduce((a, b) => a + b, 0);
     const percentages = counts.map((c) =>
       total === 0 ? 0 : Math.round((c / total) * 10000) / 100,
     );

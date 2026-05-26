@@ -78,3 +78,6 @@ export const PostSchema = SchemaFactory.createForClass(Post);
 PostSchema.index({ createdAt: -1 });
 PostSchema.index({ feedPriority: -1, voteCount: -1 });
 PostSchema.index({ status: 1, scheduledAt: 1 });
+// Feed filter queries: type + createdBy, and type + status + orgReach
+PostSchema.index({ type: 1, createdBy: 1, status: 1 });
+PostSchema.index({ type: 1, orgReach: 1, status: 1 });

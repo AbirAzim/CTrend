@@ -35,11 +35,7 @@ export class FeedService {
     viewerId?: string,
     viewerRole?: string,
   ) {
-    const baseFilter = await this.buildFilter(scope, viewerId, viewerRole);
-    this.logger.log(
-      `[DEBUG] getFeed viewerId=${viewerId} viewerRole=${viewerRole} filter=${JSON.stringify(baseFilter)}`,
-    );
-    const filter = baseFilter;
+    const filter = await this.buildFilter(scope, viewerId, viewerRole);
     const sortSpec = this.buildSort(sort);
     const q = this.postModel.find(filter).sort(sortSpec).skip(skip).limit(take);
     const [rows, totalCount] = await Promise.all([
@@ -89,13 +85,6 @@ export class FeedService {
 
     // Authenticated user: own posts (any status) + friends' posts + SYSTEM + org posts.
     const viewerOid = new Types.ObjectId(viewerId);
-    const ownCount = await this.postModel.countDocuments({
-      type: PostType.USER,
-      createdBy: viewerOid,
-    });
-    this.logger.log(
-      `[DEBUG] viewerOid=${viewerOid} own USER posts in DB: ${ownCount}`,
-    );
     const followingIds = await this.followsService.getFollowingIds(viewerId);
     const followingOids = followingIds.map((id) => new Types.ObjectId(id));
     const orgConnectedIds = await this.orgIdsForFollowedOwners(followingIds);
@@ -135,11 +124,7 @@ export class FeedService {
     followingUserIds: string[],
   ): Promise<Types.ObjectId[]> {
     if (!followingUserIds.length) return [];
-    const ids: Types.ObjectId[] = [];
-    for (const fid of followingUserIds) {
-      const org = await this.organizationsService.findByOwnerUserId(fid);
-      if (org) ids.push(org._id);
-    }
-    return ids;
+    const orgs = await this.organizationsService.findManyByOwnerUserIds(followingUserIds);
+    return orgs.map((org) => org._id);
   }
 }

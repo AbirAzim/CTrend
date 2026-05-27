@@ -26,8 +26,12 @@ export class MessageGql {
   @Field({ nullable: true })
   senderAvatar?: string;
 
-  @Field()
+  @Field({ defaultValue: '' })
   text: string;
+
+  /** Public URL of an attached image, if any. */
+  @Field({ nullable: true })
+  imageUrl?: string;
 
   @Field(() => [ReadReceiptGql])
   readBy: ReadReceiptGql[];
@@ -79,6 +83,19 @@ export class ParticipantGql {
 
   @Field()
   online: boolean;
+}
+
+@ObjectType()
+export class MessageReadGql {
+  @Field(() => ID)
+  conversationId: string;
+
+  /** The user who marked the conversation as read. */
+  @Field(() => ID)
+  userId: string;
+
+  @Field()
+  readAt: Date;
 }
 
 @ObjectType()

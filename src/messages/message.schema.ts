@@ -19,8 +19,12 @@ export class Message {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   senderId: Types.ObjectId;
 
-  @Prop({ required: true, trim: true, maxlength: 2000 })
+  @Prop({ required: false, trim: true, maxlength: 2000, default: '' })
   text: string;
+
+  /** Optional image attached to the message (R2 public URL). */
+  @Prop({ required: false, type: String, default: null })
+  imageUrl?: string | null;
 
   @Prop({
     type: [{ userId: Types.ObjectId, readAt: Date }],

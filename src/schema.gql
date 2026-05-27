@@ -208,11 +208,18 @@ type MessageGql {
   conversationId: ID!
   createdAt: DateTime!
   id: ID!
+  imageUrl: String
   readBy: [ReadReceiptGql!]!
   senderAvatar: String
   senderId: ID!
   senderName: String!
   text: String!
+}
+
+type MessageReadGql {
+  conversationId: ID!
+  readAt: DateTime!
+  userId: ID!
 }
 
 type Mutation {
@@ -254,7 +261,7 @@ type Mutation {
   resetPassword(newPassword: String!, token: String!): Boolean!
   respondFriendRequest(accept: Boolean!, requesterId: ID!): Boolean!
   sendAdminBroadcast(body: String!, title: String!): Int!
-  sendMessage(conversationId: ID!, text: String!): MessageGql!
+  sendMessage(conversationId: ID!, imageUrl: String, text: String! = ""): MessageGql!
   setCommentLike(commentId: ID!, liked: Boolean!): CommentGql!
   setPostHype(active: Boolean!, postId: ID!): Boolean!
   setPostKeep(keep: Boolean!, postId: ID!): Boolean!
@@ -451,6 +458,7 @@ input RegisterInput {
 }
 
 type Subscription {
+  messageRead: MessageReadGql!
   messageReceived: MessageGql!
   newNotification: NotificationGql!
   newPosts: NewPostGql!

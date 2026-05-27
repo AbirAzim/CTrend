@@ -12,6 +12,7 @@ import { MessagesService } from './messages.service';
 import {
   ConversationGql,
   MessageGql,
+  MessageReadGql,
   PresenceChangedGql,
   TypingIndicatorGql,
 } from './graphql/message.types';
@@ -20,6 +21,7 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
   pubsub,
   NEW_MESSAGE,
+  MESSAGE_READ,
   TYPING_INDICATOR,
   USER_PRESENCE_CHANGED,
 } from '../pubsub';
@@ -100,9 +102,15 @@ export class MessagesResolver {
   async sendMessage(
     @CurrentUser() user: ReqUser,
     @Args('conversationId', { type: () => ID }) conversationId: string,
-    @Args('text') text: string,
+    @Args('text', { defaultValue: '' }) text: string,
+    @Args('imageUrl', { nullable: true }) imageUrl?: string,
   ) {
-    return this.messagesService.sendMessage(user.id, conversationId, text);
+    return this.messagesService.sendMessage(
+      user.id,
+      conversationId,
+      text,
+      imageUrl,
+    );
   }
 
   @Mutation(() => Boolean)
@@ -140,6 +148,26 @@ export class MessagesResolver {
   @UseGuards(GqlAuthGuard)
   messageReceived() {
     return pubsub.asyncIterableIterator(NEW_MESSAGE);
+  }
+
+  /**
+   * Fires when any participant marks a conversation as read.
+   * Only delivered to users who are participants in that conversation.
+   */
+  @Subscription(() => MessageReadGql, {
+    filter(payload, _variables, context) {
+      const userId: string = context?.req?.user?.id;
+      return (
+        userId &&
+        Array.isArray(payload.participantIds) &&
+        payload.participantIds.includes(userId)
+      );
+    },
+    resolve: (payload) => payload.messageRead,
+  })
+  @UseGuards(GqlAuthGuard)
+  messageRead() {
+    return pubsub.asyncIterableIterator(MESSAGE_READ);
   }
 
   @Subscription(() => TypingIndicatorGql, {

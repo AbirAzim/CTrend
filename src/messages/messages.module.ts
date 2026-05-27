@@ -6,7 +6,6 @@ import { MessagesService } from './messages.service';
 import { MessagesResolver } from './messages.resolver';
 import { UsersModule } from '../users/users.module';
 import { FollowsModule } from '../follows/follows.module';
-import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -16,7 +15,6 @@ import { NotificationsModule } from '../notifications/notifications.module';
     ]),
     UsersModule,
     FollowsModule,
-    NotificationsModule,
   ],
   providers: [MessagesService, MessagesResolver],
   exports: [MessagesService],

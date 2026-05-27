@@ -16,8 +16,7 @@ import {
   MessageGql,
   ParticipantGql,
 } from './graphql/message.types';
-import { pubsub, NEW_MESSAGE, TYPING_INDICATOR } from '../pubsub';
-import { NotificationsService } from '../notifications/notifications.service';
+import { pubsub, NEW_MESSAGE, MESSAGE_READ, TYPING_INDICATOR } from '../pubsub';
 import { UserRole } from '../common/enums';
 
 @Injectable()
@@ -30,7 +29,6 @@ export class MessagesService {
     private usersService: UsersService,
     private followsService: FollowsService,
     private presenceService: PresenceService,
-    private notificationsService: NotificationsService,
   ) {}
 
   // ── Conversations ──────────────────────────────────────────────
@@ -113,7 +111,13 @@ export class MessagesService {
     viewerId: string,
     conversationId: string,
     text: string,
+    imageUrl?: string,
   ): Promise<MessageGql> {
+    const trimmedText = text?.trim() ?? '';
+    if (!trimmedText && !imageUrl) {
+      throw new BadRequestException('Message must contain text or an image');
+    }
+
     const convo = await this.conversationModel.findById(conversationId).exec();
     if (!convo) throw new NotFoundException('Conversation not found');
 
@@ -125,7 +129,8 @@ export class MessagesService {
     const msg = await this.messageModel.create({
       conversationId: convo._id,
       senderId: viewerOid,
-      text: text.trim(),
+      text: trimmedText,
+      imageUrl: imageUrl ?? null,
       readBy: [{ userId: viewerOid, readAt: new Date() }],
     });
 
@@ -137,11 +142,14 @@ export class MessagesService {
           (convo.unreadCounts?.[pid.toHexString()] ?? 0) + 1;
       }
     }
+
+    // Preview text shown in conversation list
+    const previewText = trimmedText || '📷 Image';
     await this.conversationModel.updateOne(
       { _id: convo._id },
       {
         $set: {
-          lastMessageText: text.trim().slice(0, 100),
+          lastMessageText: previewText.slice(0, 100),
           lastMessageAt: msg.createdAt,
           ...updates,
         },
@@ -156,22 +164,10 @@ export class MessagesService {
       participantIds: convo.participantIds.map((id) => id.toHexString()),
     });
 
-    // Notify recipients
-    const sender = await this.usersService.findById(viewerId);
-    const senderName =
-      sender?.displayName?.trim() || sender?.username || 'Someone';
-    for (const pid of convo.participantIds) {
-      if (!pid.equals(viewerOid)) {
-        await this.notificationsService.create({
-          userId: pid.toHexString(),
-          type: 'MESSAGE',
-          title: `New message from ${senderName}`,
-          body: text.trim().slice(0, 80),
-          referenceId: convo._id.toHexString(),
-          referenceType: 'Conversation',
-        });
-      }
-    }
+    // NOTE: We intentionally do NOT create bell-icon notifications for chat
+    // messages. Unread message counts are tracked per-conversation via
+    // unreadCounts on the Conversation document and surfaced through the
+    // messenger FAB badge, not the notification bell.
 
     return gql;
   }
@@ -207,7 +203,7 @@ export class MessagesService {
     if (!convo.participantIds.some((id) => id.equals(viewerOid))) return false;
 
     const now = new Date();
-    await this.messageModel.updateMany(
+    const result = await this.messageModel.updateMany(
       {
         conversationId: convo._id,
         'readBy.userId': { $ne: viewerOid },
@@ -215,10 +211,24 @@ export class MessagesService {
       { $push: { readBy: { userId: viewerOid, readAt: now } } },
     );
 
+    // Always reset unread counter for this user
     await this.conversationModel.updateOne(
       { _id: convo._id },
       { $set: { [`unreadCounts.${viewerId}`]: 0 } },
     );
+
+    // Only broadcast if there were genuinely unread messages — avoids
+    // redundant subscription events when the conversation is already read.
+    if (result.modifiedCount > 0) {
+      await pubsub.publish(MESSAGE_READ, {
+        messageRead: {
+          conversationId: convo._id.toHexString(),
+          userId: viewerId,
+          readAt: now,
+        },
+        participantIds: convo.participantIds.map((id) => id.toHexString()),
+      });
+    }
 
     return true;
   }
@@ -280,7 +290,8 @@ export class MessagesService {
       senderId: msg.senderId.toHexString(),
       senderName: sender?.displayName?.trim() || sender?.username || 'User',
       senderAvatar: sender?.profileImageUrl ?? undefined,
-      text: msg.text,
+      text: msg.text ?? '',
+      imageUrl: msg.imageUrl ?? undefined,
       readBy: msg.readBy.map((r) => ({
         userId: r.userId.toHexString(),
         readAt: r.readAt,

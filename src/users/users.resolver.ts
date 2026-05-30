@@ -77,6 +77,19 @@ export class UsersResolver {
     return users.map((u) => this.usersService.toGql(u));
   }
 
+  /** Admin: total count of users matching the role filter (for pagination). */
+  @Query(() => Int)
+  @UseGuards(GqlAuthGuard)
+  async listUsersCount(
+    @CurrentUser() actor: ReqUser,
+    @Args('role', { type: () => String, nullable: true }) role?: string,
+  ): Promise<number> {
+    if (actor.role !== UserRole.ADMIN)
+      throw new ForbiddenException('Admin only');
+    const roleFilter = role ? (role as UserRole) : undefined;
+    return this.usersService.listUsersCount(roleFilter);
+  }
+
   /** Admin: promote an existing user to also hold the admin role. */
   @Mutation(() => UserGql)
   @UseGuards(GqlAuthGuard)

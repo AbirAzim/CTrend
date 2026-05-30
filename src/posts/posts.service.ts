@@ -30,11 +30,12 @@ import { VotesService } from '../votes/votes.service';
 import { CategoryDocument } from '../categories/category.schema';
 import { UserDocument } from '../users/user.schema';
 import { PostGql } from './graphql/post.types';
-import { NEW_POST, POST_VOTE_UPDATED, pubsub } from '../pubsub';
+import { NEW_POST, POST_DELETED, POST_VOTE_UPDATED, pubsub } from '../pubsub';
 import { Comment, CommentDocument } from '../comments/comment.schema';
 import { CommentsService } from '../comments/comments.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { FollowsService } from '../follows/follows.service';
+import { OnModuleInit } from '@nestjs/common';
 
 const PREMIUM_GLOBAL_MONTHLY = 20;
 
@@ -44,7 +45,22 @@ function currentMonthKey(): string {
 }
 
 @Injectable()
-export class PostsService {
+export class PostsService implements OnModuleInit {
+  async onModuleInit() {
+    // Backfill: re-enable hype on existing system/admin posts that were
+    // created with likesDisabled=true. New posts always start with hype enabled.
+    try {
+      await this.postModel
+        .updateMany(
+          { likesDisabled: true },
+          { $set: { likesDisabled: false } },
+        )
+        .exec();
+    } catch {
+      // non-fatal
+    }
+  }
+
   constructor(
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
     @InjectModel(PostReaction.name)
@@ -160,6 +176,10 @@ export class PostsService {
       this.postReactionModel.deleteMany({ postId: pid }),
       this.commentModel.deleteMany({ postId: pid }),
     ]);
+    // Notify all connected feed clients so the post disappears in real time.
+    await pubsub.publish(POST_DELETED, {
+      postDeleted: { postId: pid.toHexString() },
+    });
     return true;
   }
 
@@ -399,7 +419,7 @@ export class PostsService {
       feedPriority: 100,
       voteCount: 0,
       commentsDisabled: false,
-      likesDisabled: true,
+      likesDisabled: false,
       votingEndsAt,
       status,
       scheduledAt,
@@ -412,16 +432,42 @@ export class PostsService {
 
   private async publishNewPost(postId: string) {
     await pubsub.publish(NEW_POST, { newPost: { postId } });
-    // Fan-out NEW_POST_FRIEND notifications to the author's friends
     try {
       const post = await this.postModel.findById(postId).exec();
-      if (!post || post.type === PostType.SYSTEM) return;
+      if (!post) return;
       const authorId = post.createdBy.toHexString();
       const author = await this.usersService.findById(authorId);
       const authorName =
-        author?.displayName?.trim() || author?.username || 'A friend';
-      const friends = await this.followsService.getMyFriends(authorId);
+        author?.displayName?.trim() || author?.username || 'Someone';
       const caption = (post.contentText ?? '').trim();
+
+      if (post.type === PostType.SYSTEM) {
+        // SYSTEM (admin/campaign) posts fan out to ALL users on the platform.
+        // The admin who created the post does not receive a notification.
+        const allUserIds = await this.usersService.findAllIds();
+        const recipients = allUserIds.filter((id) => id !== authorId);
+        const body = caption
+          ? caption.slice(0, 120)
+          : 'A new campaign is live — tap to view.';
+        await Promise.all(
+          recipients.map((userId) =>
+            this.notificationsService.create({
+              userId,
+              type: 'ANNOUNCEMENT',
+              title: `📢 ${authorName} posted a campaign`,
+              body,
+              referenceId: postId,
+              referenceType: 'Post',
+              actorId: authorId,
+              actorName: authorName,
+            }),
+          ),
+        );
+        return;
+      }
+
+      // USER posts → notify the author's friends only.
+      const friends = await this.followsService.getMyFriends(authorId);
       const body = caption
         ? `${authorName} posted: ${caption.slice(0, 80)}`
         : `${authorName} shared a new compare`;

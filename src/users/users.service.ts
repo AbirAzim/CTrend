@@ -154,18 +154,36 @@ export class UsersService {
     return result.deletedCount > 0;
   }
 
+  private buildListFilter(role?: UserRole): Record<string, unknown> {
+    if (!role) return {};
+    // role='user' returns ONLY pure users (excludes anyone holding admin role)
+    if (String(role) === 'user') {
+      return {
+        $and: [
+          { $or: [{ roles: 'user' }, { role: 'user' }] },
+          { $nor: [{ roles: 'admin' }, { role: 'admin' }] },
+        ],
+      };
+    }
+    // role='admin' (or others): match the role in either field
+    return { $or: [{ roles: role }, { role }] };
+  }
+
   async listUsers(
     skip = 0,
     take = 50,
     role?: UserRole,
   ): Promise<UserDocument[]> {
-    const filter = role ? { roles: role } : {};
     return this.userModel
-      .find(filter)
+      .find(this.buildListFilter(role))
       .skip(skip)
       .limit(take)
       .sort({ createdAt: -1 })
       .exec();
+  }
+
+  async listUsersCount(role?: UserRole): Promise<number> {
+    return this.userModel.countDocuments(this.buildListFilter(role)).exec();
   }
 
   async countUsers(): Promise<number> {

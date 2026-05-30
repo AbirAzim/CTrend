@@ -32,6 +32,7 @@ import { CampaignsModule } from './campaigns/campaigns.module';
 import { MessagesModule } from './messages/messages.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PresenceModule } from './presence/presence.module';
+import { SearchModule } from './search/search.module';
 import { PresenceService } from './presence/presence.service';
 
 @Module({
@@ -190,6 +191,7 @@ import { PresenceService } from './presence/presence.service';
     PresenceModule,
     NotificationsModule,
     MessagesModule,
+    SearchModule,
   ],
   providers: [
     {

@@ -231,12 +231,14 @@ type Mutation {
   cancelSubscription(organizationId: ID): Boolean!
   commentPost(input: CommentPostInput!, postId: ID!): CommentGql!
   createCampaign(input: CreateCampaignInput!): CampaignGql!
+  createCategory(name: String!): CategoryGql!
   createGroupConversation(memberIds: [ID!]!, name: String!): ConversationGql!
   createOrganization(name: String!): OrganizationGql!
   createPost(input: CreatePostInput!): PostGql!
   createStripeCheckoutSession(organizationId: ID, plan: SubscriptionPlan!): CheckoutSessionGql!
   createSystemPost(input: CreatePostInput!): PostGql!
   createWorldCupCampaignPost(fixtureId: ID!): PostGql!
+  deleteCategory(id: ID!): Boolean!
   deletePost(postId: ID!): Boolean!
   extendPostVoting(newVotingEndsAt: DateTime!, postId: ID!): PostGql!
   followUser(userId: ID!): Boolean!
@@ -275,6 +277,7 @@ type Mutation {
   toggleCampaign(id: ID!, isActive: Boolean!): CampaignGql!
   unfriend(userId: ID!): Boolean!
   updateCampaign(id: ID!, input: UpdateCampaignInput!): CampaignGql!
+  updateCategory(id: ID!, name: String!): CategoryGql!
   updatePost(input: UpdatePostInput!, postId: ID!): PostGql!
   updateProfile(input: UpdateProfileInput!): UserGql!
   verifyBkashPayment(payload: String!): BkashVerificationGql!
@@ -333,6 +336,10 @@ type ParticipantGql {
   displayName: String!
   id: ID!
   online: Boolean!
+}
+
+type PostDeletedGql {
+  postId: ID!
 }
 
 type PostGql {
@@ -421,6 +428,7 @@ type Query {
   campaignWinners: [CampaignWinnerGql!]!
   campaigns: [CampaignGql!]!
   categories: [CategoryGql!]!
+  categoryPostCount(categoryId: ID!): Int!
   commentsByPost(postId: ID!): [CommentGql!]!
   feedPosts(scope: FeedScope, skip: Int = 0, sort: FeedSort, take: Int = 20): [PostGql!]!
   friendRequests: FriendRequestsGql!
@@ -431,9 +439,11 @@ type Query {
   getPostById(id: ID!): PostGql!
   getPostsByUser(userId: ID!): [PostGql!]!
   getUserProfile(userId: ID!): UserGql!
+  globalSearch(limit: Int = 20, query: String!): SearchResultGql!
   incomingFriendRequests: [UserGql!]!
   listInvitations(status: InvitationStatus): [InvitationGql!]!
   listUsers(role: String, skip: Int! = 0, take: Int! = 50): [UserGql!]!
+  listUsersCount(role: String): Int!
   me: UserGql!
   messages(conversationId: ID!, skip: Int! = 0, take: Int! = 30): [MessageGql!]!
   myConversations: [ConversationGql!]!
@@ -463,11 +473,22 @@ input RegisterInput {
   username: String!
 }
 
+type SearchResultGql {
+  posts: [PostGql!]!
+  users: [SearchUserGql!]!
+}
+
+type SearchUserGql {
+  isFriend: Boolean!
+  user: UserGql!
+}
+
 type Subscription {
   messageRead: MessageReadGql!
   messageReceived: MessageGql!
   newNotification: NotificationGql!
   newPosts: NewPostGql!
+  postDeleted: PostDeletedGql!
   postVoteUpdated(postId: ID!): PostGql!
   presenceChanged: PresenceChangedGql!
   typingIndicator(conversationId: ID!): TypingIndicatorGql!

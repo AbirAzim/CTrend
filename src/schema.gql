@@ -225,6 +225,7 @@ type MessageReadGql {
 type Mutation {
   acceptInvitation(displayName: String, password: String!, token: String!): AuthPayloadGql!
   addFriend(userId: ID!): String!
+  cancelFriendRequest(userId: ID!): Boolean!
   cancelInvitation(id: ID!): Boolean!
   cancelScheduledPost(postId: ID!): Boolean!
   cancelSubscription(organizationId: ID): Boolean!

@@ -179,6 +179,19 @@ export class FollowsService {
     return users.map((u) => this.usersService.toGql(u));
   }
 
+  async cancelFriendRequest(
+    requesterId: string,
+    targetId: string,
+  ): Promise<void> {
+    await this.followModel
+      .deleteOne({
+        followerId: new Types.ObjectId(requesterId),
+        followingId: new Types.ObjectId(targetId),
+        status: FollowStatus.PENDING,
+      })
+      .exec();
+  }
+
   async unfriend(userId: string, targetId: string): Promise<void> {
     const a = new Types.ObjectId(userId);
     const b = new Types.ObjectId(targetId);

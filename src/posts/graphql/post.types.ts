@@ -74,6 +74,10 @@ export class PostGql {
   @Field()
   authorEmail: string;
 
+  /** Legacy frontend alias: author.profileImageUrl (nullable) */
+  @Field(() => String, { nullable: true })
+  authorProfileImageUrl?: string | null;
+
   @Field(() => OrgPostReach, { nullable: true })
   orgReach?: OrgPostReach;
 

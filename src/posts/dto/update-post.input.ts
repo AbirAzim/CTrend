@@ -1,0 +1,40 @@
+import { Field, InputType } from '@nestjs/graphql';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateNested,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { PostOptionInput } from './create-post.input';
+
+@InputType()
+export class UpdatePostInput {
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  @MaxLength(10000)
+  caption?: string;
+
+  @Field(() => [String], { nullable: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(2)
+  @IsString({ each: true })
+  imageUrls?: string[];
+
+  @Field(() => [PostOptionInput], { nullable: true })
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(2)
+  @ValidateNested({ each: true })
+  @Type(() => PostOptionInput)
+  options?: PostOptionInput[];
+
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsString()
+  categoryId?: string;
+}

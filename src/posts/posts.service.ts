@@ -14,6 +14,7 @@ import {
 } from './post-reaction.schema';
 import { SavedPost, SavedPostDocument } from './saved-post.schema';
 import { CreatePostInput } from './dto/create-post.input';
+import { UpdatePostInput } from './dto/update-post.input';
 import {
   OrgPostReach,
   PostStatus,
@@ -107,6 +108,29 @@ export class PostsService {
     }
     await this.postModel.deleteOne({ _id: post._id });
     return true;
+  }
+
+  async updatePost(
+    userId: string,
+    postId: string,
+    input: UpdatePostInput,
+  ): Promise<PostDocument> {
+    const post = await this.postModel.findById(postId).exec();
+    if (!post) throw new NotFoundException('Post not found');
+    if (post.createdBy.toHexString() !== userId) {
+      throw new ForbiddenException('Only the author can edit this post');
+    }
+    if (input.caption !== undefined) post.contentText = input.caption;
+    if (input.imageUrls && input.imageUrls.length >= 2) {
+      post.imageUrls = input.imageUrls;
+    }
+    if (input.options && input.options.length >= 2) {
+      post.options = input.options as any;
+    }
+    if (input.categoryId) {
+      post.categoryId = new Types.ObjectId(input.categoryId);
+    }
+    return post.save();
   }
 
   async deletePost(
@@ -483,6 +507,7 @@ export class PostsService {
       authorUsername: author.username,
       authorDisplayName: author.displayName ?? null,
       authorEmail: author.email,
+      authorProfileImageUrl: author.profileImageUrl ?? null,
       orgReach: post.orgReach,
       commentsDisabled: post.commentsDisabled,
       likesDisabled: post.likesDisabled,

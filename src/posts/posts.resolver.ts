@@ -10,6 +10,7 @@ import { NotFoundException, UseGuards } from '@nestjs/common';
 import { PostsService } from './posts.service';
 import { PostGql } from './graphql/post.types';
 import { CreatePostInput } from './dto/create-post.input';
+import { UpdatePostInput } from './dto/update-post.input';
 import { GqlAuthGuard } from '../common/guards/gql-auth.guard';
 import { OptionalJwtGqlGuard } from '../common/guards/optional-jwt-gql.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -123,6 +124,17 @@ export class PostsResolver {
     @Args('postId', { type: () => ID }) postId: string,
   ) {
     return this.postsService.cancelScheduledPost(user.id, postId);
+  }
+
+  @Mutation(() => PostGql)
+  @UseGuards(GqlAuthGuard)
+  async updatePost(
+    @CurrentUser() user: ReqUser,
+    @Args('postId', { type: () => ID }) postId: string,
+    @Args('input') input: UpdatePostInput,
+  ) {
+    const post = await this.postsService.updatePost(user.id, postId, input);
+    return this.postsService.toGql(post, user.id);
   }
 
   @Mutation(() => Boolean)

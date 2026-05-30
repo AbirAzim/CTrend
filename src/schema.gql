@@ -275,6 +275,7 @@ type Mutation {
   toggleCampaign(id: ID!, isActive: Boolean!): CampaignGql!
   unfriend(userId: ID!): Boolean!
   updateCampaign(id: ID!, input: UpdateCampaignInput!): CampaignGql!
+  updatePost(input: UpdatePostInput!, postId: ID!): PostGql!
   updateProfile(input: UpdateProfileInput!): UserGql!
   verifyBkashPayment(payload: String!): BkashVerificationGql!
   verifyEmail(code: String!, email: String!): AuthPayloadGql!
@@ -336,6 +337,7 @@ type PostGql {
   authorDisplayName: String
   authorEmail: String!
   authorId: ID!
+  authorProfileImageUrl: String
   authorUsername: String!
   caption: String
   category: CategoryGql!
@@ -493,6 +495,13 @@ input UpdateCampaignInput {
   rules: String
   rulesBn: String
   startDate: DateTime
+}
+
+input UpdatePostInput {
+  caption: String
+  categoryId: String
+  imageUrls: [String!]
+  options: [PostOptionInput!]
 }
 
 input UpdateProfileInput {

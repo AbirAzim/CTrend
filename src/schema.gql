@@ -287,9 +287,12 @@ type NewPostGql {
 }
 
 type NotificationGql {
+  actorCount: Int!
   body: String!
   createdAt: DateTime!
   id: ID!
+  latestActorId: String
+  latestActorName: String
   read: Boolean!
   referenceId: String
   referenceType: String
@@ -421,7 +424,7 @@ type Query {
   commentsByPost(postId: ID!): [CommentGql!]!
   feedPosts(scope: FeedScope, skip: Int = 0, sort: FeedSort, take: Int = 20): [PostGql!]!
   friendRequests: FriendRequestsGql!
-  friendSuggestions(limit: Int): [UserGql!]!
+  friendSuggestions(limit: Int, search: String): [UserGql!]!
   friendshipStatus(userId: ID!): String!
   getAllCategories: [CategoryGql!]!
   getFeed(scope: FeedScope!, skip: Int = 0, sort: FeedSort!, take: Int = 20): FeedConnectionGql!

@@ -20,6 +20,15 @@ export class NotificationGql {
   @Field({ nullable: true })
   referenceType?: string;
 
+  @Field(() => Int)
+  actorCount: number;
+
+  @Field({ nullable: true })
+  latestActorId?: string;
+
+  @Field({ nullable: true })
+  latestActorName?: string;
+
   @Field()
   read: boolean;
 

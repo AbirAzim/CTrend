@@ -5,6 +5,7 @@ import { Follow, FollowDocument, FollowStatus } from './follow.schema';
 import { User, UserDocument } from '../users/user.schema';
 import { UsersService } from '../users/users.service';
 import { UserGql } from '../users/graphql/user.types';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class FollowsService {
@@ -12,6 +13,7 @@ export class FollowsService {
     @InjectModel(Follow.name) private followModel: Model<FollowDocument>,
     @InjectModel(User.name) private userModel: Model<UserDocument>,
     private usersService: UsersService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async follow(followerId: string, followingId: string) {
@@ -81,7 +83,11 @@ export class FollowsService {
   async getFriendSuggestions(
     userId: string,
     limit: number,
+    search?: string,
   ): Promise<UserGql[]> {
+    // Exclude all users I have any relationship with (accepted friends OR
+    // anyone with a pending request in either direction). Those people belong
+    // in the Friends or Requests tabs, not Suggestions.
     const relatedRows = await this.followModel
       .find({
         $or: [
@@ -97,19 +103,47 @@ export class FollowsService {
       excludedIds.add(row.followerId.toString());
       excludedIds.add(row.followingId.toString());
     }
-    const candidates = await this.userModel
-      .find({
-        _id: {
-          $nin: Array.from(excludedIds).map((id) => new Types.ObjectId(id)),
+
+    // Build the role filter: include anyone with USER role
+    // OR anyone with ADMIN role (admins should appear too).
+    // This intentionally drops the "pure admin only" exclusion — per
+    // product spec, admin accounts are visible in suggestions.
+    const roleFilter = {
+      $or: [
+        { roles: 'user' },
+        { roles: 'admin' },
+        { role: 'user' },
+        { role: 'admin' },
+        { roles: { $exists: false } },
+        { roles: { $size: 0 } },
+      ],
+    };
+
+    const baseFilter: Record<string, unknown> = {
+      _id: {
+        $nin: Array.from(excludedIds).map((id) => new Types.ObjectId(id)),
+      },
+      ...roleFilter,
+    };
+
+    // Add case-insensitive search across displayName, username, email
+    const q = search?.trim();
+    if (q) {
+      const escaped = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const re = new RegExp(escaped, 'i');
+      baseFilter.$and = [
+        {
+          $or: [
+            { displayName: re },
+            { username: re },
+            { email: re },
+          ],
         },
-        // Only show users who hold the user role.
-        // Pure admin-only accounts (no user role) are excluded.
-        $or: [
-          { roles: 'user' }, // has user role in the array (includes dual-role)
-          { roles: { $exists: false } }, // legacy docs without roles field
-          { roles: { $size: 0 } }, // edge case: empty roles array
-        ],
-      })
+      ];
+    }
+
+    const candidates = await this.userModel
+      .find(baseFilter)
       .sort({ createdAt: -1 })
       .limit(Math.max(1, Math.min(limit, 100)))
       .exec();
@@ -130,7 +164,7 @@ export class FollowsService {
       .exec();
     if (existing?.status === FollowStatus.ACCEPTED) return 'accepted';
 
-    await this.followModel
+    const result = await this.followModel
       .updateOne(
         { followerId: requester, followingId: target },
         {
@@ -140,6 +174,26 @@ export class FollowsService {
         { upsert: true },
       )
       .exec();
+
+    // Only notify on a fresh insert (not when re-asserting an existing PENDING)
+    if (result.upsertedCount > 0) {
+      const requesterDoc = await this.usersService.findById(requesterId);
+      const name =
+        requesterDoc?.displayName?.trim() ||
+        requesterDoc?.username ||
+        'Someone';
+      await this.notificationsService.create({
+        userId: targetUserId,
+        type: 'FRIEND_REQUEST',
+        title: 'New friend request',
+        body: `${name} sent you a friend request`,
+        referenceId: requesterId,
+        referenceType: 'User',
+        actorId: requesterId,
+        actorName: name,
+      });
+    }
+
     return 'requested';
   }
 

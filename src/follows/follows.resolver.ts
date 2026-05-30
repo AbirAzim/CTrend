@@ -51,8 +51,13 @@ export class FollowsResolver {
   async friendSuggestions(
     @CurrentUser() user: ReqUser,
     @Args('limit', { type: () => Int, nullable: true }) limit?: number,
+    @Args('search', { type: () => String, nullable: true }) search?: string,
   ) {
-    return this.followsService.getFriendSuggestions(user.id, limit ?? 20);
+    return this.followsService.getFriendSuggestions(
+      user.id,
+      limit ?? 20,
+      search,
+    );
   }
 
   @Query(() => [UserGql])

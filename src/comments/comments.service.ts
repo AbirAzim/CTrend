@@ -11,6 +11,7 @@ import { Post, PostDocument } from '../posts/post.schema';
 import { UsersService } from '../users/users.service';
 import { CommentGql } from './graphql/comment.types';
 import { UserDocument } from '../users/user.schema';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class CommentsService {
@@ -20,6 +21,7 @@ export class CommentsService {
     private commentLikeModel: Model<CommentLikeDocument>,
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
     private usersService: UsersService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async create(
@@ -39,6 +41,24 @@ export class CommentsService {
       content,
       parentId: parentId ? new Types.ObjectId(parentId) : undefined,
     });
+    // Fire grouped POST_COMMENT notification to the post owner
+    try {
+      const commenter = await this.usersService.findById(userId);
+      const name =
+        commenter?.displayName?.trim() || commenter?.username || 'Someone';
+      await this.notificationsService.createOrUpdateGrouped({
+        userId: post.createdBy.toHexString(),
+        type: 'POST_COMMENT',
+        referenceId: postId,
+        referenceType: 'Post',
+        actorId: userId,
+        actorName: name,
+        verbPhrase: 'commented on your post',
+        title: 'New comment on your post',
+      });
+    } catch {
+      // Don't fail the comment create if notification fan-out fails
+    }
     return doc;
   }
 

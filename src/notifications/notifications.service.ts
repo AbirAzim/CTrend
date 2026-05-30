@@ -28,6 +28,8 @@ export class NotificationsService {
     body: string;
     referenceId?: string;
     referenceType?: string;
+    actorId?: string;
+    actorName?: string;
   }): Promise<NotificationGql> {
     const doc = await this.notificationModel.create({
       userId: new Types.ObjectId(params.userId),
@@ -36,6 +38,9 @@ export class NotificationsService {
       body: params.body,
       referenceId: params.referenceId,
       referenceType: params.referenceType,
+      actorCount: 1,
+      latestActorId: params.actorId,
+      latestActorName: params.actorName,
       read: false,
     });
     const gql = this.toGql(doc);
@@ -44,6 +49,82 @@ export class NotificationsService {
       recipientId: params.userId,
     });
     return gql;
+  }
+
+  /**
+   * For grouped notifications (POST_HYPE, POST_COMMENT): find an existing
+   * UNREAD notification for the same recipient+type+referenceId. If found,
+   * increment actorCount, update latestActor*, refresh title/body, and bump
+   * createdAt. If not found, create a new one. Skips no-op when the same
+   * actor triggers the same event back-to-back (e.g. like → unlike → like).
+   */
+  async createOrUpdateGrouped(params: {
+    userId: string;
+    type: NotificationType;
+    referenceId: string;
+    referenceType: string;
+    actorId: string;
+    actorName: string;
+    /** "{name} hyped your post" -> verbPhrase = "hyped your post" */
+    verbPhrase: string;
+    title: string;
+  }): Promise<NotificationGql | null> {
+    // Don't notify yourself
+    if (params.userId === params.actorId) return null;
+
+    const existing = await this.notificationModel
+      .findOne({
+        userId: new Types.ObjectId(params.userId),
+        type: params.type,
+        referenceId: params.referenceId,
+        read: false,
+      })
+      .exec();
+
+    if (existing) {
+      // Same actor as last time → no-op (prevents bouncing on like/unlike/like)
+      if (existing.latestActorId === params.actorId) {
+        return this.toGql(existing);
+      }
+      existing.actorCount += 1;
+      existing.latestActorId = params.actorId;
+      existing.latestActorName = params.actorName;
+      existing.body = this.formatGroupedBody(
+        params.actorName,
+        existing.actorCount,
+        params.verbPhrase,
+      );
+      // Bump timestamp so it sorts to the top
+      (existing as any).createdAt = new Date();
+      await existing.save();
+      const gql = this.toGql(existing);
+      await pubsub.publish(NEW_NOTIFICATION, {
+        newNotification: gql,
+        recipientId: params.userId,
+      });
+      return gql;
+    }
+
+    return this.create({
+      userId: params.userId,
+      type: params.type,
+      title: params.title,
+      body: this.formatGroupedBody(params.actorName, 1, params.verbPhrase),
+      referenceId: params.referenceId,
+      referenceType: params.referenceType,
+      actorId: params.actorId,
+      actorName: params.actorName,
+    });
+  }
+
+  private formatGroupedBody(
+    latestName: string,
+    count: number,
+    verbPhrase: string,
+  ): string {
+    if (count <= 1) return `${latestName} ${verbPhrase}`;
+    const others = count - 1;
+    return `${latestName} and ${others} more ${verbPhrase}`;
   }
 
   async sendBroadcast(
@@ -114,6 +195,9 @@ export class NotificationsService {
       body: doc.body,
       referenceId: doc.referenceId,
       referenceType: doc.referenceType,
+      actorCount: doc.actorCount ?? 1,
+      latestActorId: doc.latestActorId,
+      latestActorName: doc.latestActorName,
       read: doc.read,
       createdAt: (doc as any).createdAt,
     };

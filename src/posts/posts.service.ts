@@ -33,6 +33,8 @@ import { PostGql } from './graphql/post.types';
 import { NEW_POST, POST_VOTE_UPDATED, pubsub } from '../pubsub';
 import { Comment, CommentDocument } from '../comments/comment.schema';
 import { CommentsService } from '../comments/comments.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { FollowsService } from '../follows/follows.service';
 
 const PREMIUM_GLOBAL_MONTHLY = 20;
 
@@ -56,6 +58,8 @@ export class PostsService {
     private usersService: UsersService,
     private votesService: VotesService,
     private commentsService: CommentsService,
+    private notificationsService: NotificationsService,
+    private followsService: FollowsService,
   ) {}
 
   async findById(id: string): Promise<PostDocument | null> {
@@ -214,11 +218,27 @@ export class PostsService {
     const uid = new Types.ObjectId(userId);
     const pid = post._id;
     if (active) {
-      await this.postReactionModel.updateOne(
+      const result = await this.postReactionModel.updateOne(
         { userId: uid, postId: pid, kind },
         { $setOnInsert: { userId: uid, postId: pid, kind } },
         { upsert: true },
       );
+      // Only notify on a fresh hype (not on re-asserting the same reaction)
+      if (kind === 'hype' && result.upsertedCount > 0) {
+        const actor = await this.usersService.findById(userId);
+        const name =
+          actor?.displayName?.trim() || actor?.username || 'Someone';
+        await this.notificationsService.createOrUpdateGrouped({
+          userId: post.createdBy.toHexString(),
+          type: 'POST_HYPE',
+          referenceId: post._id.toHexString(),
+          referenceType: 'Post',
+          actorId: userId,
+          actorName: name,
+          verbPhrase: 'hyped your post',
+          title: 'New hype on your post',
+        });
+      }
       return;
     }
     await this.postReactionModel.deleteOne({ userId: uid, postId: pid, kind });
@@ -392,6 +412,36 @@ export class PostsService {
 
   private async publishNewPost(postId: string) {
     await pubsub.publish(NEW_POST, { newPost: { postId } });
+    // Fan-out NEW_POST_FRIEND notifications to the author's friends
+    try {
+      const post = await this.postModel.findById(postId).exec();
+      if (!post || post.type === PostType.SYSTEM) return;
+      const authorId = post.createdBy.toHexString();
+      const author = await this.usersService.findById(authorId);
+      const authorName =
+        author?.displayName?.trim() || author?.username || 'A friend';
+      const friends = await this.followsService.getMyFriends(authorId);
+      const caption = (post.contentText ?? '').trim();
+      const body = caption
+        ? `${authorName} posted: ${caption.slice(0, 80)}`
+        : `${authorName} shared a new compare`;
+      await Promise.all(
+        friends.map((f) =>
+          this.notificationsService.create({
+            userId: f.id,
+            type: 'NEW_POST_FRIEND',
+            title: `${authorName} shared a new post`,
+            body,
+            referenceId: postId,
+            referenceType: 'Post',
+            actorId: authorId,
+            actorName: authorName,
+          }),
+        ),
+      );
+    } catch {
+      // Don't fail post-create flow if notifications fan-out fails
+    }
   }
 
   private parseFutureDate(

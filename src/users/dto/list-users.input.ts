@@ -29,9 +29,7 @@ export function normalizeListUsersQuery(input: {
 
   const statusRaw = input.status?.trim().toLowerCase();
   const status: UserListStatus =
-    statusRaw === 'verified' || statusRaw === 'unverified'
-      ? statusRaw
-      : 'all';
+    statusRaw === 'verified' || statusRaw === 'unverified' ? statusRaw : 'all';
 
   const sortByRaw = input.sortBy?.trim().toLowerCase();
   const sortBy: UserListSortBy = sortByRaw === 'name' ? 'name' : 'joined';

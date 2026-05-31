@@ -15,6 +15,7 @@ export class CommentReaction {
   emoji: string;
 }
 
-export const CommentReactionSchema = SchemaFactory.createForClass(CommentReaction);
+export const CommentReactionSchema =
+  SchemaFactory.createForClass(CommentReaction);
 CommentReactionSchema.index({ commentId: 1, userId: 1 }, { unique: true });
 CommentReactionSchema.index({ commentId: 1 });

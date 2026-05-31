@@ -70,13 +70,20 @@ export class UsersResolver {
     @Args('searchBy', { type: () => String, nullable: true }) searchBy?: string,
     @Args('status', { type: () => String, nullable: true }) status?: string,
     @Args('sortBy', { type: () => String, nullable: true }) sortBy?: string,
-    @Args('sortOrder', { type: () => String, nullable: true }) sortOrder?: string,
+    @Args('sortOrder', { type: () => String, nullable: true })
+    sortOrder?: string,
   ): Promise<UserGql[]> {
     if (actor.role !== UserRole.ADMIN)
       throw new ForbiddenException('Admin only');
     const query = {
       role: role ?? undefined,
-      ...normalizeListUsersQuery({ search, searchBy, status, sortBy, sortOrder }),
+      ...normalizeListUsersQuery({
+        search,
+        searchBy,
+        status,
+        sortBy,
+        sortOrder,
+      }),
     };
     const users = await this.usersService.listUsers(
       skip,

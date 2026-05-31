@@ -81,7 +81,11 @@ export class MessagesResolver {
     @Args('take', { type: () => Int, defaultValue: 50 }) take: number,
     @Args('search', { nullable: true }) search?: string,
   ) {
-    return this.messagesService.listModeratorMessagesForAdmin(skip, take, search);
+    return this.messagesService.listModeratorMessagesForAdmin(
+      skip,
+      take,
+      search,
+    );
   }
 
   @Query(() => Int)
@@ -101,7 +105,11 @@ export class MessagesResolver {
     @Args('take', { type: () => Int, defaultValue: 50 }) take: number,
     @Args('search', { nullable: true }) search?: string,
   ) {
-    return this.messagesService.listModeratorThreadsForAdmin(skip, take, search);
+    return this.messagesService.listModeratorThreadsForAdmin(
+      skip,
+      take,
+      search,
+    );
   }
 
   @Query(() => [MessageGql])

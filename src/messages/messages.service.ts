@@ -125,7 +125,10 @@ export class MessagesService {
 
   // ── Moderator (platform) messages ─────────────────────────────
 
-  private requireUserObjectId(userId: string, label = 'userId'): Types.ObjectId {
+  private requireUserObjectId(
+    userId: string,
+    label = 'userId',
+  ): Types.ObjectId {
     const trimmed = userId?.trim();
     if (!trimmed || !Types.ObjectId.isValid(trimmed)) {
       throw new BadRequestException(`Invalid ${label}`);
@@ -280,11 +283,7 @@ export class MessagesService {
         if (!recipientId) continue;
         const user = await this.usersService.findById(recipientId);
         if (!user) continue;
-        const haystack = [
-          user.email,
-          user.username,
-          user.displayName ?? '',
-        ]
+        const haystack = [user.email, user.username, user.displayName ?? '']
           .join(' ')
           .toLowerCase();
         if (haystack.includes(trimmedSearch)) {
@@ -313,7 +312,9 @@ export class MessagesService {
   async countModeratorMessagesForAdmin(search?: string): Promise<number> {
     const trimmedSearch = search?.trim().toLowerCase();
     if (!trimmedSearch) {
-      return this.messageModel.countDocuments({ isModeratorMessage: true }).exec();
+      return this.messageModel
+        .countDocuments({ isModeratorMessage: true })
+        .exec();
     }
 
     const convos = await this.conversationModel
@@ -371,7 +372,8 @@ export class MessagesService {
   async getModeratorThreadMessagesForAdmin(
     targetUserId: string,
   ): Promise<MessageGql[]> {
-    const convo = await this.findModeratorConversationForRecipient(targetUserId);
+    const convo =
+      await this.findModeratorConversationForRecipient(targetUserId);
     if (!convo) return [];
 
     const resolvedUserId =
@@ -387,8 +389,11 @@ export class MessagesService {
     );
   }
 
-  async markModeratorThreadReadForAdmin(targetUserId: string): Promise<boolean> {
-    const convo = await this.findModeratorConversationForRecipient(targetUserId);
+  async markModeratorThreadReadForAdmin(
+    targetUserId: string,
+  ): Promise<boolean> {
+    const convo =
+      await this.findModeratorConversationForRecipient(targetUserId);
     if (!convo) return false;
 
     await this.conversationModel.updateOne(
@@ -464,8 +469,7 @@ export class MessagesService {
     });
 
     if (convo.type === 'moderator') {
-      const recipientUserId =
-        this.extractModeratorRecipientId(convo) ?? '';
+      const recipientUserId = this.extractModeratorRecipientId(convo) ?? '';
       const unreadFromUserCount =
         updates[`unreadCounts.${MODERATOR_ADMIN_UNREAD_KEY}`] ?? 1;
       await pubsub.publish(ADMIN_MODERATOR_USER_MESSAGE, {
@@ -509,7 +513,9 @@ export class MessagesService {
       .limit(take)
       .exec();
 
-    return Promise.all(msgs.reverse().map((m) => this.messageToGql(m, viewerId)));
+    return Promise.all(
+      msgs.reverse().map((m) => this.messageToGql(m, viewerId)),
+    );
   }
 
   async markRead(viewerId: string, conversationId: string): Promise<boolean> {
@@ -694,9 +700,7 @@ export class MessagesService {
     const convo = await this.conversationModel
       .findById(msg.conversationId)
       .exec();
-    const recipientId = convo
-      ? this.extractModeratorRecipientId(convo)
-      : null;
+    const recipientId = convo ? this.extractModeratorRecipientId(convo) : null;
     const recipient = recipientId
       ? await this.usersService.findById(recipientId)
       : null;
@@ -715,8 +719,7 @@ export class MessagesService {
         recipient?.displayName?.trim() || recipient?.username || 'User',
       recipientEmail: recipient?.email ?? '',
       sentByAdminId: msg.sentByAdminId?.toHexString() ?? '',
-      sentByAdminName:
-        admin?.displayName?.trim() || admin?.username || 'Admin',
+      sentByAdminName: admin?.displayName?.trim() || admin?.username || 'Admin',
       sentByAdminEmail: admin?.email ?? '',
     };
   }

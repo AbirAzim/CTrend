@@ -51,10 +51,7 @@ export class PostsService implements OnModuleInit {
     // created with likesDisabled=true. New posts always start with hype enabled.
     try {
       await this.postModel
-        .updateMany(
-          { likesDisabled: true },
-          { $set: { likesDisabled: false } },
-        )
+        .updateMany({ likesDisabled: true }, { $set: { likesDisabled: false } })
         .exec();
     } catch {
       // non-fatal
@@ -249,8 +246,7 @@ export class PostsService implements OnModuleInit {
       // Only notify on a fresh hype (not on re-asserting the same reaction)
       if (kind === 'hype' && result.upsertedCount > 0) {
         const actor = await this.usersService.findById(userId);
-        const name =
-          actor?.displayName?.trim() || actor?.username || 'Someone';
+        const name = actor?.displayName?.trim() || actor?.username || 'Someone';
         await this.notificationsService.createOrUpdateGrouped({
           userId: post.createdBy.toHexString(),
           type: 'POST_HYPE',

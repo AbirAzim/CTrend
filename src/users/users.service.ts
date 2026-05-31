@@ -5,14 +5,6 @@ import { randomInt } from 'crypto';
 import { User, UserDocument } from './user.schema';
 import { UserGql } from './graphql/user.types';
 import { UserRole } from '../common/enums';
-import {
-  DEFAULT_MESSAGE_SOUND_ID,
-  DEFAULT_NOTIFICATION_SOUND_ID,
-  DEFAULT_VOTE_SOUND_ID,
-  isMessageSoundId,
-  isNotificationSoundId,
-  isVoteSoundId,
-} from './sound-preferences.constants';
 import { ListUsersQuery } from './dto/list-users.input';
 
 @Injectable()
@@ -41,7 +33,8 @@ export class UsersService {
       bio: doc.bio,
       profileImageUrl: doc.profileImageUrl,
       emailVerified: doc.emailVerified ?? false,
-      createdAt: (doc as UserDocument & { createdAt?: Date }).createdAt ?? new Date(),
+      createdAt:
+        (doc as UserDocument & { createdAt?: Date }).createdAt ?? new Date(),
     };
   }
 
@@ -200,7 +193,9 @@ export class UsersService {
     sort: Record<string, 1 | -1>;
   } {
     const clauses: Record<string, unknown>[] = [];
-    const roleFilter = this.buildListFilter(options.role as UserRole | undefined);
+    const roleFilter = this.buildListFilter(
+      options.role as UserRole | undefined,
+    );
     if (Object.keys(roleFilter).length > 0) clauses.push(roleFilter);
 
     if (options.status === 'verified') {
@@ -258,12 +253,7 @@ export class UsersService {
       await this.repairAdminMemberRoles();
     }
     const { filter, sort } = this.buildListQuery(query);
-    return this.userModel
-      .find(filter)
-      .skip(skip)
-      .limit(take)
-      .sort(sort)
-      .exec();
+    return this.userModel.find(filter).skip(skip).limit(take).sort(sort).exec();
   }
 
   async listUsersCount(query: ListUsersQuery = {}): Promise<number> {

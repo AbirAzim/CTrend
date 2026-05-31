@@ -1,7 +1,10 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Comment, CommentSchema } from './comment.schema';
-import { CommentReaction, CommentReactionSchema } from './comment-reaction.schema';
+import {
+  CommentReaction,
+  CommentReactionSchema,
+} from './comment-reaction.schema';
 import { Post, PostSchema } from '../posts/post.schema';
 import { CommentsService } from './comments.service';
 import { CommentsResolver } from './comments.resolver';

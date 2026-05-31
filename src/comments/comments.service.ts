@@ -7,17 +7,17 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Comment, CommentDocument } from './comment.schema';
-import { CommentReaction, CommentReactionDocument } from './comment-reaction.schema';
+import {
+  CommentReaction,
+  CommentReactionDocument,
+} from './comment-reaction.schema';
 import {
   COMMENT_REACTION_EMOJIS,
   isCommentReactionEmoji,
 } from './comment-reaction.constants';
 import { Post, PostDocument } from '../posts/post.schema';
 import { UsersService } from '../users/users.service';
-import {
-  CommentGql,
-  CommentReactionCountGql,
-} from './graphql/comment.types';
+import { CommentGql, CommentReactionCountGql } from './graphql/comment.types';
 import { UserDocument } from '../users/user.schema';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -52,12 +52,15 @@ export class CommentsService {
     let parentComment: CommentDocument | null = null;
     if (parentId) {
       parentComment = await this.commentModel.findById(parentId).exec();
-      if (!parentComment) throw new NotFoundException('Parent comment not found');
+      if (!parentComment)
+        throw new NotFoundException('Parent comment not found');
       if (parentComment.postId.toHexString() !== postId) {
         throw new BadRequestException('Reply must be on the same post');
       }
       if (parentComment.parentId) {
-        throw new BadRequestException('Replies are only allowed on top-level comments');
+        throw new BadRequestException(
+          'Replies are only allowed on top-level comments',
+        );
       }
     }
 
@@ -107,7 +110,10 @@ export class CommentsService {
     commentId: Types.ObjectId,
   ): Promise<CommentReactionCountGql[]> {
     const rows = await this.commentReactionModel
-      .aggregate<{ _id: string; count: number }>([
+      .aggregate<{
+        _id: string;
+        count: number;
+      }>([
         { $match: { commentId } },
         { $group: { _id: '$emoji', count: { $sum: 1 } } },
       ])
@@ -118,8 +124,10 @@ export class CommentsService {
       .map((r) => ({ emoji: r._id, count: r.count }))
       .sort(
         (a, b) =>
-          (order.get(a.emoji as (typeof COMMENT_REACTION_EMOJIS)[number]) ?? 99) -
-          (order.get(b.emoji as (typeof COMMENT_REACTION_EMOJIS)[number]) ?? 99),
+          (order.get(a.emoji as (typeof COMMENT_REACTION_EMOJIS)[number]) ??
+            99) -
+          (order.get(b.emoji as (typeof COMMENT_REACTION_EMOJIS)[number]) ??
+            99),
       );
   }
 
@@ -173,7 +181,10 @@ export class CommentsService {
     viewerId?: string,
   ): Promise<CommentGql[]> {
     const rows = await this.commentModel
-      .find({ postId: new Types.ObjectId(postId), parentId: { $exists: false } })
+      .find({
+        postId: new Types.ObjectId(postId),
+        parentId: { $exists: false },
+      })
       .sort({ createdAt: -1 })
       .limit(limit)
       .exec();
@@ -199,7 +210,10 @@ export class CommentsService {
     const postId = comment.postId.toHexString();
 
     if (emoji === null || emoji === '') {
-      await this.commentReactionModel.deleteOne({ commentId: cid, userId: uid });
+      await this.commentReactionModel.deleteOne({
+        commentId: cid,
+        userId: uid,
+      });
       return this.toGql(comment, userId);
     }
 

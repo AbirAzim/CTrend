@@ -10,7 +10,11 @@ export type ConversationDocument = HydratedDocument<Conversation> & {
 
 @Schema({ timestamps: true })
 export class Conversation {
-  @Prop({ type: String, enum: ['direct', 'group', 'moderator'], required: true })
+  @Prop({
+    type: String,
+    enum: ['direct', 'group', 'moderator'],
+    required: true,
+  })
   type: ConversationType;
 
   @Prop({ type: [Types.ObjectId], ref: 'User', required: true })

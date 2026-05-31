@@ -1,7 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 
-export type ConversationType = 'direct' | 'group';
+export type ConversationType = 'direct' | 'group' | 'moderator';
 
 export type ConversationDocument = HydratedDocument<Conversation> & {
   createdAt: Date;
@@ -10,7 +10,7 @@ export type ConversationDocument = HydratedDocument<Conversation> & {
 
 @Schema({ timestamps: true })
 export class Conversation {
-  @Prop({ type: String, enum: ['direct', 'group'], required: true })
+  @Prop({ type: String, enum: ['direct', 'group', 'moderator'], required: true })
   type: ConversationType;
 
   @Prop({ type: [Types.ObjectId], ref: 'User', required: true })

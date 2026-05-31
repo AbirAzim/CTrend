@@ -19,6 +19,13 @@ export class Message {
   @Prop({ type: Types.ObjectId, ref: 'User', required: true })
   senderId: Types.ObjectId;
 
+  /** Real admin who sent a platform moderator message (hidden from regular users). */
+  @Prop({ type: Types.ObjectId, ref: 'User', required: false })
+  sentByAdminId?: Types.ObjectId;
+
+  @Prop({ default: false })
+  isModeratorMessage: boolean;
+
   @Prop({ required: false, trim: true, maxlength: 2000, default: '' })
   text: string;
 

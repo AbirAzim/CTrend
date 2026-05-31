@@ -2,6 +2,15 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
+type AdminModeratorUserMessageGql {
+  conversationId: ID!
+  lastMessageAt: DateTime
+  lastMessageText: String
+  message: MessageGql!
+  recipientUserId: ID!
+  unreadFromUserCount: Int!
+}
+
 type AuthPayloadGql {
   accessToken: String!
   refreshToken: String
@@ -220,6 +229,9 @@ type MessageGql {
   senderAvatar: String
   senderId: ID!
   senderName: String!
+  sentByAdminEmail: String
+  sentByAdminId: String
+  sentByAdminName: String
   text: String!
 }
 
@@ -227,6 +239,32 @@ type MessageReadGql {
   conversationId: ID!
   readAt: DateTime!
   userId: ID!
+}
+
+type ModeratorMessageAdminGql {
+  conversationId: ID!
+  createdAt: DateTime!
+  id: ID!
+  imageUrl: String
+  recipientEmail: String!
+  recipientName: String!
+  recipientUserId: ID!
+  sentByAdminEmail: String!
+  sentByAdminId: ID!
+  sentByAdminName: String!
+  text: String!
+}
+
+type ModeratorThreadAdminGql {
+  conversationId: ID!
+  lastMessageAt: DateTime
+  lastMessageText: String
+  messageCount: Int!
+  recipientEmail: String!
+  recipientName: String!
+  recipientProfileImageUrl: String
+  recipientUserId: ID!
+  unreadFromUserCount: Int!
 }
 
 type Mutation {
@@ -258,6 +296,7 @@ type Mutation {
   markAllNotificationsRead: Boolean!
   markCampaignPrizePaid(winnerId: ID!): CampaignWinnerGql!
   markConversationRead(conversationId: ID!): Boolean!
+  markModeratorThreadReadForAdmin(userId: ID!): Boolean!
   markNotificationRead(id: ID!): Boolean!
   processMatchResult(campaignId: ID, fixtureId: ID!): CampaignWinnerGql!
   promoteToAdmin(email: String!): UserGql!
@@ -272,6 +311,8 @@ type Mutation {
   respondFriendRequest(accept: Boolean!, requesterId: ID!): Boolean!
   sendAdminBroadcast(body: String!, title: String!): Int!
   sendMessage(conversationId: ID!, imageUrl: String, text: String! = ""): MessageGql!
+  sendModeratorMessage(imageUrl: String, text: String! = "", userId: ID!): ModeratorMessageAdminGql!
+  sendModeratorMessages(imageUrl: String, text: String! = "", userIds: [ID!]!): [ModeratorMessageAdminGql!]!
   setCommentLike(commentId: ID!, liked: Boolean!): CommentGql!
   setCommentReaction(commentId: ID!, emoji: String): CommentGql!
   setPostHype(active: Boolean!, postId: ID!): Boolean!
@@ -433,6 +474,10 @@ type PresignedUploadUrl {
 
 type Query {
   activeCampaigns: [CampaignGql!]!
+  adminModeratorMessages(search: String, skip: Int! = 0, take: Int! = 50): [ModeratorMessageAdminGql!]!
+  adminModeratorMessagesCount(search: String): Int!
+  adminModeratorThreadMessages(userId: ID!): [MessageGql!]!
+  adminModeratorThreads(search: String, skip: Int! = 0, take: Int! = 50): [ModeratorThreadAdminGql!]!
   campaign(slug: String!): CampaignGql
   campaignWinner(fixtureId: ID!): CampaignWinnerGql
   campaignWinners: [CampaignWinnerGql!]!
@@ -494,6 +539,7 @@ type SearchUserGql {
 }
 
 type Subscription {
+  adminModeratorUserMessage: AdminModeratorUserMessageGql!
   messageRead: MessageReadGql!
   messageReceived: MessageGql!
   newNotification: NotificationGql!

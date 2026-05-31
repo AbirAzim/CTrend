@@ -13,10 +13,7 @@ import {
   isNotificationSoundId,
   isVoteSoundId,
 } from './sound-preferences.constants';
-import {
-  ListUsersQuery,
-  normalizeListUsersQuery,
-} from './dto/list-users.input';
+import { ListUsersQuery } from './dto/list-users.input';
 
 @Injectable()
 export class UsersService {
@@ -43,15 +40,6 @@ export class UsersService {
       roles,
       bio: doc.bio,
       profileImageUrl: doc.profileImageUrl,
-      voteSoundId: isVoteSoundId(doc.voteSoundId ?? '')
-        ? doc.voteSoundId
-        : DEFAULT_VOTE_SOUND_ID,
-      notificationSoundId: isNotificationSoundId(doc.notificationSoundId ?? '')
-        ? doc.notificationSoundId
-        : DEFAULT_NOTIFICATION_SOUND_ID,
-      messageSoundId: isMessageSoundId(doc.messageSoundId ?? '')
-        ? doc.messageSoundId
-        : DEFAULT_MESSAGE_SOUND_ID,
       emailVerified: doc.emailVerified ?? false,
       createdAt: (doc as UserDocument & { createdAt?: Date }).createdAt ?? new Date(),
     };
@@ -116,13 +104,10 @@ export class UsersService {
       profileImageUrl?: string;
       interests?: string[];
       displayName?: string;
-      voteSoundId?: string;
-      notificationSoundId?: string;
-      messageSoundId?: string;
     },
   ): Promise<UserDocument | null> {
     return this.userModel
-      .findByIdAndUpdate(userId, { $set: patch }, { returnDocument: 'after' })
+      .findByIdAndUpdate(userId, { $set: patch }, { new: true })
       .exec();
   }
 
@@ -142,7 +127,7 @@ export class UsersService {
       .findByIdAndUpdate(
         userId,
         { $set: { role, roles: [role] } },
-        { returnDocument: 'after' },
+        { new: true },
       )
       .exec();
   }
@@ -153,10 +138,11 @@ export class UsersService {
       .findOneAndUpdate(
         { email: normalized },
         {
-          $addToSet: { roles: UserRole.ADMIN },
+          // Dual-role: keep user capability + add admin (matches invite-admin flow)
+          $addToSet: { roles: { $each: [UserRole.USER, UserRole.ADMIN] } },
           $set: { role: UserRole.ADMIN },
         },
-        { returnDocument: 'after' },
+        { new: true },
       )
       .exec();
   }
@@ -168,7 +154,7 @@ export class UsersService {
       .findOneAndUpdate(
         { email: normalized },
         { $pull: { roles: UserRole.ADMIN }, $set: { role: UserRole.USER } },
-        { returnDocument: 'after' },
+        { new: true },
       )
       .exec();
   }
@@ -180,8 +166,22 @@ export class UsersService {
     return result.deletedCount > 0;
   }
 
-  private buildListFilter(role?: UserRole): Record<string, unknown> {
+  private buildListFilter(role?: UserRole | string): Record<string, unknown> {
     if (!role) return {};
+    // role='member' — anyone with user role (pure users + admin+user dual-role).
+    // Excludes pure-admin-only accounts (admin with no user role anywhere).
+    if (String(role) === 'member') {
+      return {
+        $nor: [
+          {
+            $and: [
+              { $or: [{ roles: UserRole.ADMIN }, { role: UserRole.ADMIN }] },
+              { $nor: [{ roles: UserRole.USER }, { role: UserRole.USER }] },
+            ],
+          },
+        ],
+      };
+    }
     // role='user' returns ONLY pure users (excludes anyone holding admin role)
     if (String(role) === 'user') {
       return {
@@ -237,11 +237,26 @@ export class UsersService {
     return { filter, sort };
   }
 
+  /** Ensure promoted admins retain user role in `roles[]` (legacy data repair). */
+  private async repairAdminMemberRoles(): Promise<void> {
+    await this.userModel.updateMany(
+      {
+        $or: [{ roles: UserRole.ADMIN }, { role: UserRole.ADMIN }],
+        $nor: [{ roles: UserRole.USER }],
+        role: { $ne: UserRole.USER },
+      },
+      { $addToSet: { roles: UserRole.USER } },
+    );
+  }
+
   async listUsers(
     skip = 0,
     take = 50,
     query: ListUsersQuery = {},
   ): Promise<UserDocument[]> {
+    if (String(query.role) === 'member') {
+      await this.repairAdminMemberRoles();
+    }
     const { filter, sort } = this.buildListQuery(query);
     return this.userModel
       .find(filter)

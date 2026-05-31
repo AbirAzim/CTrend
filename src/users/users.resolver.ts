@@ -74,9 +74,8 @@ export class UsersResolver {
   ): Promise<UserGql[]> {
     if (actor.role !== UserRole.ADMIN)
       throw new ForbiddenException('Admin only');
-    const roleFilter = role ? (role as UserRole) : undefined;
     const query = {
-      role: roleFilter,
+      role: role ?? undefined,
       ...normalizeListUsersQuery({ search, searchBy, status, sortBy, sortOrder }),
     };
     const users = await this.usersService.listUsers(
@@ -99,9 +98,8 @@ export class UsersResolver {
   ): Promise<number> {
     if (actor.role !== UserRole.ADMIN)
       throw new ForbiddenException('Admin only');
-    const roleFilter = role ? (role as UserRole) : undefined;
     const query = {
-      role: roleFilter,
+      role: role ?? undefined,
       ...normalizeListUsersQuery({ search, searchBy, status }),
     };
     return this.usersService.listUsersCount(query);

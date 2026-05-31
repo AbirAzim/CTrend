@@ -4,7 +4,7 @@ export const MODERATOR_SENDER_GQL_ID = 'moderator';
 /** Sentinel ObjectId stored on moderator messages (no User row required). */
 export const MODERATOR_SENDER_OBJECT_ID = '000000000000000000000001';
 
-export const MODERATOR_DISPLAY_NAME = 'Moderator';
+export const MODERATOR_DISPLAY_NAME = 'Ke Jitbe Moderator';
 
 /** Relative path; clients resolve against their origin. */
 export const MODERATOR_AVATAR_URL = '/logo.png';

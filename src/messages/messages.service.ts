@@ -125,6 +125,39 @@ export class MessagesService {
 
   // ── Moderator (platform) messages ─────────────────────────────
 
+  private requireUserObjectId(userId: string, label = 'userId'): Types.ObjectId {
+    const trimmed = userId?.trim();
+    if (!trimmed || !Types.ObjectId.isValid(trimmed)) {
+      throw new BadRequestException(`Invalid ${label}`);
+    }
+    return new Types.ObjectId(trimmed);
+  }
+
+  /** Real recipient on a moderator thread (never the virtual moderator sentinel). */
+  private extractModeratorRecipientId(
+    convo: ConversationDocument,
+  ): string | null {
+    const sentinelHex = MODERATOR_SENDER_OBJECT_ID;
+    for (const pid of convo.participantIds) {
+      const hex = pid.toHexString();
+      if (hex === sentinelHex || hex === MODERATOR_SENDER_GQL_ID) continue;
+      if (Types.ObjectId.isValid(hex)) return hex;
+    }
+    return null;
+  }
+
+  private async findModeratorConversationForRecipient(
+    targetUserId: string,
+  ): Promise<ConversationDocument | null> {
+    const targetOid = this.requireUserObjectId(targetUserId);
+    return this.conversationModel
+      .findOne({
+        type: 'moderator',
+        participantIds: targetOid,
+      })
+      .exec();
+  }
+
   async getOrCreateModeratorConversation(
     targetUserId: string,
     adminId: string,
@@ -132,11 +165,11 @@ export class MessagesService {
     const target = await this.usersService.findById(targetUserId);
     if (!target) throw new NotFoundException('User not found');
 
-    const targetOid = new Types.ObjectId(targetUserId);
+    const targetOid = this.requireUserObjectId(targetUserId);
     const existing = await this.conversationModel
       .findOne({
         type: 'moderator',
-        participantIds: { $all: [targetOid], $size: 1 },
+        participantIds: targetOid,
       })
       .exec();
 
@@ -201,7 +234,7 @@ export class MessagesService {
     await this.notificationsService.create({
       userId: targetUserId,
       type: 'MESSAGE',
-      title: MODERATOR_DISPLAY_NAME,
+      title: 'Official admin message',
       body: previewText.slice(0, 140),
       referenceId: convo._id.toHexString(),
       referenceType: 'moderator_conversation',
@@ -243,7 +276,7 @@ export class MessagesService {
         .exec();
       const matched: Types.ObjectId[] = [];
       for (const convo of convos) {
-        const recipientId = convo.participantIds[0]?.toHexString();
+        const recipientId = this.extractModeratorRecipientId(convo);
         if (!recipientId) continue;
         const user = await this.usersService.findById(recipientId);
         if (!user) continue;
@@ -288,7 +321,7 @@ export class MessagesService {
       .exec();
     const matched: Types.ObjectId[] = [];
     for (const convo of convos) {
-      const recipientId = convo.participantIds[0]?.toHexString();
+      const recipientId = this.extractModeratorRecipientId(convo);
       if (!recipientId) continue;
       const user = await this.usersService.findById(recipientId);
       if (!user) continue;
@@ -338,14 +371,11 @@ export class MessagesService {
   async getModeratorThreadMessagesForAdmin(
     targetUserId: string,
   ): Promise<MessageGql[]> {
-    const targetOid = new Types.ObjectId(targetUserId);
-    const convo = await this.conversationModel
-      .findOne({
-        type: 'moderator',
-        participantIds: { $all: [targetOid], $size: 1 },
-      })
-      .exec();
+    const convo = await this.findModeratorConversationForRecipient(targetUserId);
     if (!convo) return [];
+
+    const resolvedUserId =
+      this.extractModeratorRecipientId(convo) ?? targetUserId.trim();
 
     const msgs = await this.messageModel
       .find({ conversationId: convo._id })
@@ -353,18 +383,12 @@ export class MessagesService {
       .exec();
 
     return Promise.all(
-      msgs.map((m) => this.messageToGql(m, targetUserId, true)),
+      msgs.map((m) => this.messageToGql(m, resolvedUserId, true)),
     );
   }
 
   async markModeratorThreadReadForAdmin(targetUserId: string): Promise<boolean> {
-    const targetOid = new Types.ObjectId(targetUserId);
-    const convo = await this.conversationModel
-      .findOne({
-        type: 'moderator',
-        participantIds: { $all: [targetOid], $size: 1 },
-      })
-      .exec();
+    const convo = await this.findModeratorConversationForRecipient(targetUserId);
     if (!convo) return false;
 
     await this.conversationModel.updateOne(
@@ -440,7 +464,8 @@ export class MessagesService {
     });
 
     if (convo.type === 'moderator') {
-      const recipientUserId = convo.participantIds[0]?.toHexString() ?? '';
+      const recipientUserId =
+        this.extractModeratorRecipientId(convo) ?? '';
       const unreadFromUserCount =
         updates[`unreadCounts.${MODERATOR_ADMIN_UNREAD_KEY}`] ?? 1;
       await pubsub.publish(ADMIN_MODERATOR_USER_MESSAGE, {
@@ -669,7 +694,9 @@ export class MessagesService {
     const convo = await this.conversationModel
       .findById(msg.conversationId)
       .exec();
-    const recipientId = convo?.participantIds[0]?.toHexString() ?? '';
+    const recipientId = convo
+      ? this.extractModeratorRecipientId(convo)
+      : null;
     const recipient = recipientId
       ? await this.usersService.findById(recipientId)
       : null;
@@ -683,7 +710,7 @@ export class MessagesService {
       text: msg.text ?? '',
       imageUrl: msg.imageUrl ?? undefined,
       createdAt: (msg as MessageDocument & { createdAt: Date }).createdAt,
-      recipientUserId: recipientId,
+      recipientUserId: recipientId ?? '',
       recipientName:
         recipient?.displayName?.trim() || recipient?.username || 'User',
       recipientEmail: recipient?.email ?? '',
@@ -697,7 +724,7 @@ export class MessagesService {
   private async moderatorThreadAdminGql(
     convo: ConversationDocument,
   ): Promise<ModeratorThreadAdminGql> {
-    const recipientId = convo.participantIds[0]?.toHexString() ?? '';
+    const recipientId = this.extractModeratorRecipientId(convo) ?? '';
     const recipient = recipientId
       ? await this.usersService.findById(recipientId)
       : null;

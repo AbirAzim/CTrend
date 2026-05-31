@@ -51,7 +51,10 @@ export class PostsService implements OnModuleInit {
     // created with likesDisabled=true. New posts always start with hype enabled.
     try {
       await this.postModel
-        .updateMany({ likesDisabled: true }, { $set: { likesDisabled: false } })
+        .updateMany(
+          { likesDisabled: true },
+          { $set: { likesDisabled: false } },
+        )
         .exec();
     } catch {
       // non-fatal
@@ -246,7 +249,8 @@ export class PostsService implements OnModuleInit {
       // Only notify on a fresh hype (not on re-asserting the same reaction)
       if (kind === 'hype' && result.upsertedCount > 0) {
         const actor = await this.usersService.findById(userId);
-        const name = actor?.displayName?.trim() || actor?.username || 'Someone';
+        const name =
+          actor?.displayName?.trim() || actor?.username || 'Someone';
         await this.notificationsService.createOrUpdateGrouped({
           userId: post.createdBy.toHexString(),
           type: 'POST_HYPE',
@@ -563,13 +567,16 @@ export class PostsService implements OnModuleInit {
       percentage: stats.percentages[index] ?? 0,
     }));
     let mySelected: number | undefined;
+    let myVoteAnonymous: boolean | null = null;
     if (viewerId) {
-      const [voteIndex] = await Promise.all([
+      const [voteIndex, myVote] = await Promise.all([
         this.votesService.getMyVoteIndex(viewerId, post._id.toHexString()),
+        this.votesService.getMyVote(viewerId, post._id.toHexString()),
       ]);
       mySelected = voteIndex;
+      myVoteAnonymous = myVote ? myVote.anonymous : null;
     }
-    const [viewerHasSaved, viewerHasHyped, recentComments] = await Promise.all([
+    const [viewerHasSaved, viewerHasHyped] = await Promise.all([
       viewerId
         ? this.savedPostModel
             .exists({ userId: new Types.ObjectId(viewerId), postId: post._id })
@@ -584,11 +591,6 @@ export class PostsService implements OnModuleInit {
             })
             .exec()
         : Promise.resolve(null),
-      this.commentsService.listMostRecentByPost(
-        post._id.toHexString(),
-        2,
-        viewerId,
-      ),
     ]);
     const now = Date.now();
     const isVotingOpen =
@@ -621,12 +623,13 @@ export class PostsService implements OnModuleInit {
       saveCount,
       viewerHasSaved: !!viewerHasSaved,
       viewerHasHyped: !!viewerHasHyped,
-      recentComments,
+      recentComments: [],
       totalVotes: stats.totalVotes,
       upvoteCount: stats.countsPerOption[0] ?? 0,
       downvoteCount: stats.countsPerOption[1] ?? 0,
       optionStats,
       mySelectedOptionIndex: mySelected,
+      myVoteAnonymous,
       viewerVote:
         mySelected === undefined ? null : mySelected === 0 ? 'up' : 'down',
       votingEndsAt: post.votingEndsAt,

@@ -48,7 +48,7 @@ export class Notification {
   @Prop({ type: String })
   referenceType?: string;
 
-  /** Post id for deep-linking comment notifications */
+  /** Post id for deep-linking into feed/post detail from notification */
   @Prop({ type: String })
   postId?: string;
 

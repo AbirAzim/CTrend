@@ -15,8 +15,7 @@ export class PostSchedulerService {
     private readonly config: ConfigService,
     @InjectConnection() private readonly connection: Connection,
   ) {
-    this.disabled =
-      this.config.get<string>('DISABLE_POST_SCHEDULER') === 'true';
+    this.disabled = this.config.get<string>('DISABLE_POST_SCHEDULER') === 'true';
     if (this.disabled) {
       this.logger.warn('Post scheduler disabled (DISABLE_POST_SCHEDULER=true)');
     }
@@ -38,10 +37,7 @@ export class PostSchedulerService {
       await this.postsService.publishScheduledPosts();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      if (
-        message.includes('timed out') ||
-        message.includes('MongoServerSelectionError')
-      ) {
+      if (message.includes('timed out') || message.includes('MongoServerSelectionError')) {
         this.logger.warn(
           'Scheduled publish skipped — MongoDB unreachable. Check Atlas Network Access (IP whitelist) and internet.',
         );

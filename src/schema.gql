@@ -414,6 +414,7 @@ type PostGql {
   likeCount: Int!
   likesDisabled: Boolean!
   mySelectedOptionIndex: Int
+  myVoteAnonymous: Boolean
   optionStats: [VoteOptionStatGql!]!
   options: [PostOptionGql!]!
   orgReach: OrgPostReach

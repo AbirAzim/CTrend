@@ -10,6 +10,7 @@ import { UserGql } from './graphql/user.types';
 import { GqlAuthGuard } from '../common/guards/gql-auth.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UpdateProfileInput } from './dto/update-profile.input';
+import { normalizeListUsersQuery } from './dto/list-users.input';
 import { UserRole } from '../common/enums';
 import { PromotionTokensService } from '../promotion-tokens/promotion-tokens.service';
 
@@ -65,16 +66,50 @@ export class UsersResolver {
     @Args('skip', { type: () => Int, defaultValue: 0 }) skip: number,
     @Args('take', { type: () => Int, defaultValue: 50 }) take: number,
     @Args('role', { type: () => String, nullable: true }) role?: string,
+    @Args('search', { type: () => String, nullable: true }) search?: string,
+    @Args('searchBy', { type: () => String, nullable: true }) searchBy?: string,
+    @Args('status', { type: () => String, nullable: true }) status?: string,
+    @Args('sortBy', { type: () => String, nullable: true }) sortBy?: string,
+    @Args('sortOrder', { type: () => String, nullable: true })
+    sortOrder?: string,
   ): Promise<UserGql[]> {
     if (actor.role !== UserRole.ADMIN)
       throw new ForbiddenException('Admin only');
-    const roleFilter = role ? (role as UserRole) : undefined;
+    const query = {
+      role: role ?? undefined,
+      ...normalizeListUsersQuery({
+        search,
+        searchBy,
+        status,
+        sortBy,
+        sortOrder,
+      }),
+    };
     const users = await this.usersService.listUsers(
       skip,
       Math.min(take, 200),
-      roleFilter,
+      query,
     );
     return users.map((u) => this.usersService.toGql(u));
+  }
+
+  /** Admin: total count of users matching the role filter (for pagination). */
+  @Query(() => Int)
+  @UseGuards(GqlAuthGuard)
+  async listUsersCount(
+    @CurrentUser() actor: ReqUser,
+    @Args('role', { type: () => String, nullable: true }) role?: string,
+    @Args('search', { type: () => String, nullable: true }) search?: string,
+    @Args('searchBy', { type: () => String, nullable: true }) searchBy?: string,
+    @Args('status', { type: () => String, nullable: true }) status?: string,
+  ): Promise<number> {
+    if (actor.role !== UserRole.ADMIN)
+      throw new ForbiddenException('Admin only');
+    const query = {
+      role: role ?? undefined,
+      ...normalizeListUsersQuery({ search, searchBy, status }),
+    };
+    return this.usersService.listUsersCount(query);
   }
 
   /** Admin: promote an existing user to also hold the admin role. */

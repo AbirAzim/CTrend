@@ -5,6 +5,7 @@ import { randomInt } from 'crypto';
 import { User, UserDocument } from './user.schema';
 import { UserGql } from './graphql/user.types';
 import { UserRole } from '../common/enums';
+import { ListUsersQuery } from './dto/list-users.input';
 
 @Injectable()
 export class UsersService {
@@ -31,6 +32,9 @@ export class UsersService {
       roles,
       bio: doc.bio,
       profileImageUrl: doc.profileImageUrl,
+      emailVerified: doc.emailVerified ?? false,
+      createdAt:
+        (doc as UserDocument & { createdAt?: Date }).createdAt ?? new Date(),
     };
   }
 
@@ -127,7 +131,8 @@ export class UsersService {
       .findOneAndUpdate(
         { email: normalized },
         {
-          $addToSet: { roles: UserRole.ADMIN },
+          // Dual-role: keep user capability + add admin (matches invite-admin flow)
+          $addToSet: { roles: { $each: [UserRole.USER, UserRole.ADMIN] } },
           $set: { role: UserRole.ADMIN },
         },
         { new: true },
@@ -154,18 +159,106 @@ export class UsersService {
     return result.deletedCount > 0;
   }
 
+  private buildListFilter(role?: UserRole | string): Record<string, unknown> {
+    if (!role) return {};
+    // role='member' — anyone with user role (pure users + admin+user dual-role).
+    // Excludes pure-admin-only accounts (admin with no user role anywhere).
+    if (String(role) === 'member') {
+      return {
+        $nor: [
+          {
+            $and: [
+              { $or: [{ roles: UserRole.ADMIN }, { role: UserRole.ADMIN }] },
+              { $nor: [{ roles: UserRole.USER }, { role: UserRole.USER }] },
+            ],
+          },
+        ],
+      };
+    }
+    // role='user' returns ONLY pure users (excludes anyone holding admin role)
+    if (String(role) === 'user') {
+      return {
+        $and: [
+          { $or: [{ roles: 'user' }, { role: 'user' }] },
+          { $nor: [{ roles: 'admin' }, { role: 'admin' }] },
+        ],
+      };
+    }
+    // role='admin' (or others): match the role in either field
+    return { $or: [{ roles: role }, { role }] };
+  }
+
+  private buildListQuery(options: ListUsersQuery = {}): {
+    filter: Record<string, unknown>;
+    sort: Record<string, 1 | -1>;
+  } {
+    const clauses: Record<string, unknown>[] = [];
+    const roleFilter = this.buildListFilter(
+      options.role as UserRole | undefined,
+    );
+    if (Object.keys(roleFilter).length > 0) clauses.push(roleFilter);
+
+    if (options.status === 'verified') {
+      clauses.push({ emailVerified: true });
+    } else if (options.status === 'unverified') {
+      clauses.push({ emailVerified: { $ne: true } });
+    }
+
+    const search = options.search?.trim();
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = { $regex: escaped, $options: 'i' };
+      const by = options.searchBy ?? 'all';
+      if (by === 'email') clauses.push({ email: regex });
+      else if (by === 'username') clauses.push({ username: regex });
+      else if (by === 'name') clauses.push({ displayName: regex });
+      else {
+        clauses.push({
+          $or: [{ email: regex }, { displayName: regex }, { username: regex }],
+        });
+      }
+    }
+
+    let filter: Record<string, unknown> = {};
+    if (clauses.length === 1) filter = clauses[0]!;
+    else if (clauses.length > 1) filter = { $and: clauses };
+
+    const sortOrder = options.sortOrder === 'asc' ? 1 : -1;
+    const sort: Record<string, 1 | -1> =
+      options.sortBy === 'name'
+        ? { displayName: sortOrder, username: sortOrder, createdAt: -1 }
+        : { createdAt: sortOrder };
+
+    return { filter, sort };
+  }
+
+  /** Ensure promoted admins retain user role in `roles[]` (legacy data repair). */
+  private async repairAdminMemberRoles(): Promise<void> {
+    await this.userModel.updateMany(
+      {
+        $or: [{ roles: UserRole.ADMIN }, { role: UserRole.ADMIN }],
+        $nor: [{ roles: UserRole.USER }],
+        role: { $ne: UserRole.USER },
+      },
+      { $addToSet: { roles: UserRole.USER } },
+    );
+  }
+
   async listUsers(
     skip = 0,
     take = 50,
-    role?: UserRole,
+    query: ListUsersQuery = {},
   ): Promise<UserDocument[]> {
-    const filter = role ? { roles: role } : {};
-    return this.userModel
-      .find(filter)
-      .skip(skip)
-      .limit(take)
-      .sort({ createdAt: -1 })
-      .exec();
+    if (String(query.role) === 'member') {
+      await this.repairAdminMemberRoles();
+    }
+    const { filter, sort } = this.buildListQuery(query);
+    return this.userModel.find(filter).skip(skip).limit(take).sort(sort).exec();
+  }
+
+  async listUsersCount(query: ListUsersQuery = {}): Promise<number> {
+    const { filter } = this.buildListQuery(query);
+    return this.userModel.countDocuments(filter).exec();
   }
 
   async countUsers(): Promise<number> {

@@ -55,6 +55,23 @@ export class VotesService {
     return v?.selectedOptionIndex;
   }
 
+  async getMyVote(
+    userId: string,
+    postId: string,
+  ): Promise<{ selectedOptionIndex: number; anonymous: boolean } | null> {
+    const v = await this.voteModel
+      .findOne({
+        userId: new Types.ObjectId(userId),
+        postId: new Types.ObjectId(postId),
+      })
+      .exec();
+    if (!v) return null;
+    return {
+      selectedOptionIndex: v.selectedOptionIndex,
+      anonymous: !!v.anonymous,
+    };
+  }
+
   async vote(
     userId: string,
     postId: string,

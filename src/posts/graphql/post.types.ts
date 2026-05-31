@@ -74,6 +74,10 @@ export class PostGql {
   @Field()
   authorEmail: string;
 
+  /** Legacy frontend alias: author.profileImageUrl (nullable) */
+  @Field(() => String, { nullable: true })
+  authorProfileImageUrl?: string | null;
+
   @Field(() => OrgPostReach, { nullable: true })
   orgReach?: OrgPostReach;
 
@@ -98,6 +102,9 @@ export class PostGql {
   @Field()
   viewerHasSaved: boolean;
 
+  @Field()
+  viewerHasHyped: boolean;
+
   @Field(() => [CommentGql])
   recentComments: CommentGql[];
 
@@ -117,6 +124,10 @@ export class PostGql {
 
   @Field(() => Int, { nullable: true })
   mySelectedOptionIndex?: number;
+
+  /** Whether the viewer's vote on this post is anonymous (null if not voted). */
+  @Field(() => Boolean, { nullable: true })
+  myVoteAnonymous?: boolean | null;
 
   /** Legacy frontend alias: "up" | "down" | null */
   @Field(() => String, { nullable: true })

@@ -51,8 +51,13 @@ export class FollowsResolver {
   async friendSuggestions(
     @CurrentUser() user: ReqUser,
     @Args('limit', { type: () => Int, nullable: true }) limit?: number,
+    @Args('search', { type: () => String, nullable: true }) search?: string,
   ) {
-    return this.followsService.getFriendSuggestions(user.id, limit ?? 20);
+    return this.followsService.getFriendSuggestions(
+      user.id,
+      limit ?? 20,
+      search,
+    );
   }
 
   @Query(() => [UserGql])
@@ -69,6 +74,16 @@ export class FollowsResolver {
       this.followsService.getIncomingFriendRequests(user.id),
     ]);
     return { requestedByMe, requestedMe };
+  }
+
+  @Mutation(() => Boolean)
+  @UseGuards(GqlAuthGuard)
+  async cancelFriendRequest(
+    @CurrentUser() user: ReqUser,
+    @Args('userId', { type: () => ID }) userId: string,
+  ) {
+    await this.followsService.cancelFriendRequest(user.id, userId);
+    return true;
   }
 
   @Mutation(() => Boolean)

@@ -32,6 +32,7 @@ import { CampaignsModule } from './campaigns/campaigns.module';
 import { MessagesModule } from './messages/messages.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PresenceModule } from './presence/presence.module';
+import { SearchModule } from './search/search.module';
 import { PresenceService } from './presence/presence.service';
 
 @Module({
@@ -43,6 +44,28 @@ import { PresenceService } from './presence/presence.service';
       inject: [ConfigService],
       useFactory: (c: ConfigService) => ({
         uri: c.getOrThrow<string>('MONGODB_URI'),
+        // Atlas / remote clusters: tolerate brief network blips
+        serverSelectionTimeoutMS: 15_000,
+        connectTimeoutMS: 15_000,
+        socketTimeoutMS: 45_000,
+        maxPoolSize: 10,
+        minPoolSize: 1,
+        retryWrites: true,
+        retryReads: true,
+        heartbeatFrequencyMS: 10_000,
+        connectionFactory: (connection: import('mongoose').Connection) => {
+          const log = (msg: string, err?: unknown) => {
+            const prefix = '[MongoDB]';
+            if (err) console.error(prefix, msg, err);
+            else console.log(prefix, msg);
+          };
+          connection.on('connected', () => log('connected'));
+          connection.on('disconnected', () =>
+            log('disconnected — check Atlas IP whitelist and network'),
+          );
+          connection.on('error', (err) => log('connection error', err));
+          return connection;
+        },
       }),
     }),
     ThrottlerModule.forRoot([
@@ -190,6 +213,7 @@ import { PresenceService } from './presence/presence.service';
     PresenceModule,
     NotificationsModule,
     MessagesModule,
+    SearchModule,
   ],
   providers: [
     {

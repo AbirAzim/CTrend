@@ -3,7 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { existsSync, readFileSync } from 'fs';
 import * as nodemailer from 'nodemailer';
 import { join } from 'path';
-import sharp from 'sharp';
+import * as sharp from 'sharp';
 
 const LOGO_PATH = join(process.cwd(), 'logo.png');
 

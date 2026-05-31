@@ -12,15 +12,22 @@ import { MessagesService } from './messages.service';
 import {
   ConversationGql,
   MessageGql,
+  ModeratorMessageAdminGql,
+  ModeratorThreadAdminGql,
+  AdminModeratorUserMessageGql,
   MessageReadGql,
   PresenceChangedGql,
   TypingIndicatorGql,
 } from './graphql/message.types';
 import { GqlAuthGuard } from '../common/guards/gql-auth.guard';
+import { RolesGuard } from '../common/guards/roles.guard';
+import { Roles } from '../common/decorators/roles.decorator';
+import { UserRole } from '../common/enums';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import {
   pubsub,
   NEW_MESSAGE,
+  ADMIN_MODERATOR_USER_MESSAGE,
   MESSAGE_READ,
   TYPING_INDICATOR,
   USER_PRESENCE_CHANGED,
@@ -64,6 +71,63 @@ export class MessagesResolver {
   @UseGuards(GqlAuthGuard)
   async onlineUserIds(): Promise<string[]> {
     return this.presenceService.onlineUserIds();
+  }
+
+  @Query(() => [ModeratorMessageAdminGql])
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async adminModeratorMessages(
+    @Args('skip', { type: () => Int, defaultValue: 0 }) skip: number,
+    @Args('take', { type: () => Int, defaultValue: 50 }) take: number,
+    @Args('search', { nullable: true }) search?: string,
+  ) {
+    return this.messagesService.listModeratorMessagesForAdmin(
+      skip,
+      take,
+      search,
+    );
+  }
+
+  @Query(() => Int)
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async adminModeratorMessagesCount(
+    @Args('search', { nullable: true }) search?: string,
+  ) {
+    return this.messagesService.countModeratorMessagesForAdmin(search);
+  }
+
+  @Query(() => [ModeratorThreadAdminGql])
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async adminModeratorThreads(
+    @Args('skip', { type: () => Int, defaultValue: 0 }) skip: number,
+    @Args('take', { type: () => Int, defaultValue: 50 }) take: number,
+    @Args('search', { nullable: true }) search?: string,
+  ) {
+    return this.messagesService.listModeratorThreadsForAdmin(
+      skip,
+      take,
+      search,
+    );
+  }
+
+  @Query(() => [MessageGql])
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async adminModeratorThreadMessages(
+    @Args('userId', { type: () => ID }) userId: string,
+  ) {
+    return this.messagesService.getModeratorThreadMessagesForAdmin(userId);
+  }
+
+  @Mutation(() => Boolean)
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async markModeratorThreadReadForAdmin(
+    @Args('userId', { type: () => ID }) userId: string,
+  ) {
+    return this.messagesService.markModeratorThreadReadForAdmin(userId);
   }
 
   // ── Mutations ──────────────────────────────────────────────────
@@ -132,6 +196,40 @@ export class MessagesResolver {
     return this.messagesService.setTyping(user.id, conversationId, isTyping);
   }
 
+  @Mutation(() => ModeratorMessageAdminGql)
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async sendModeratorMessage(
+    @CurrentUser() user: ReqUser,
+    @Args('userId', { type: () => ID }) userId: string,
+    @Args('text', { defaultValue: '' }) text: string,
+    @Args('imageUrl', { nullable: true }) imageUrl?: string,
+  ) {
+    return this.messagesService.sendModeratorMessage(
+      user.id,
+      userId,
+      text,
+      imageUrl,
+    );
+  }
+
+  @Mutation(() => [ModeratorMessageAdminGql])
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async sendModeratorMessages(
+    @CurrentUser() user: ReqUser,
+    @Args('userIds', { type: () => [ID] }) userIds: string[],
+    @Args('text', { defaultValue: '' }) text: string,
+    @Args('imageUrl', { nullable: true }) imageUrl?: string,
+  ) {
+    return this.messagesService.sendModeratorMessages(
+      user.id,
+      userIds,
+      text,
+      imageUrl,
+    );
+  }
+
   // ── Subscriptions ──────────────────────────────────────────────
 
   @Subscription(() => MessageGql, {
@@ -148,6 +246,15 @@ export class MessagesResolver {
   @UseGuards(GqlAuthGuard)
   messageReceived() {
     return pubsub.asyncIterableIterator(NEW_MESSAGE);
+  }
+
+  @Subscription(() => AdminModeratorUserMessageGql, {
+    resolve: (payload) => payload.adminModeratorUserMessage,
+  })
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  adminModeratorUserMessage() {
+    return pubsub.asyncIterableIterator(ADMIN_MODERATOR_USER_MESSAGE);
   }
 
   /**
@@ -177,8 +284,9 @@ export class MessagesResolver {
   })
   @UseGuards(GqlAuthGuard)
   typingIndicator(
-    @Args('conversationId', { type: () => ID }) _conversationId: string,
+    @Args('conversationId', { type: () => ID }) conversationId: string,
   ) {
+    void conversationId;
     return pubsub.asyncIterableIterator(TYPING_INDICATOR);
   }
 

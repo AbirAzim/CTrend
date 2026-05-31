@@ -1,5 +1,16 @@
 import { Field, InputType } from '@nestjs/graphql';
-import { IsArray, IsOptional, IsString, MaxLength } from 'class-validator';
+import {
+  IsArray,
+  IsIn,
+  IsOptional,
+  IsString,
+  MaxLength,
+} from 'class-validator';
+import {
+  MESSAGE_SOUND_IDS,
+  NOTIFICATION_SOUND_IDS,
+  VOTE_SOUND_IDS,
+} from '../sound-preferences.constants';
 
 @InputType()
 export class UpdateProfileInput {
@@ -26,4 +37,22 @@ export class UpdateProfileInput {
   @IsArray()
   @IsString({ each: true })
   interests?: string[];
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  @IsIn([...VOTE_SOUND_IDS])
+  voteSoundId?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  @IsIn([...NOTIFICATION_SOUND_IDS])
+  notificationSoundId?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  @IsIn([...MESSAGE_SOUND_IDS])
+  messageSoundId?: string;
 }

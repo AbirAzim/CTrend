@@ -63,10 +63,11 @@ export class FeedService {
     viewerId?: string,
     viewerRole?: string,
   ): Promise<Record<string, unknown>> {
-    // Admins see every post on the platform.
-    if (viewerRole === 'admin') return {};
-
     const notScheduled = { status: { $ne: PostStatus.SCHEDULED } };
+
+    // Admins see every post on the platform — but never the SCHEDULED ones in
+    // the main feed (those have their own /profile/scheduled view).
+    if (viewerRole === 'admin') return notScheduled;
 
     // Unauthenticated: only SYSTEM posts (explicitly platform-wide by admin choice).
     // Regular USER posts by admins are friends-only, same as any other user.
@@ -82,7 +83,8 @@ export class FeedService {
 
     const parts: Record<string, unknown>[] = [
       { type: PostType.SYSTEM, ...notScheduled },
-      { type: PostType.USER, createdBy: viewerOid }, // own posts: no status restriction
+      // Own posts in feed exclude SCHEDULED — they live in /profile/scheduled
+      { type: PostType.USER, createdBy: viewerOid, ...notScheduled },
     ];
 
     if (followingOids.length > 0) {

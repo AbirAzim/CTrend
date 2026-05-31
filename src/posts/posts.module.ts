@@ -12,6 +12,8 @@ import { OrganizationsModule } from '../organizations/organizations.module';
 import { UsersModule } from '../users/users.module';
 import { VotesModule } from '../votes/votes.module';
 import { CommentsModule } from '../comments/comments.module';
+import { NotificationsModule } from '../notifications/notifications.module';
+import { FollowsModule } from '../follows/follows.module';
 
 @Module({
   imports: [
@@ -26,6 +28,8 @@ import { CommentsModule } from '../comments/comments.module';
     UsersModule,
     VotesModule,
     CommentsModule,
+    NotificationsModule,
+    FollowsModule,
   ],
   providers: [PostsService, PostsResolver, PostSchedulerService],
   exports: [PostsService],

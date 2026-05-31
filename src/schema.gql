@@ -2,6 +2,15 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
+type AdminModeratorUserMessageGql {
+  conversationId: ID!
+  lastMessageAt: DateTime
+  lastMessageText: String
+  message: MessageGql!
+  recipientUserId: ID!
+  unreadFromUserCount: Int!
+}
+
 type AuthPayloadGql {
   accessToken: String!
   refreshToken: String
@@ -65,12 +74,19 @@ type CommentGql {
   likeCount: Float!
   parentId: ID
   postId: ID!
+  reactions: [CommentReactionCountGql!]!
   viewerHasLiked: Boolean!
+  viewerReaction: String
 }
 
 input CommentPostInput {
   content: String!
   parentId: ID
+}
+
+type CommentReactionCountGql {
+  count: Int!
+  emoji: String!
 }
 
 type ConversationGql {
@@ -213,6 +229,9 @@ type MessageGql {
   senderAvatar: String
   senderId: ID!
   senderName: String!
+  sentByAdminEmail: String
+  sentByAdminId: String
+  sentByAdminName: String
   text: String!
 }
 
@@ -222,20 +241,49 @@ type MessageReadGql {
   userId: ID!
 }
 
+type ModeratorMessageAdminGql {
+  conversationId: ID!
+  createdAt: DateTime!
+  id: ID!
+  imageUrl: String
+  recipientEmail: String!
+  recipientName: String!
+  recipientUserId: ID!
+  sentByAdminEmail: String!
+  sentByAdminId: ID!
+  sentByAdminName: String!
+  text: String!
+}
+
+type ModeratorThreadAdminGql {
+  conversationId: ID!
+  lastMessageAt: DateTime
+  lastMessageText: String
+  messageCount: Int!
+  recipientEmail: String!
+  recipientName: String!
+  recipientProfileImageUrl: String
+  recipientUserId: ID!
+  unreadFromUserCount: Int!
+}
+
 type Mutation {
   acceptInvitation(displayName: String, password: String!, token: String!): AuthPayloadGql!
   addFriend(userId: ID!): String!
+  cancelFriendRequest(userId: ID!): Boolean!
   cancelInvitation(id: ID!): Boolean!
   cancelScheduledPost(postId: ID!): Boolean!
   cancelSubscription(organizationId: ID): Boolean!
   commentPost(input: CommentPostInput!, postId: ID!): CommentGql!
   createCampaign(input: CreateCampaignInput!): CampaignGql!
+  createCategory(name: String!): CategoryGql!
   createGroupConversation(memberIds: [ID!]!, name: String!): ConversationGql!
   createOrganization(name: String!): OrganizationGql!
   createPost(input: CreatePostInput!): PostGql!
   createStripeCheckoutSession(organizationId: ID, plan: SubscriptionPlan!): CheckoutSessionGql!
   createSystemPost(input: CreatePostInput!): PostGql!
   createWorldCupCampaignPost(fixtureId: ID!): PostGql!
+  deleteCategory(id: ID!): Boolean!
   deletePost(postId: ID!): Boolean!
   extendPostVoting(newVotingEndsAt: DateTime!, postId: ID!): PostGql!
   followUser(userId: ID!): Boolean!
@@ -248,6 +296,7 @@ type Mutation {
   markAllNotificationsRead: Boolean!
   markCampaignPrizePaid(winnerId: ID!): CampaignWinnerGql!
   markConversationRead(conversationId: ID!): Boolean!
+  markModeratorThreadReadForAdmin(userId: ID!): Boolean!
   markNotificationRead(id: ID!): Boolean!
   processMatchResult(campaignId: ID, fixtureId: ID!): CampaignWinnerGql!
   promoteToAdmin(email: String!): UserGql!
@@ -262,7 +311,10 @@ type Mutation {
   respondFriendRequest(accept: Boolean!, requesterId: ID!): Boolean!
   sendAdminBroadcast(body: String!, title: String!): Int!
   sendMessage(conversationId: ID!, imageUrl: String, text: String! = ""): MessageGql!
+  sendModeratorMessage(imageUrl: String, text: String! = "", userId: ID!): ModeratorMessageAdminGql!
+  sendModeratorMessages(imageUrl: String, text: String! = "", userIds: [ID!]!): [ModeratorMessageAdminGql!]!
   setCommentLike(commentId: ID!, liked: Boolean!): CommentGql!
+  setCommentReaction(commentId: ID!, emoji: String): CommentGql!
   setPostHype(active: Boolean!, postId: ID!): Boolean!
   setPostKeep(keep: Boolean!, postId: ID!): Boolean!
   setPostLike(active: Boolean!, postId: ID!): Boolean!
@@ -274,6 +326,8 @@ type Mutation {
   toggleCampaign(id: ID!, isActive: Boolean!): CampaignGql!
   unfriend(userId: ID!): Boolean!
   updateCampaign(id: ID!, input: UpdateCampaignInput!): CampaignGql!
+  updateCategory(id: ID!, name: String!): CategoryGql!
+  updatePost(input: UpdatePostInput!, postId: ID!): PostGql!
   updateProfile(input: UpdateProfileInput!): UserGql!
   verifyBkashPayment(payload: String!): BkashVerificationGql!
   verifyEmail(code: String!, email: String!): AuthPayloadGql!
@@ -285,9 +339,13 @@ type NewPostGql {
 }
 
 type NotificationGql {
+  actorCount: Int!
   body: String!
   createdAt: DateTime!
   id: ID!
+  latestActorId: String
+  latestActorName: String
+  postId: String
   read: Boolean!
   referenceId: String
   referenceType: String
@@ -330,11 +388,16 @@ type ParticipantGql {
   online: Boolean!
 }
 
+type PostDeletedGql {
+  postId: ID!
+}
+
 type PostGql {
   author: UserGql!
   authorDisplayName: String
   authorEmail: String!
   authorId: ID!
+  authorProfileImageUrl: String
   authorUsername: String!
   caption: String
   category: CategoryGql!
@@ -351,6 +414,7 @@ type PostGql {
   likeCount: Int!
   likesDisabled: Boolean!
   mySelectedOptionIndex: Int
+  myVoteAnonymous: Boolean
   optionStats: [VoteOptionStatGql!]!
   options: [PostOptionGql!]!
   orgReach: OrgPostReach
@@ -361,6 +425,7 @@ type PostGql {
   totalVotes: Int!
   type: PostType!
   upvoteCount: Int!
+  viewerHasHyped: Boolean!
   viewerHasSaved: Boolean!
   viewerVote: String
   visibility: Visibility!
@@ -410,24 +475,31 @@ type PresignedUploadUrl {
 
 type Query {
   activeCampaigns: [CampaignGql!]!
+  adminModeratorMessages(search: String, skip: Int! = 0, take: Int! = 50): [ModeratorMessageAdminGql!]!
+  adminModeratorMessagesCount(search: String): Int!
+  adminModeratorThreadMessages(userId: ID!): [MessageGql!]!
+  adminModeratorThreads(search: String, skip: Int! = 0, take: Int! = 50): [ModeratorThreadAdminGql!]!
   campaign(slug: String!): CampaignGql
   campaignWinner(fixtureId: ID!): CampaignWinnerGql
   campaignWinners: [CampaignWinnerGql!]!
   campaigns: [CampaignGql!]!
   categories: [CategoryGql!]!
+  categoryPostCount(categoryId: ID!): Int!
   commentsByPost(postId: ID!): [CommentGql!]!
   feedPosts(scope: FeedScope, skip: Int = 0, sort: FeedSort, take: Int = 20): [PostGql!]!
   friendRequests: FriendRequestsGql!
-  friendSuggestions(limit: Int): [UserGql!]!
+  friendSuggestions(limit: Int, search: String): [UserGql!]!
   friendshipStatus(userId: ID!): String!
   getAllCategories: [CategoryGql!]!
   getFeed(scope: FeedScope!, skip: Int = 0, sort: FeedSort!, take: Int = 20): FeedConnectionGql!
   getPostById(id: ID!): PostGql!
   getPostsByUser(userId: ID!): [PostGql!]!
   getUserProfile(userId: ID!): UserGql!
+  globalSearch(limit: Int = 20, query: String!): SearchResultGql!
   incomingFriendRequests: [UserGql!]!
   listInvitations(status: InvitationStatus): [InvitationGql!]!
-  listUsers(role: String, skip: Int! = 0, take: Int! = 50): [UserGql!]!
+  listUsers(role: String, search: String, searchBy: String, skip: Int! = 0, sortBy: String, sortOrder: String, status: String, take: Int! = 50): [UserGql!]!
+  listUsersCount(role: String, search: String, searchBy: String, status: String): Int!
   me: UserGql!
   messages(conversationId: ID!, skip: Int! = 0, take: Int! = 30): [MessageGql!]!
   myConversations: [ConversationGql!]!
@@ -457,11 +529,23 @@ input RegisterInput {
   username: String!
 }
 
+type SearchResultGql {
+  posts: [PostGql!]!
+  users: [SearchUserGql!]!
+}
+
+type SearchUserGql {
+  isFriend: Boolean!
+  user: UserGql!
+}
+
 type Subscription {
+  adminModeratorUserMessage: AdminModeratorUserMessageGql!
   messageRead: MessageReadGql!
   messageReceived: MessageGql!
   newNotification: NotificationGql!
   newPosts: NewPostGql!
+  postDeleted: PostDeletedGql!
   postVoteUpdated(postId: ID!): PostGql!
   presenceChanged: PresenceChangedGql!
   typingIndicator(conversationId: ID!): TypingIndicatorGql!
@@ -494,23 +578,38 @@ input UpdateCampaignInput {
   startDate: DateTime
 }
 
+input UpdatePostInput {
+  caption: String
+  categoryId: String
+  imageUrls: [String!]
+  options: [PostOptionInput!]
+}
+
 input UpdateProfileInput {
   bio: String
   displayName: String
   interests: [String!]
+  messageSoundId: String
+  notificationSoundId: String
   profileImageUrl: String
+  voteSoundId: String
 }
 
 type UserGql {
   bio: String
+  createdAt: DateTime!
   displayName: String
   email: String!
+  emailVerified: Boolean!
   id: ID!
   interests: [String!]!
+  messageSoundId: String
+  notificationSoundId: String
   profileImageUrl: String
   role: UserRole!
   roles: [UserRole!]!
   username: String!
+  voteSoundId: String
 }
 
 enum UserRole {

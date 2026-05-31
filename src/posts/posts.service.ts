@@ -14,6 +14,7 @@ import {
 } from './post-reaction.schema';
 import { SavedPost, SavedPostDocument } from './saved-post.schema';
 import { CreatePostInput } from './dto/create-post.input';
+import { UpdatePostInput } from './dto/update-post.input';
 import {
   OrgPostReach,
   PostStatus,
@@ -29,9 +30,12 @@ import { VotesService } from '../votes/votes.service';
 import { CategoryDocument } from '../categories/category.schema';
 import { UserDocument } from '../users/user.schema';
 import { PostGql } from './graphql/post.types';
-import { NEW_POST, POST_VOTE_UPDATED, pubsub } from '../pubsub';
+import { NEW_POST, POST_DELETED, POST_VOTE_UPDATED, pubsub } from '../pubsub';
 import { Comment, CommentDocument } from '../comments/comment.schema';
 import { CommentsService } from '../comments/comments.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { FollowsService } from '../follows/follows.service';
+import { OnModuleInit } from '@nestjs/common';
 
 const PREMIUM_GLOBAL_MONTHLY = 20;
 
@@ -41,7 +45,19 @@ function currentMonthKey(): string {
 }
 
 @Injectable()
-export class PostsService {
+export class PostsService implements OnModuleInit {
+  async onModuleInit() {
+    // Backfill: re-enable hype on existing system/admin posts that were
+    // created with likesDisabled=true. New posts always start with hype enabled.
+    try {
+      await this.postModel
+        .updateMany({ likesDisabled: true }, { $set: { likesDisabled: false } })
+        .exec();
+    } catch {
+      // non-fatal
+    }
+  }
+
   constructor(
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
     @InjectModel(PostReaction.name)
@@ -55,6 +71,8 @@ export class PostsService {
     private usersService: UsersService,
     private votesService: VotesService,
     private commentsService: CommentsService,
+    private notificationsService: NotificationsService,
+    private followsService: FollowsService,
   ) {}
 
   async findById(id: string): Promise<PostDocument | null> {
@@ -90,7 +108,10 @@ export class PostsService {
       .find({ status: PostStatus.SCHEDULED, scheduledAt: { $lte: new Date() } })
       .exec();
     for (const post of due) {
+      const goLiveAt = post.scheduledAt ?? new Date();
       post.status = PostStatus.PUBLISHED;
+      // Feed "posted" time should reflect go-live, not draft creation time.
+      post.createdAt = goLiveAt;
       await post.save();
       await this.publishNewPost(post._id.toHexString());
     }
@@ -107,6 +128,29 @@ export class PostsService {
     }
     await this.postModel.deleteOne({ _id: post._id });
     return true;
+  }
+
+  async updatePost(
+    userId: string,
+    postId: string,
+    input: UpdatePostInput,
+  ): Promise<PostDocument> {
+    const post = await this.postModel.findById(postId).exec();
+    if (!post) throw new NotFoundException('Post not found');
+    if (post.createdBy.toHexString() !== userId) {
+      throw new ForbiddenException('Only the author can edit this post');
+    }
+    if (input.caption !== undefined) post.contentText = input.caption;
+    if (input.imageUrls && input.imageUrls.length >= 2) {
+      post.imageUrls = input.imageUrls;
+    }
+    if (input.options && input.options.length >= 2) {
+      post.options = input.options as any;
+    }
+    if (input.categoryId) {
+      post.categoryId = new Types.ObjectId(input.categoryId);
+    }
+    return post.save();
   }
 
   async deletePost(
@@ -132,6 +176,10 @@ export class PostsService {
       this.postReactionModel.deleteMany({ postId: pid }),
       this.commentModel.deleteMany({ postId: pid }),
     ]);
+    // Notify all connected feed clients so the post disappears in real time.
+    await pubsub.publish(POST_DELETED, {
+      postDeleted: { postId: pid.toHexString() },
+    });
     return true;
   }
 
@@ -190,11 +238,26 @@ export class PostsService {
     const uid = new Types.ObjectId(userId);
     const pid = post._id;
     if (active) {
-      await this.postReactionModel.updateOne(
+      const result = await this.postReactionModel.updateOne(
         { userId: uid, postId: pid, kind },
         { $setOnInsert: { userId: uid, postId: pid, kind } },
         { upsert: true },
       );
+      // Only notify on a fresh hype (not on re-asserting the same reaction)
+      if (kind === 'hype' && result.upsertedCount > 0) {
+        const actor = await this.usersService.findById(userId);
+        const name = actor?.displayName?.trim() || actor?.username || 'Someone';
+        await this.notificationsService.createOrUpdateGrouped({
+          userId: post.createdBy.toHexString(),
+          type: 'POST_HYPE',
+          referenceId: post._id.toHexString(),
+          referenceType: 'Post',
+          actorId: userId,
+          actorName: name,
+          verbPhrase: 'hyped your post',
+          title: 'New hype on your post',
+        });
+      }
       return;
     }
     await this.postReactionModel.deleteOne({ userId: uid, postId: pid, kind });
@@ -355,7 +418,7 @@ export class PostsService {
       feedPriority: 100,
       voteCount: 0,
       commentsDisabled: false,
-      likesDisabled: true,
+      likesDisabled: false,
       votingEndsAt,
       status,
       scheduledAt,
@@ -368,6 +431,62 @@ export class PostsService {
 
   private async publishNewPost(postId: string) {
     await pubsub.publish(NEW_POST, { newPost: { postId } });
+    try {
+      const post = await this.postModel.findById(postId).exec();
+      if (!post) return;
+      const authorId = post.createdBy.toHexString();
+      const author = await this.usersService.findById(authorId);
+      const authorName =
+        author?.displayName?.trim() || author?.username || 'Someone';
+      const caption = (post.contentText ?? '').trim();
+
+      if (post.type === PostType.SYSTEM) {
+        // SYSTEM (admin/campaign) posts fan out to ALL users on the platform.
+        // The admin who created the post does not receive a notification.
+        const allUserIds = await this.usersService.findAllIds();
+        const recipients = allUserIds.filter((id) => id !== authorId);
+        const body = caption
+          ? caption.slice(0, 120)
+          : 'A new campaign is live — tap to view.';
+        await Promise.all(
+          recipients.map((userId) =>
+            this.notificationsService.create({
+              userId,
+              type: 'ANNOUNCEMENT',
+              title: `📢 ${authorName} posted a campaign`,
+              body,
+              referenceId: postId,
+              referenceType: 'Post',
+              actorId: authorId,
+              actorName: authorName,
+            }),
+          ),
+        );
+        return;
+      }
+
+      // USER posts → notify the author's friends only.
+      const friends = await this.followsService.getMyFriends(authorId);
+      const body = caption
+        ? `${authorName} posted: ${caption.slice(0, 80)}`
+        : `${authorName} shared a new compare`;
+      await Promise.all(
+        friends.map((f) =>
+          this.notificationsService.create({
+            userId: f.id,
+            type: 'NEW_POST_FRIEND',
+            title: `${authorName} shared a new post`,
+            body,
+            referenceId: postId,
+            referenceType: 'Post',
+            actorId: authorId,
+            actorName: authorName,
+          }),
+        ),
+      );
+    } catch {
+      // Don't fail post-create flow if notifications fan-out fails
+    }
   }
 
   private parseFutureDate(
@@ -444,23 +563,30 @@ export class PostsService {
       percentage: stats.percentages[index] ?? 0,
     }));
     let mySelected: number | undefined;
+    let myVoteAnonymous: boolean | null = null;
     if (viewerId) {
-      const [voteIndex] = await Promise.all([
+      const [voteIndex, myVote] = await Promise.all([
         this.votesService.getMyVoteIndex(viewerId, post._id.toHexString()),
+        this.votesService.getMyVote(viewerId, post._id.toHexString()),
       ]);
       mySelected = voteIndex;
+      myVoteAnonymous = myVote ? myVote.anonymous : null;
     }
-    const [viewerHasSaved, recentComments] = await Promise.all([
+    const [viewerHasSaved, viewerHasHyped] = await Promise.all([
       viewerId
         ? this.savedPostModel
             .exists({ userId: new Types.ObjectId(viewerId), postId: post._id })
             .exec()
         : Promise.resolve(null),
-      this.commentsService.listMostRecentByPost(
-        post._id.toHexString(),
-        2,
-        viewerId,
-      ),
+      viewerId
+        ? this.postReactionModel
+            .exists({
+              userId: new Types.ObjectId(viewerId),
+              postId: post._id,
+              kind: 'hype',
+            })
+            .exec()
+        : Promise.resolve(null),
     ]);
     const now = Date.now();
     const isVotingOpen =
@@ -483,6 +609,7 @@ export class PostsService {
       authorUsername: author.username,
       authorDisplayName: author.displayName ?? null,
       authorEmail: author.email,
+      authorProfileImageUrl: author.profileImageUrl ?? null,
       orgReach: post.orgReach,
       commentsDisabled: post.commentsDisabled,
       likesDisabled: post.likesDisabled,
@@ -491,12 +618,14 @@ export class PostsService {
       hypeCount,
       saveCount,
       viewerHasSaved: !!viewerHasSaved,
-      recentComments,
+      viewerHasHyped: !!viewerHasHyped,
+      recentComments: [],
       totalVotes: stats.totalVotes,
       upvoteCount: stats.countsPerOption[0] ?? 0,
       downvoteCount: stats.countsPerOption[1] ?? 0,
       optionStats,
       mySelectedOptionIndex: mySelected,
+      myVoteAnonymous,
       viewerVote:
         mySelected === undefined ? null : mySelected === 0 ? 'up' : 'down',
       votingEndsAt: post.votingEndsAt,

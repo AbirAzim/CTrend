@@ -32,4 +32,19 @@ export class UserGql {
 
   @Field({ nullable: true })
   profileImageUrl?: string;
+
+  @Field(() => String, { nullable: true })
+  voteSoundId?: string | null;
+
+  @Field(() => String, { nullable: true })
+  notificationSoundId?: string | null;
+
+  @Field(() => String, { nullable: true })
+  messageSoundId?: string | null;
+
+  @Field()
+  emailVerified: boolean;
+
+  @Field()
+  createdAt: Date;
 }

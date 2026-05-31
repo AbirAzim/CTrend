@@ -26,6 +26,16 @@ export class MessageGql {
   @Field({ nullable: true })
   senderAvatar?: string;
 
+  /** Populated only for admin moderator-thread queries. */
+  @Field({ nullable: true })
+  sentByAdminId?: string;
+
+  @Field({ nullable: true })
+  sentByAdminName?: string;
+
+  @Field({ nullable: true })
+  sentByAdminEmail?: string;
+
   @Field({ defaultValue: '' })
   text: string;
 
@@ -117,4 +127,92 @@ export class PresenceChangedGql {
 
   @Field()
   online: boolean;
+}
+
+@ObjectType()
+export class ModeratorMessageAdminGql {
+  @Field(() => ID)
+  id: string;
+
+  @Field(() => ID)
+  conversationId: string;
+
+  @Field()
+  text: string;
+
+  @Field({ nullable: true })
+  imageUrl?: string;
+
+  @Field()
+  createdAt: Date;
+
+  @Field(() => ID)
+  recipientUserId: string;
+
+  @Field()
+  recipientName: string;
+
+  @Field()
+  recipientEmail: string;
+
+  @Field(() => ID)
+  sentByAdminId: string;
+
+  @Field()
+  sentByAdminName: string;
+
+  @Field()
+  sentByAdminEmail: string;
+}
+
+@ObjectType()
+export class ModeratorThreadAdminGql {
+  @Field(() => ID)
+  conversationId: string;
+
+  @Field(() => ID)
+  recipientUserId: string;
+
+  @Field()
+  recipientName: string;
+
+  @Field()
+  recipientEmail: string;
+
+  @Field({ nullable: true })
+  recipientProfileImageUrl?: string;
+
+  @Field({ nullable: true })
+  lastMessageText?: string;
+
+  @Field({ nullable: true })
+  lastMessageAt?: Date;
+
+  @Field(() => Int)
+  messageCount: number;
+
+  /** Unread user replies waiting for admin attention. */
+  @Field(() => Int)
+  unreadFromUserCount: number;
+}
+
+@ObjectType()
+export class AdminModeratorUserMessageGql {
+  @Field(() => ID)
+  conversationId: string;
+
+  @Field(() => ID)
+  recipientUserId: string;
+
+  @Field(() => MessageGql)
+  message: MessageGql;
+
+  @Field(() => Int)
+  unreadFromUserCount: number;
+
+  @Field({ nullable: true })
+  lastMessageText?: string;
+
+  @Field({ nullable: true })
+  lastMessageAt?: Date;
 }

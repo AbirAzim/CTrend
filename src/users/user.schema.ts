@@ -39,6 +39,15 @@ export class User {
   @Prop()
   profileImageUrl?: string;
 
+  @Prop({ trim: true, default: 'buzz-in' })
+  voteSoundId?: string;
+
+  @Prop({ trim: true, default: 'ascending-chime' })
+  notificationSoundId?: string;
+
+  @Prop({ trim: true, default: 'gentle-ping' })
+  messageSoundId?: string;
+
   @Prop({ default: false })
   emailVerified: boolean;
 

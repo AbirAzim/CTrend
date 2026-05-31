@@ -133,11 +133,7 @@ export class FollowsService {
       const re = new RegExp(escaped, 'i');
       baseFilter.$and = [
         {
-          $or: [
-            { displayName: re },
-            { username: re },
-            { email: re },
-          ],
+          $or: [{ displayName: re }, { username: re }, { email: re }],
         },
       ];
     }

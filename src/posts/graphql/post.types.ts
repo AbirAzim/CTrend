@@ -102,6 +102,9 @@ export class PostGql {
   @Field()
   viewerHasSaved: boolean;
 
+  @Field()
+  viewerHasHyped: boolean;
+
   @Field(() => [CommentGql])
   recentComments: CommentGql[];
 

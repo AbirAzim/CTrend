@@ -5,6 +5,14 @@ import { randomInt } from 'crypto';
 import { User, UserDocument } from './user.schema';
 import { UserGql } from './graphql/user.types';
 import { UserRole } from '../common/enums';
+import {
+  DEFAULT_MESSAGE_SOUND_ID,
+  DEFAULT_NOTIFICATION_SOUND_ID,
+  DEFAULT_VOTE_SOUND_ID,
+  isMessageSoundId,
+  isNotificationSoundId,
+  isVoteSoundId,
+} from './sound-preferences.constants';
 
 @Injectable()
 export class UsersService {
@@ -31,6 +39,15 @@ export class UsersService {
       roles,
       bio: doc.bio,
       profileImageUrl: doc.profileImageUrl,
+      voteSoundId: isVoteSoundId(doc.voteSoundId ?? '')
+        ? doc.voteSoundId
+        : DEFAULT_VOTE_SOUND_ID,
+      notificationSoundId: isNotificationSoundId(doc.notificationSoundId ?? '')
+        ? doc.notificationSoundId
+        : DEFAULT_NOTIFICATION_SOUND_ID,
+      messageSoundId: isMessageSoundId(doc.messageSoundId ?? '')
+        ? doc.messageSoundId
+        : DEFAULT_MESSAGE_SOUND_ID,
     };
   }
 
@@ -93,10 +110,13 @@ export class UsersService {
       profileImageUrl?: string;
       interests?: string[];
       displayName?: string;
+      voteSoundId?: string;
+      notificationSoundId?: string;
+      messageSoundId?: string;
     },
   ): Promise<UserDocument | null> {
     return this.userModel
-      .findByIdAndUpdate(userId, { $set: patch }, { new: true })
+      .findByIdAndUpdate(userId, { $set: patch }, { returnDocument: 'after' })
       .exec();
   }
 
@@ -116,7 +136,7 @@ export class UsersService {
       .findByIdAndUpdate(
         userId,
         { $set: { role, roles: [role] } },
-        { new: true },
+        { returnDocument: 'after' },
       )
       .exec();
   }
@@ -130,7 +150,7 @@ export class UsersService {
           $addToSet: { roles: UserRole.ADMIN },
           $set: { role: UserRole.ADMIN },
         },
-        { new: true },
+        { returnDocument: 'after' },
       )
       .exec();
   }
@@ -142,7 +162,7 @@ export class UsersService {
       .findOneAndUpdate(
         { email: normalized },
         { $pull: { roles: UserRole.ADMIN }, $set: { role: UserRole.USER } },
-        { new: true },
+        { returnDocument: 'after' },
       )
       .exec();
   }

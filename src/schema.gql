@@ -374,6 +374,7 @@ type PostGql {
   totalVotes: Int!
   type: PostType!
   upvoteCount: Int!
+  viewerHasHyped: Boolean!
   viewerHasSaved: Boolean!
   viewerVote: String
   visibility: Visibility!
@@ -532,7 +533,10 @@ input UpdateProfileInput {
   bio: String
   displayName: String
   interests: [String!]
+  messageSoundId: String
+  notificationSoundId: String
   profileImageUrl: String
+  voteSoundId: String
 }
 
 type UserGql {
@@ -541,10 +545,13 @@ type UserGql {
   email: String!
   id: ID!
   interests: [String!]!
+  messageSoundId: String
+  notificationSoundId: String
   profileImageUrl: String
   role: UserRole!
   roles: [UserRole!]!
   username: String!
+  voteSoundId: String
 }
 
 enum UserRole {

@@ -181,7 +181,8 @@ export class PostsResolver {
       return this.postsService.toGql(post, context.req?.user?.id);
     },
   })
-  postVoteUpdated(@Args('postId', { type: () => ID }) _postId: string) {
+  postVoteUpdated(@Args('postId', { type: () => ID }) postId: string) {
+    void postId;
     return pubsub.asyncIterableIterator(POST_VOTE_UPDATED);
   }
 }

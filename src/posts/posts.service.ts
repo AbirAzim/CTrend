@@ -51,10 +51,7 @@ export class PostsService implements OnModuleInit {
     // created with likesDisabled=true. New posts always start with hype enabled.
     try {
       await this.postModel
-        .updateMany(
-          { likesDisabled: true },
-          { $set: { likesDisabled: false } },
-        )
+        .updateMany({ likesDisabled: true }, { $set: { likesDisabled: false } })
         .exec();
     } catch {
       // non-fatal
@@ -111,7 +108,10 @@ export class PostsService implements OnModuleInit {
       .find({ status: PostStatus.SCHEDULED, scheduledAt: { $lte: new Date() } })
       .exec();
     for (const post of due) {
+      const goLiveAt = post.scheduledAt ?? new Date();
       post.status = PostStatus.PUBLISHED;
+      // Feed "posted" time should reflect go-live, not draft creation time.
+      post.createdAt = goLiveAt;
       await post.save();
       await this.publishNewPost(post._id.toHexString());
     }
@@ -246,8 +246,7 @@ export class PostsService implements OnModuleInit {
       // Only notify on a fresh hype (not on re-asserting the same reaction)
       if (kind === 'hype' && result.upsertedCount > 0) {
         const actor = await this.usersService.findById(userId);
-        const name =
-          actor?.displayName?.trim() || actor?.username || 'Someone';
+        const name = actor?.displayName?.trim() || actor?.username || 'Someone';
         await this.notificationsService.createOrUpdateGrouped({
           userId: post.createdBy.toHexString(),
           type: 'POST_HYPE',
@@ -570,10 +569,19 @@ export class PostsService implements OnModuleInit {
       ]);
       mySelected = voteIndex;
     }
-    const [viewerHasSaved, recentComments] = await Promise.all([
+    const [viewerHasSaved, viewerHasHyped, recentComments] = await Promise.all([
       viewerId
         ? this.savedPostModel
             .exists({ userId: new Types.ObjectId(viewerId), postId: post._id })
+            .exec()
+        : Promise.resolve(null),
+      viewerId
+        ? this.postReactionModel
+            .exists({
+              userId: new Types.ObjectId(viewerId),
+              postId: post._id,
+              kind: 'hype',
+            })
             .exec()
         : Promise.resolve(null),
       this.commentsService.listMostRecentByPost(
@@ -612,6 +620,7 @@ export class PostsService implements OnModuleInit {
       hypeCount,
       saveCount,
       viewerHasSaved: !!viewerHasSaved,
+      viewerHasHyped: !!viewerHasHyped,
       recentComments,
       totalVotes: stats.totalVotes,
       upvoteCount: stats.countsPerOption[0] ?? 0,

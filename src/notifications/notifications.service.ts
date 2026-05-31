@@ -82,11 +82,17 @@ export class NotificationsService {
       .exec();
 
     if (existing) {
-      // Same actor as last time → no-op (prevents bouncing on like/unlike/like)
-      if (existing.latestActorId === params.actorId) {
+      // Same actor re-hyping after unhype: bump timestamp and re-notify.
+      // Other grouped types still no-op on duplicate actor to avoid like/unlike spam.
+      if (
+        existing.latestActorId === params.actorId &&
+        params.type !== 'POST_HYPE'
+      ) {
         return this.toGql(existing);
       }
-      existing.actorCount += 1;
+      if (existing.latestActorId !== params.actorId) {
+        existing.actorCount += 1;
+      }
       existing.latestActorId = params.actorId;
       existing.latestActorName = params.actorName;
       existing.body = this.formatGroupedBody(

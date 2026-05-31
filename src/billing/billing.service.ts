@@ -1,8 +1,4 @@
-import {
-  BadRequestException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -88,10 +84,11 @@ export class BillingService {
     };
   }
 
-  async verifyBkashPayment(_payloadJson: string): Promise<{
+  async verifyBkashPayment(payloadJson: string): Promise<{
     success: boolean;
     message?: string;
   }> {
+    void payloadJson;
     return {
       success: false,
       message:

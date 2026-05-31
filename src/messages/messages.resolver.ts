@@ -177,8 +177,9 @@ export class MessagesResolver {
   })
   @UseGuards(GqlAuthGuard)
   typingIndicator(
-    @Args('conversationId', { type: () => ID }) _conversationId: string,
+    @Args('conversationId', { type: () => ID }) conversationId: string,
   ) {
+    void conversationId;
     return pubsub.asyncIterableIterator(TYPING_INDICATOR);
   }
 

@@ -93,9 +93,11 @@ export class OrganizationsService {
 
   async setPremiumFromWebhook(
     organizationId: string,
-    _stripeCustomerId?: string,
-    _stripeSubscriptionId?: string,
+    stripeCustomerId?: string,
+    stripeSubscriptionId?: string,
   ) {
+    void stripeCustomerId;
+    void stripeSubscriptionId;
     const org = await this.orgModel.findById(organizationId);
     if (!org) return;
     org.subscriptionPlan = SubscriptionPlan.PREMIUM;

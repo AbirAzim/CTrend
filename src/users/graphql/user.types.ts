@@ -41,4 +41,10 @@ export class UserGql {
 
   @Field(() => String, { nullable: true })
   messageSoundId?: string | null;
+
+  @Field()
+  emailVerified: boolean;
+
+  @Field()
+  createdAt: Date;
 }

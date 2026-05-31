@@ -28,6 +28,7 @@ export class NotificationsService {
     body: string;
     referenceId?: string;
     referenceType?: string;
+    postId?: string;
     actorId?: string;
     actorName?: string;
   }): Promise<NotificationGql> {
@@ -38,6 +39,7 @@ export class NotificationsService {
       body: params.body,
       referenceId: params.referenceId,
       referenceType: params.referenceType,
+      postId: params.postId,
       actorCount: 1,
       latestActorId: params.actorId,
       latestActorName: params.actorName,
@@ -63,6 +65,7 @@ export class NotificationsService {
     type: NotificationType;
     referenceId: string;
     referenceType: string;
+    postId?: string;
     actorId: string;
     actorName: string;
     /** "{name} hyped your post" -> verbPhrase = "hyped your post" */
@@ -86,7 +89,8 @@ export class NotificationsService {
       // Other grouped types still no-op on duplicate actor to avoid like/unlike spam.
       if (
         existing.latestActorId === params.actorId &&
-        params.type !== 'POST_HYPE'
+        params.type !== 'POST_HYPE' &&
+        params.type !== 'COMMENT_REACTION'
       ) {
         return this.toGql(existing);
       }
@@ -95,6 +99,7 @@ export class NotificationsService {
       }
       existing.latestActorId = params.actorId;
       existing.latestActorName = params.actorName;
+      if (params.postId) existing.postId = params.postId;
       existing.body = this.formatGroupedBody(
         params.actorName,
         existing.actorCount,
@@ -118,6 +123,7 @@ export class NotificationsService {
       body: this.formatGroupedBody(params.actorName, 1, params.verbPhrase),
       referenceId: params.referenceId,
       referenceType: params.referenceType,
+      postId: params.postId,
       actorId: params.actorId,
       actorName: params.actorName,
     });
@@ -201,6 +207,7 @@ export class NotificationsService {
       body: doc.body,
       referenceId: doc.referenceId,
       referenceType: doc.referenceType,
+      postId: doc.postId,
       actorCount: doc.actorCount ?? 1,
       latestActorId: doc.latestActorId,
       latestActorName: doc.latestActorName,

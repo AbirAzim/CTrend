@@ -13,6 +13,10 @@ import {
   isNotificationSoundId,
   isVoteSoundId,
 } from './sound-preferences.constants';
+import {
+  ListUsersQuery,
+  normalizeListUsersQuery,
+} from './dto/list-users.input';
 
 @Injectable()
 export class UsersService {
@@ -48,6 +52,8 @@ export class UsersService {
       messageSoundId: isMessageSoundId(doc.messageSoundId ?? '')
         ? doc.messageSoundId
         : DEFAULT_MESSAGE_SOUND_ID,
+      emailVerified: doc.emailVerified ?? false,
+      createdAt: (doc as UserDocument & { createdAt?: Date }).createdAt ?? new Date(),
     };
   }
 
@@ -189,21 +195,65 @@ export class UsersService {
     return { $or: [{ roles: role }, { role }] };
   }
 
+  private buildListQuery(options: ListUsersQuery = {}): {
+    filter: Record<string, unknown>;
+    sort: Record<string, 1 | -1>;
+  } {
+    const clauses: Record<string, unknown>[] = [];
+    const roleFilter = this.buildListFilter(options.role as UserRole | undefined);
+    if (Object.keys(roleFilter).length > 0) clauses.push(roleFilter);
+
+    if (options.status === 'verified') {
+      clauses.push({ emailVerified: true });
+    } else if (options.status === 'unverified') {
+      clauses.push({ emailVerified: { $ne: true } });
+    }
+
+    const search = options.search?.trim();
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = { $regex: escaped, $options: 'i' };
+      const by = options.searchBy ?? 'all';
+      if (by === 'email') clauses.push({ email: regex });
+      else if (by === 'username') clauses.push({ username: regex });
+      else if (by === 'name') clauses.push({ displayName: regex });
+      else {
+        clauses.push({
+          $or: [{ email: regex }, { displayName: regex }, { username: regex }],
+        });
+      }
+    }
+
+    let filter: Record<string, unknown> = {};
+    if (clauses.length === 1) filter = clauses[0]!;
+    else if (clauses.length > 1) filter = { $and: clauses };
+
+    const sortOrder = options.sortOrder === 'asc' ? 1 : -1;
+    const sort: Record<string, 1 | -1> =
+      options.sortBy === 'name'
+        ? { displayName: sortOrder, username: sortOrder, createdAt: -1 }
+        : { createdAt: sortOrder };
+
+    return { filter, sort };
+  }
+
   async listUsers(
     skip = 0,
     take = 50,
-    role?: UserRole,
+    query: ListUsersQuery = {},
   ): Promise<UserDocument[]> {
+    const { filter, sort } = this.buildListQuery(query);
     return this.userModel
-      .find(this.buildListFilter(role))
+      .find(filter)
       .skip(skip)
       .limit(take)
-      .sort({ createdAt: -1 })
+      .sort(sort)
       .exec();
   }
 
-  async listUsersCount(role?: UserRole): Promise<number> {
-    return this.userModel.countDocuments(this.buildListFilter(role)).exec();
+  async listUsersCount(query: ListUsersQuery = {}): Promise<number> {
+    const { filter } = this.buildListQuery(query);
+    return this.userModel.countDocuments(filter).exec();
   }
 
   async countUsers(): Promise<number> {

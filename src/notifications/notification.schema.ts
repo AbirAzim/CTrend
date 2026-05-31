@@ -8,6 +8,8 @@ export type NotificationType =
   | 'NEW_POST_FRIEND'
   | 'POST_HYPE'
   | 'POST_COMMENT'
+  | 'COMMENT_REPLY'
+  | 'COMMENT_REACTION'
   | 'SYSTEM';
 
 export type NotificationDocument = HydratedDocument<Notification>;
@@ -26,6 +28,8 @@ export class Notification {
       'NEW_POST_FRIEND',
       'POST_HYPE',
       'POST_COMMENT',
+      'COMMENT_REPLY',
+      'COMMENT_REACTION',
       'SYSTEM',
     ],
     required: true,
@@ -43,6 +47,10 @@ export class Notification {
 
   @Prop({ type: String })
   referenceType?: string;
+
+  /** Post id for deep-linking comment notifications */
+  @Prop({ type: String })
+  postId?: string;
 
   /** Number of distinct actors that triggered this grouped notification */
   @Prop({ type: Number, default: 1 })

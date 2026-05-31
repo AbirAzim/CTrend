@@ -54,6 +54,16 @@ export class CommentsResolver {
 
   @Mutation(() => CommentGql)
   @UseGuards(GqlAuthGuard)
+  async setCommentReaction(
+    @CurrentUser() user: ReqUser,
+    @Args('commentId', { type: () => ID }) commentId: string,
+    @Args('emoji', { type: () => String, nullable: true }) emoji: string | null,
+  ) {
+    return this.commentsService.setCommentReaction(user.id, commentId, emoji);
+  }
+
+  @Mutation(() => CommentGql)
+  @UseGuards(GqlAuthGuard)
   async setCommentLike(
     @CurrentUser() user: ReqUser,
     @Args('commentId', { type: () => ID }) commentId: string,

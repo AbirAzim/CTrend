@@ -4,6 +4,13 @@ import { UserRole } from '../common/enums';
 
 export type UserDocument = HydratedDocument<User>;
 
+/** A registered device push token (FCM/APNs) for mobile notifications. */
+export interface PushToken {
+  token: string;
+  platform?: string;
+  updatedAt: Date;
+}
+
 @Schema({ timestamps: true })
 export class User {
   @Prop({ required: true, unique: true, trim: true })
@@ -62,6 +69,19 @@ export class User {
 
   @Prop()
   passwordResetExpiry?: Date;
+
+  /** Registered device push tokens (FCM/APNs) for mobile push notifications. */
+  @Prop({
+    type: [
+      {
+        token: { type: String, required: true },
+        platform: { type: String },
+        updatedAt: { type: Date, default: Date.now },
+      },
+    ],
+    default: [],
+  })
+  pushTokens: PushToken[];
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

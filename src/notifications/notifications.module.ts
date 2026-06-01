@@ -4,6 +4,7 @@ import { Notification, NotificationSchema } from './notification.schema';
 import { NotificationsService } from './notifications.service';
 import { NotificationsResolver } from './notifications.resolver';
 import { UsersModule } from '../users/users.module';
+import { PushModule } from '../push/push.module';
 
 @Module({
   imports: [
@@ -11,6 +12,7 @@ import { UsersModule } from '../users/users.module';
       { name: Notification.name, schema: NotificationSchema },
     ]),
     UsersModule,
+    PushModule,
   ],
   providers: [NotificationsService, NotificationsResolver],
   exports: [NotificationsService],

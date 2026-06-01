@@ -146,6 +146,7 @@ CORS_ORIGIN=             # comma-separated allowed origins
 PORT=                    # default 4000
 NODE_ENV=                # set to "production" to disable GraphQL playground
 FOOTBALL_DATA_API_KEY=   # football-data.org free API key for World Cup fixtures
+FIREBASE_SERVICE_ACCOUNT= # optional, enables FCM mobile push; Firebase service-account JSON (raw or base64)
 ```
 
 ## Campaign System

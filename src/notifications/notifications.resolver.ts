@@ -3,7 +3,9 @@ import {
   ID,
   Int,
   Mutation,
+  Parent,
   Query,
+  ResolveField,
   Resolver,
   Subscription,
 } from '@nestjs/graphql';
@@ -22,9 +24,19 @@ import { pubsub, NEW_NOTIFICATION } from '../pubsub';
 
 type ReqUser = { id: string };
 
-@Resolver()
+@Resolver(() => NotificationGql)
 export class NotificationsResolver {
   constructor(private notificationsService: NotificationsService) {}
+
+  /** Profile picture of the latest actor (commenter/liker/etc.), or null. */
+  @ResolveField(() => String, { nullable: true })
+  async latestActorAvatar(
+    @Parent() notification: NotificationGql,
+  ): Promise<string | null> {
+    return this.notificationsService.resolveActorAvatar(
+      notification.latestActorId,
+    );
+  }
 
   @Query(() => NotificationsPageGql)
   @UseGuards(GqlAuthGuard)

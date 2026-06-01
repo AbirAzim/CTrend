@@ -12,6 +12,7 @@ import {
 } from './graphql/notification.types';
 import { pubsub, NEW_NOTIFICATION } from '../pubsub';
 import { UsersService } from '../users/users.service';
+import { PushService } from '../push/push.service';
 
 @Injectable()
 export class NotificationsService {
@@ -19,6 +20,7 @@ export class NotificationsService {
     @InjectModel(Notification.name)
     private notificationModel: Model<NotificationDocument>,
     private usersService: UsersService,
+    private pushService: PushService,
   ) {}
 
   async create(params: {
@@ -50,6 +52,7 @@ export class NotificationsService {
       newNotification: gql,
       recipientId: params.userId,
     });
+    await this.sendBellPush(params.userId, gql);
     return gql;
   }
 
@@ -113,6 +116,7 @@ export class NotificationsService {
         newNotification: gql,
         recipientId: params.userId,
       });
+      await this.sendBellPush(params.userId, gql);
       return gql;
     }
 
@@ -197,6 +201,34 @@ export class NotificationsService {
       { $set: { read: true } },
     );
     return true;
+  }
+
+  /** Resolve the profile picture URL of a notification's latest actor (null if none). */
+  async resolveActorAvatar(actorId?: string | null): Promise<string | null> {
+    if (!actorId) return null;
+    const actor = await this.usersService.findById(actorId);
+    return actor?.profileImageUrl ?? null;
+  }
+
+  /**
+   * Send a data-only, high-priority FCM "BELL" push for a freshly created or
+   * updated notification. Failures are swallowed inside PushService so they
+   * never break the originating action.
+   */
+  private async sendBellPush(
+    recipientId: string,
+    gql: NotificationGql,
+  ): Promise<void> {
+    const actorAvatar = await this.resolveActorAvatar(gql.latestActorId);
+    await this.pushService.sendDataToUser(recipientId, {
+      type: 'BELL',
+      referenceType: gql.referenceType ?? '',
+      referenceId: gql.referenceId ?? '',
+      postId: gql.postId ?? '',
+      title: gql.title,
+      body: gql.body,
+      actorAvatar: actorAvatar ?? '',
+    });
   }
 
   private toGql(doc: NotificationDocument): NotificationGql {

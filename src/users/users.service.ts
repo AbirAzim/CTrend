@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { randomInt } from 'crypto';
-import { User, UserDocument } from './user.schema';
+import { User, UserDocument, PushToken } from './user.schema';
 import { UserGql } from './graphql/user.types';
 import { UserRole } from '../common/enums';
 import { ListUsersQuery } from './dto/list-users.input';
@@ -276,6 +276,80 @@ export class UsersService {
   async findAllIds(): Promise<string[]> {
     const docs = await this.userModel.find({}, { _id: 1 }).lean().exec();
     return docs.map((d) => (d._id as Types.ObjectId).toHexString());
+  }
+
+  // ── Push tokens ────────────────────────────────────────────────
+
+  /**
+   * Register (upsert) a device push token for a user. A given token can only
+   * belong to one user, so it is first detached from any other account (handles
+   * the case where a device is re-used by a different user after logout).
+   */
+  async registerPushToken(
+    userId: string,
+    token: string,
+    platform?: string,
+  ): Promise<boolean> {
+    const trimmed = token?.trim();
+    if (!trimmed || !Types.ObjectId.isValid(userId)) return false;
+    const oid = new Types.ObjectId(userId);
+
+    // Detach this token from every account (including this one) so we can re-add a fresh entry.
+    await this.userModel
+      .updateMany(
+        { 'pushTokens.token': trimmed },
+        { $pull: { pushTokens: { token: trimmed } } },
+      )
+      .exec();
+
+    await this.userModel
+      .updateOne(
+        { _id: oid },
+        {
+          $push: {
+            pushTokens: {
+              token: trimmed,
+              platform: platform?.trim() || undefined,
+              updatedAt: new Date(),
+            },
+          },
+        },
+      )
+      .exec();
+    return true;
+  }
+
+  async removePushToken(userId: string, token: string): Promise<boolean> {
+    const trimmed = token?.trim();
+    if (!trimmed || !Types.ObjectId.isValid(userId)) return false;
+    await this.userModel
+      .updateOne(
+        { _id: new Types.ObjectId(userId) },
+        { $pull: { pushTokens: { token: trimmed } } },
+      )
+      .exec();
+    return true;
+  }
+
+  /** All registered device tokens for a user (used by the push sender). */
+  async getPushTokens(userId: string): Promise<string[]> {
+    if (!Types.ObjectId.isValid(userId)) return [];
+    const doc = await this.userModel
+      .findById(userId, { pushTokens: 1 })
+      .lean<{ pushTokens?: PushToken[] }>()
+      .exec();
+    return (doc?.pushTokens ?? []).map((t) => t.token).filter(Boolean);
+  }
+
+  /** Purge tokens that FCM reported as invalid/unregistered, across all users. */
+  async removePushTokensEverywhere(tokens: string[]): Promise<void> {
+    if (!tokens.length) return;
+    await this.userModel
+      .updateMany(
+        { 'pushTokens.token': { $in: tokens } },
+        { $pull: { pushTokens: { token: { $in: tokens } } } },
+      )
+      .exec();
   }
 }
 

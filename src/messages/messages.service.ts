@@ -12,6 +12,7 @@ import { UsersService } from '../users/users.service';
 import { FollowsService } from '../follows/follows.service';
 import { PresenceService } from '../presence/presence.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PushService } from '../push/push.service';
 import {
   ConversationGql,
   MessageGql,
@@ -47,6 +48,7 @@ export class MessagesService {
     private followsService: FollowsService,
     private presenceService: PresenceService,
     private notificationsService: NotificationsService,
+    private pushService: PushService,
   ) {}
 
   // ── Conversations ──────────────────────────────────────────────
@@ -488,6 +490,24 @@ export class MessagesService {
     // messages. Unread message counts are tracked per-conversation via
     // unreadCounts on the Conversation document and surfaced through the
     // messenger FAB badge, not the notification bell.
+
+    // Mobile push: send a data-only, high-priority FCM message to every other
+    // participant so their app (even backgrounded) can surface the message.
+    // Tokens are looked up inside PushService; recipients without one are skipped.
+    const recipientIds = convo.participantIds
+      .filter((pid) => !pid.equals(viewerOid))
+      .map((pid) => pid.toHexString());
+    await Promise.all(
+      recipientIds.map((recipientId) =>
+        this.pushService.sendDataToUser(recipientId, {
+          type: 'MESSAGE',
+          conversationId: convo._id.toHexString(),
+          senderName: gql.senderName,
+          senderAvatar: gql.senderAvatar ?? '',
+          body: gql.text ?? '',
+        }),
+      ),
+    );
 
     return gql;
   }

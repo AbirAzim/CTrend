@@ -175,6 +175,7 @@ SMTP variables are documented for email (`SMTP_HOST`, `SMTP_USER`, `SMTP_PASS`, 
 ## API documentation for frontend
 
 - **`docs/frontend-post-engagement-api.md`** — engagement fields, saves, reactions, comment likes, voters, anonymous votes, and GraphQL examples.
+- **`docs/firebase-android-setup.md`** — Google services Gradle plugin + Firebase BoM for the Android client (`google-services.json`).
 
 Do **not** hand-edit `src/schema.gql` for schema changes — it is regenerated from decorators at startup.
 

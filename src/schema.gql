@@ -301,6 +301,7 @@ type Mutation {
   processMatchResult(campaignId: ID, fixtureId: ID!): CampaignWinnerGql!
   promoteToAdmin(email: String!): UserGql!
   register(input: RegisterInput!): AuthPayloadGql!
+  registerPushToken(platform: String, token: String!): Boolean!
   rejectAdminPromotion(token: String!): Boolean!
   removeAdmin(email: String!): UserGql!
   removeUser(email: String!): Boolean!
@@ -325,6 +326,7 @@ type Mutation {
   syncWorldCupFixtures: Boolean!
   toggleCampaign(id: ID!, isActive: Boolean!): CampaignGql!
   unfriend(userId: ID!): Boolean!
+  unregisterPushToken(token: String!): Boolean!
   updateCampaign(id: ID!, input: UpdateCampaignInput!): CampaignGql!
   updateCategory(id: ID!, name: String!): CategoryGql!
   updatePost(input: UpdatePostInput!, postId: ID!): PostGql!
@@ -343,6 +345,7 @@ type NotificationGql {
   body: String!
   createdAt: DateTime!
   id: ID!
+  latestActorAvatar: String
   latestActorId: String
   latestActorName: String
   postId: String

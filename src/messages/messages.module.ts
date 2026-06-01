@@ -7,6 +7,7 @@ import { MessagesResolver } from './messages.resolver';
 import { UsersModule } from '../users/users.module';
 import { FollowsModule } from '../follows/follows.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { PushModule } from '../push/push.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     UsersModule,
     FollowsModule,
     NotificationsModule,
+    PushModule,
   ],
   providers: [MessagesService, MessagesResolver],
   exports: [MessagesService],

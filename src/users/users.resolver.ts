@@ -134,6 +134,27 @@ export class UsersResolver {
     return this.usersService.toGql(updated);
   }
 
+  /** Register the caller's device push token (FCM/APNs) for mobile notifications. */
+  @Mutation(() => Boolean)
+  @UseGuards(GqlAuthGuard)
+  async registerPushToken(
+    @CurrentUser() user: ReqUser,
+    @Args('token') token: string,
+    @Args('platform', { nullable: true }) platform?: string,
+  ): Promise<boolean> {
+    return this.usersService.registerPushToken(user.id, token, platform);
+  }
+
+  /** Remove a device push token (e.g. on logout) so the device stops receiving pushes. */
+  @Mutation(() => Boolean)
+  @UseGuards(GqlAuthGuard)
+  async unregisterPushToken(
+    @CurrentUser() user: ReqUser,
+    @Args('token') token: string,
+  ): Promise<boolean> {
+    return this.usersService.removePushToken(user.id, token);
+  }
+
   /** Anyone with a valid promotion token can reject (decline) their admin promotion. */
   @Mutation(() => Boolean)
   async rejectAdminPromotion(@Args('token') token: string): Promise<boolean> {

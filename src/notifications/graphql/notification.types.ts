@@ -32,6 +32,10 @@ export class NotificationGql {
   @Field({ nullable: true })
   latestActorName?: string;
 
+  /** Profile picture URL of the latest actor (resolved on demand). */
+  @Field({ nullable: true })
+  latestActorAvatar?: string;
+
   @Field()
   read: boolean;
 

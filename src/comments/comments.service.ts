@@ -81,6 +81,7 @@ export class CommentsService {
           referenceId: parentComment._id.toHexString(),
           referenceType: 'Comment',
           postId,
+          commentId: doc._id.toHexString(),
           actorId: userId,
           actorName: name,
           verbPhrase: 'replied to your comment',
@@ -93,6 +94,7 @@ export class CommentsService {
           referenceId: postId,
           referenceType: 'Post',
           postId,
+          commentId: doc._id.toHexString(),
           actorId: userId,
           actorName: name,
           verbPhrase: 'commented on your post',
@@ -106,61 +108,144 @@ export class CommentsService {
     return doc;
   }
 
+  private sortReactionCounts(
+    reactions: CommentReactionCountGql[],
+  ): CommentReactionCountGql[] {
+    const order = new Map(COMMENT_REACTION_EMOJIS.map((e, i) => [e, i]));
+    return [...reactions].sort(
+      (a, b) =>
+        (order.get(a.emoji as (typeof COMMENT_REACTION_EMOJIS)[number]) ?? 99) -
+        (order.get(b.emoji as (typeof COMMENT_REACTION_EMOJIS)[number]) ?? 99),
+    );
+  }
+
   private async reactionCountsForComment(
     commentId: Types.ObjectId,
   ): Promise<CommentReactionCountGql[]> {
+    const map = await this.batchReactionCountsMap([commentId]);
+    return map.get(commentId.toHexString()) ?? [];
+  }
+
+  /** One aggregation for all comment reactions on a post (avoids N+1). */
+  private async batchReactionCountsMap(
+    commentIds: Types.ObjectId[],
+  ): Promise<Map<string, CommentReactionCountGql[]>> {
+    if (commentIds.length === 0) return new Map();
+
     const rows = await this.commentReactionModel
       .aggregate<{
-        _id: string;
+        commentId: Types.ObjectId;
+        emoji: string;
         count: number;
       }>([
-        { $match: { commentId } },
-        { $group: { _id: '$emoji', count: { $sum: 1 } } },
+        { $match: { commentId: { $in: commentIds } } },
+        {
+          $group: {
+            _id: { commentId: '$commentId', emoji: '$emoji' },
+            count: { $sum: 1 },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            commentId: '$_id.commentId',
+            emoji: '$_id.emoji',
+            count: 1,
+          },
+        },
       ])
       .exec();
 
-    const order = new Map(COMMENT_REACTION_EMOJIS.map((e, i) => [e, i]));
-    return rows
-      .map((r) => ({ emoji: r._id, count: r.count }))
-      .sort(
-        (a, b) =>
-          (order.get(a.emoji as (typeof COMMENT_REACTION_EMOJIS)[number]) ??
-            99) -
-          (order.get(b.emoji as (typeof COMMENT_REACTION_EMOJIS)[number]) ??
-            99),
+    const map = new Map<string, CommentReactionCountGql[]>();
+    for (const row of rows) {
+      const key = row.commentId.toHexString();
+      const list = map.get(key) ?? [];
+      list.push({ emoji: row.emoji, count: row.count });
+      map.set(key, list);
+    }
+    for (const [key, list] of map) {
+      map.set(key, this.sortReactionCounts(list));
+    }
+    return map;
+  }
+
+  private async batchViewerReactionsMap(
+    commentIds: Types.ObjectId[],
+    viewerId: string,
+  ): Promise<Map<string, string>> {
+    if (commentIds.length === 0) return new Map();
+    const rows = await this.commentReactionModel
+      .find({
+        commentId: { $in: commentIds },
+        userId: new Types.ObjectId(viewerId),
+      })
+      .select({ commentId: 1, emoji: 1 })
+      .lean()
+      .exec();
+    return new Map(rows.map((r) => [r.commentId.toHexString(), r.emoji]));
+  }
+
+  private rowsToGql(
+    rows: CommentDocument[],
+    authorById: Map<string, UserDocument>,
+    reactionsByCommentId: Map<string, CommentReactionCountGql[]>,
+    viewerReactionsByCommentId: Map<string, string>,
+  ): CommentGql[] {
+    return rows.map((c) => {
+      const author = authorById.get(c.userId.toHexString());
+      if (!author) throw new NotFoundException('Author missing');
+
+      const reactions = reactionsByCommentId.get(c._id.toHexString()) ?? [];
+      const viewerReaction = viewerReactionsByCommentId.get(
+        c._id.toHexString(),
       );
+      const likeCount = reactions.reduce((sum, r) => sum + r.count, 0);
+
+      return {
+        id: c._id.toHexString(),
+        postId: c.postId.toHexString(),
+        author: this.usersService.toGql(author),
+        content: c.content,
+        parentId: c.parentId?.toHexString(),
+        reactions,
+        viewerReaction,
+        likeCount,
+        viewerHasLiked: viewerReaction === '❤️' || viewerReaction === '👍',
+        createdAt: c.createdAt ?? new Date(),
+      };
+    });
+  }
+
+  private async hydrateCommentsToGql(
+    rows: CommentDocument[],
+    viewerId?: string,
+  ): Promise<CommentGql[]> {
+    if (rows.length === 0) return [];
+
+    const commentIds = rows.map((c) => c._id);
+    const userIds = rows.map((c) => c.userId.toHexString());
+
+    const [users, reactionsByCommentId, viewerReactionsByCommentId] =
+      await Promise.all([
+        this.usersService.findByIds(userIds),
+        this.batchReactionCountsMap(commentIds),
+        viewerId
+          ? this.batchViewerReactionsMap(commentIds, viewerId)
+          : Promise.resolve(new Map<string, string>()),
+      ]);
+
+    const authorById = new Map(users.map((u) => [u._id.toHexString(), u]));
+    return this.rowsToGql(
+      rows,
+      authorById,
+      reactionsByCommentId,
+      viewerReactionsByCommentId,
+    );
   }
 
   async toGql(c: CommentDocument, viewerId?: string): Promise<CommentGql> {
-    const author = await this.usersService.findById(c.userId.toString());
-    if (!author) throw new NotFoundException('Author missing');
-
-    const reactions = await this.reactionCountsForComment(c._id);
-    const likeCount = reactions.reduce((sum, r) => sum + r.count, 0);
-
-    let viewerReaction: string | undefined;
-    if (viewerId) {
-      const mine = await this.commentReactionModel
-        .findOne({
-          commentId: c._id,
-          userId: new Types.ObjectId(viewerId),
-        })
-        .exec();
-      viewerReaction = mine?.emoji;
-    }
-
-    return {
-      id: c._id.toHexString(),
-      postId: c.postId.toHexString(),
-      author: this.usersService.toGql(author as UserDocument),
-      content: c.content,
-      parentId: c.parentId?.toHexString(),
-      reactions,
-      viewerReaction,
-      likeCount,
-      viewerHasLiked: viewerReaction === '❤️' || viewerReaction === '👍',
-      createdAt: c.createdAt ?? new Date(),
-    };
+    const [row] = await this.hydrateCommentsToGql([c], viewerId);
+    return row;
   }
 
   async listByPost(postId: string, viewerId?: string): Promise<CommentGql[]> {
@@ -168,11 +253,7 @@ export class CommentsService {
       .find({ postId: new Types.ObjectId(postId) })
       .sort({ createdAt: 1 })
       .exec();
-    const out: CommentGql[] = [];
-    for (const c of rows) {
-      out.push(await this.toGql(c, viewerId));
-    }
-    return out;
+    return this.hydrateCommentsToGql(rows, viewerId);
   }
 
   async listMostRecentByPost(
@@ -188,7 +269,7 @@ export class CommentsService {
       .sort({ createdAt: -1 })
       .limit(limit)
       .exec();
-    return Promise.all(rows.map((c) => this.toGql(c, viewerId)));
+    return this.hydrateCommentsToGql(rows, viewerId);
   }
 
   async countByPost(postId: string): Promise<number> {
@@ -240,6 +321,7 @@ export class CommentsService {
           referenceId: comment._id.toHexString(),
           referenceType: 'Comment',
           postId,
+          commentId: comment._id.toHexString(),
           actorId: userId,
           actorName: name,
           verbPhrase: `reacted ${emoji} to your comment`,

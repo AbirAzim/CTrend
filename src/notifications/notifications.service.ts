@@ -6,6 +6,7 @@ import {
   NotificationDocument,
   NotificationType,
 } from './notification.schema';
+import { Follow, FollowDocument, FollowStatus } from '../follows/follow.schema';
 import {
   NotificationGql,
   NotificationsPageGql,
@@ -19,6 +20,8 @@ export class NotificationsService {
   constructor(
     @InjectModel(Notification.name)
     private notificationModel: Model<NotificationDocument>,
+    @InjectModel(Follow.name)
+    private followModel: Model<FollowDocument>,
     private usersService: UsersService,
     private pushService: PushService,
   ) {}
@@ -31,6 +34,7 @@ export class NotificationsService {
     referenceId?: string;
     referenceType?: string;
     postId?: string;
+    commentId?: string;
     actorId?: string;
     actorName?: string;
   }): Promise<NotificationGql> {
@@ -42,6 +46,7 @@ export class NotificationsService {
       referenceId: params.referenceId,
       referenceType: params.referenceType,
       postId: params.postId,
+      commentId: params.commentId,
       actorCount: 1,
       latestActorId: params.actorId,
       latestActorName: params.actorName,
@@ -57,7 +62,7 @@ export class NotificationsService {
   }
 
   /**
-   * For grouped notifications (POST_HYPE, POST_COMMENT): find an existing
+   * For grouped notifications (POST_HYPE, POST_VOTE, POST_COMMENT): find an existing
    * UNREAD notification for the same recipient+type+referenceId. If found,
    * increment actorCount, update latestActor*, refresh title/body, and bump
    * createdAt. If not found, create a new one. Skips no-op when the same
@@ -69,14 +74,16 @@ export class NotificationsService {
     referenceId: string;
     referenceType: string;
     postId?: string;
-    actorId: string;
+    commentId?: string;
+    /** Omitted for anonymous actions (e.g. anonymous vote) — no avatar/profile link. */
+    actorId?: string;
     actorName: string;
     /** "{name} hyped your post" -> verbPhrase = "hyped your post" */
     verbPhrase: string;
     title: string;
   }): Promise<NotificationGql | null> {
-    // Don't notify yourself
-    if (params.userId === params.actorId) return null;
+    // Don't notify yourself (identified actors only)
+    if (params.actorId && params.userId === params.actorId) return null;
 
     const existing = await this.notificationModel
       .findOne({
@@ -84,25 +91,43 @@ export class NotificationsService {
         type: params.type,
         referenceId: params.referenceId,
         read: false,
+        archived: { $ne: true },
       })
       .exec();
 
     if (existing) {
+      const isCommentActivity =
+        params.type === 'POST_COMMENT' || params.type === 'COMMENT_REPLY';
       // Same actor re-hyping after unhype: bump timestamp and re-notify.
-      // Other grouped types still no-op on duplicate actor to avoid like/unlike spam.
+      // Comment types always bump (new comment/reply). Others no-op on duplicate actor.
+      const sameIdentifiedActor =
+        params.actorId != null &&
+        existing.latestActorId === params.actorId;
       if (
-        existing.latestActorId === params.actorId &&
+        sameIdentifiedActor &&
         params.type !== 'POST_HYPE' &&
-        params.type !== 'COMMENT_REACTION'
+        params.type !== 'POST_VOTE' &&
+        params.type !== 'COMMENT_REACTION' &&
+        !isCommentActivity
       ) {
         return this.toGql(existing);
       }
-      if (existing.latestActorId !== params.actorId) {
+      const distinctActor =
+        params.actorId != null
+          ? existing.latestActorId !== params.actorId
+          : true;
+      if (distinctActor) {
         existing.actorCount += 1;
       }
-      existing.latestActorId = params.actorId;
+      if (params.actorId) {
+        existing.latestActorId = params.actorId;
+      } else {
+        existing.latestActorId = undefined;
+      }
       existing.latestActorName = params.actorName;
       if (params.postId) existing.postId = params.postId;
+      if (params.commentId) existing.commentId = params.commentId;
+      existing.read = false;
       existing.body = this.formatGroupedBody(
         params.actorName,
         existing.actorCount,
@@ -128,6 +153,7 @@ export class NotificationsService {
       referenceId: params.referenceId,
       referenceType: params.referenceType,
       postId: params.postId,
+      commentId: params.commentId,
       actorId: params.actorId,
       actorName: params.actorName,
     });
@@ -158,28 +184,173 @@ export class NotificationsService {
     return recipients.length;
   }
 
+  /**
+   * Mark FRIEND_REQUEST notifications resolved when recipient and requester are
+   * already mutual friends (e.g. accepted on profile, not via the bell).
+   */
+  async reconcileStaleFriendRequestNotifications(
+    userId: string,
+  ): Promise<void> {
+    const userOid = new Types.ObjectId(userId);
+    // Match unresolved copy (read flag alone can be stale in older rows).
+    const pending = await this.notificationModel
+      .find({
+        userId: userOid,
+        type: 'FRIEND_REQUEST',
+        title: 'New friend request',
+        archived: { $ne: true },
+        referenceId: { $exists: true, $nin: [null, ''] },
+      })
+      .select('referenceId')
+      .lean()
+      .exec();
+
+    if (!pending.length) return;
+
+    const refIds = [
+      ...new Set(
+        pending
+          .map((n) => n.referenceId)
+          .filter(
+            (id): id is string => typeof id === 'string' && id.length > 0,
+          ),
+      ),
+    ];
+    if (!refIds.length) return;
+
+    const friendIds = await this.getMutualFriendIdSet(userId);
+    const staleRefIds = refIds.filter((id) => friendIds.has(id));
+    await Promise.all(
+      staleRefIds.map((requesterId) =>
+        this.resolveFriendRequestNotifications(
+          userId,
+          requesterId,
+          'already_friends',
+        ),
+      ),
+    );
+  }
+
+  private friendRequestResolutionCopy(
+    actorName: string,
+    outcome: 'accepted' | 'rejected' | 'already_friends' | 'withdrawn',
+  ): { title: string; body: string } {
+    switch (outcome) {
+      case 'accepted':
+        return {
+          title: 'Friend request accepted',
+          body: `You accepted ${actorName}'s friend request`,
+        };
+      case 'rejected':
+        return {
+          title: 'Friend request declined',
+          body: `You declined ${actorName}'s friend request`,
+        };
+      case 'already_friends':
+        return {
+          title: "You're now friends",
+          body: `You and ${actorName} are friends`,
+        };
+      case 'withdrawn':
+        return {
+          title: 'Friend request withdrawn',
+          body: `${actorName} cancelled their friend request`,
+        };
+    }
+  }
+
+  /**
+   * Update in-app friend-request rows after accept/decline (any surface) or when
+   * friendship already exists. Publishes subscription updates for live UI sync.
+   */
+  async resolveFriendRequestNotifications(
+    recipientUserId: string,
+    requesterId: string,
+    outcome: 'accepted' | 'rejected' | 'already_friends' | 'withdrawn',
+  ): Promise<void> {
+    const requester = await this.usersService.findById(requesterId);
+    const actorName =
+      requester?.displayName?.trim() || requester?.username || 'Someone';
+    const { title, body } = this.friendRequestResolutionCopy(
+      actorName,
+      outcome,
+    );
+
+    const docs = await this.notificationModel
+      .find({
+        userId: new Types.ObjectId(recipientUserId),
+        type: 'FRIEND_REQUEST',
+        referenceId: requesterId,
+      })
+      .exec();
+
+    for (const doc of docs) {
+      doc.title = title;
+      doc.body = body;
+      doc.read = true;
+      await doc.save();
+      const gql = this.toGql(doc);
+      await pubsub.publish(NEW_NOTIFICATION, {
+        newNotification: gql,
+        recipientId: recipientUserId,
+      });
+    }
+  }
+
+  private async getMutualFriendIdSet(userId: string): Promise<Set<string>> {
+    const uid = new Types.ObjectId(userId);
+    const [followingRows, followerRows] = await Promise.all([
+      this.followModel
+        .find({ followerId: uid, status: FollowStatus.ACCEPTED })
+        .select('followingId')
+        .lean()
+        .exec(),
+      this.followModel
+        .find({ followingId: uid, status: FollowStatus.ACCEPTED })
+        .select('followerId')
+        .lean()
+        .exec(),
+    ]);
+    const followerSet = new Set(
+      followerRows.map((r) => r.followerId.toString()),
+    );
+    return new Set(
+      followingRows
+        .map((r) => r.followingId.toString())
+        .filter((id) => followerSet.has(id)),
+    );
+  }
+
+  private inboxFilter(userOid: Types.ObjectId) {
+    return { userId: userOid, archived: { $ne: true } };
+  }
+
   async myNotifications(
     userId: string,
     skip = 0,
     take = 20,
   ): Promise<NotificationsPageGql> {
+    await this.reconcileStaleFriendRequestNotifications(userId);
     const userOid = new Types.ObjectId(userId);
+    const filter = this.inboxFilter(userOid);
     const [items, totalCount, unreadCount] = await Promise.all([
       this.notificationModel
-        .find({ userId: userOid })
+        .find(filter)
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(take)
         .exec(),
-      this.notificationModel.countDocuments({ userId: userOid }),
-      this.notificationModel.countDocuments({ userId: userOid, read: false }),
+      this.notificationModel.countDocuments(filter),
+      this.notificationModel.countDocuments({ ...filter, read: false }),
     ]);
     return { items: items.map((n) => this.toGql(n)), totalCount, unreadCount };
   }
 
   async unreadCount(userId: string): Promise<number> {
+    await this.reconcileStaleFriendRequestNotifications(userId);
+    const userOid = new Types.ObjectId(userId);
     return this.notificationModel.countDocuments({
-      userId: new Types.ObjectId(userId),
+      ...this.inboxFilter(userOid),
       read: false,
     });
   }
@@ -196,15 +367,36 @@ export class NotificationsService {
   }
 
   async markAllRead(userId: string): Promise<boolean> {
+    const userOid = new Types.ObjectId(userId);
     await this.notificationModel.updateMany(
-      { userId: new Types.ObjectId(userId), read: false },
+      { ...this.inboxFilter(userOid), read: false },
       { $set: { read: true } },
     );
     return true;
   }
 
+  async archive(userId: string, notificationId: string): Promise<boolean> {
+    await this.notificationModel.updateOne(
+      {
+        _id: new Types.ObjectId(notificationId),
+        userId: new Types.ObjectId(userId),
+      },
+      { $set: { archived: true, read: true } },
+    );
+    return true;
+  }
+
   /** Resolve the profile picture URL of a notification's latest actor (null if none). */
-  async resolveActorAvatar(actorId?: string | null): Promise<string | null> {
+  async resolveActorAvatar(
+    actorId?: string | null,
+    opts?: { type?: NotificationType; latestActorName?: string | null },
+  ): Promise<string | null> {
+    if (
+      opts?.type === 'POST_VOTE' &&
+      (!actorId || opts.latestActorName === 'Someone')
+    ) {
+      return null;
+    }
     if (!actorId) return null;
     const actor = await this.usersService.findById(actorId);
     return actor?.profileImageUrl ?? null;
@@ -240,10 +432,12 @@ export class NotificationsService {
       referenceId: doc.referenceId,
       referenceType: doc.referenceType,
       postId: doc.postId,
+      commentId: doc.commentId,
       actorCount: doc.actorCount ?? 1,
       latestActorId: doc.latestActorId,
       latestActorName: doc.latestActorName,
       read: doc.read,
+      archived: doc.archived ?? false,
       createdAt: (doc as any).createdAt,
     };
   }

@@ -22,4 +22,15 @@ export class Comment {
 }
 
 export const CommentSchema = SchemaFactory.createForClass(Comment);
+/** Feed + commentsByPost: all comments on a post, sorted by time */
+CommentSchema.index({ postId: 1, createdAt: 1 });
 CommentSchema.index({ postId: 1, createdAt: -1 });
+/** recentComments preview: top-level only, newest first */
+CommentSchema.index(
+  { postId: 1, createdAt: -1 },
+  {
+    partialFilterExpression: { parentId: { $exists: false } },
+    name: 'comment_post_toplevel_created',
+  },
+);
+CommentSchema.index({ parentId: 1, createdAt: 1 });

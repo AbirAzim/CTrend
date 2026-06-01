@@ -240,6 +240,11 @@ export class FollowsService {
         status: FollowStatus.PENDING,
       })
       .exec();
+    await this.notificationsService.resolveFriendRequestNotifications(
+      targetId,
+      requesterId,
+      'withdrawn',
+    );
   }
 
   async unfriend(userId: string, targetId: string): Promise<void> {
@@ -300,6 +305,11 @@ export class FollowsService {
 
     if (!accept) {
       await this.followModel.deleteOne({ _id: req._id }).exec();
+      await this.notificationsService.resolveFriendRequestNotifications(
+        userId,
+        requesterId,
+        'rejected',
+      );
       return;
     }
 
@@ -315,5 +325,28 @@ export class FollowsService {
         { upsert: true },
       )
       .exec();
+    await this.notificationsService.resolveFriendRequestNotifications(
+      userId,
+      requesterId,
+      'accepted',
+    );
+
+    try {
+      const accepter = await this.usersService.findById(userId);
+      const accepterName =
+        accepter?.displayName?.trim() || accepter?.username || 'Someone';
+      await this.notificationsService.create({
+        userId: requesterId,
+        type: 'FRIEND_REQUEST_ACCEPTED',
+        title: 'Friend request accepted',
+        body: `${accepterName} accepted your friend request`,
+        referenceId: userId,
+        referenceType: 'User',
+        actorId: userId,
+        actorName: accepterName,
+      });
+    } catch {
+      /* notification must not block accept */
+    }
   }
 }

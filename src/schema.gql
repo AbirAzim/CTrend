@@ -11,6 +11,26 @@ type AdminModeratorUserMessageGql {
   unreadFromUserCount: Int!
 }
 
+input AdminPlatformPostsFilterInput {
+  categoryId: String
+  search: String
+  sortBy: String
+  sortOrder: String
+  status: PostStatus
+  votingFilter: String
+}
+
+input AdminPlatformPostsQueryInput {
+  categoryId: String
+  search: String
+  skip: Int = 0
+  sortBy: String
+  sortOrder: String
+  status: PostStatus
+  take: Int = 50
+  votingFilter: String
+}
+
 type AuthPayloadGql {
   accessToken: String!
   refreshToken: String
@@ -270,6 +290,7 @@ type ModeratorThreadAdminGql {
 type Mutation {
   acceptInvitation(displayName: String, password: String!, token: String!): AuthPayloadGql!
   addFriend(userId: ID!): String!
+  archiveNotification(id: ID!): Boolean!
   cancelFriendRequest(userId: ID!): Boolean!
   cancelInvitation(id: ID!): Boolean!
   cancelScheduledPost(postId: ID!): Boolean!
@@ -305,6 +326,7 @@ type Mutation {
   rejectAdminPromotion(token: String!): Boolean!
   removeAdmin(email: String!): UserGql!
   removeUser(email: String!): Boolean!
+  removeVote(postId: ID!): VoteResultGql!
   requestPasswordReset(email: String!): Boolean!
   resendInvitation(id: ID!): Boolean!
   resendVerificationEmail(email: String!): Boolean!
@@ -342,7 +364,9 @@ type NewPostGql {
 
 type NotificationGql {
   actorCount: Int!
+  archived: Boolean!
   body: String!
+  commentId: String
   createdAt: DateTime!
   id: ID!
   latestActorAvatar: String
@@ -409,11 +433,13 @@ type PostGql {
   contentText: String
   createdAt: DateTime!
   downvoteCount: Int!
+  editedBy: [UserGql!]
   hypeCount: Int!
   id: ID!
   imageUrl: String
   imageUrls: [String!]!
   isVotingOpen: Boolean!
+  lastEditedBy: UserGql
   likeCount: Int!
   likesDisabled: Boolean!
   mySelectedOptionIndex: Int
@@ -427,6 +453,7 @@ type PostGql {
   status: PostStatus!
   totalVotes: Int!
   type: PostType!
+  updatedAt: DateTime
   upvoteCount: Int!
   viewerHasHyped: Boolean!
   viewerHasSaved: Boolean!
@@ -482,6 +509,8 @@ type Query {
   adminModeratorMessagesCount(search: String): Int!
   adminModeratorThreadMessages(userId: ID!): [MessageGql!]!
   adminModeratorThreads(search: String, skip: Int! = 0, take: Int! = 50): [ModeratorThreadAdminGql!]!
+  adminPlatformPosts(query: AdminPlatformPostsQueryInput, skip: Int = 0, take: Int = 50): [PostGql!]!
+  adminPlatformPostsCount(filter: AdminPlatformPostsFilterInput): Int!
   campaign(slug: String!): CampaignGql
   campaignWinner(fixtureId: ID!): CampaignWinnerGql
   campaignWinners: [CampaignWinnerGql!]!
@@ -511,11 +540,12 @@ type Query {
   myOrganization: OrganizationGql
   mySavedPosts: [PostGql!]!
   myScheduledPosts: [PostGql!]!
+  myVotedPosts(anonymousOnly: Boolean): [PostGql!]!
   onlineUserIds: [String!]!
   organizationDashboard(organizationId: String!): OrganizationDashboardGql!
   previewInvites(emails: [String!]!): [InvitePreviewGql!]!
   unreadNotificationCount: Int!
-  votersByPost(optionIndex: Int, postId: ID!): [PostVoterGql!]!
+  votersByPost(optionIndex: Int, postId: ID!, search: String, skip: Int, take: Int): [PostVoterGql!]!
   worldCupFixture(id: ID!): FixtureGql
   worldCupFixtures(filter: FixtureFilterInput): [FixtureGql!]!
 }

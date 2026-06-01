@@ -72,6 +72,13 @@ export class Post {
 
   @Prop({ type: Date })
   scheduledAt?: Date;
+
+  /** Admins who have edited this post (platform posts). */
+  @Prop({ type: [{ type: Types.ObjectId, ref: 'User' }], default: [] })
+  editedByIds: Types.ObjectId[];
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  lastEditedById?: Types.ObjectId;
 }
 
 export const PostSchema = SchemaFactory.createForClass(Post);

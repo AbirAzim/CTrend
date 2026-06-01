@@ -16,6 +16,7 @@ import {
   ModeratorThreadAdminGql,
   AdminModeratorUserMessageGql,
   MessageReadGql,
+  MessageReactionChangedGql,
   PresenceChangedGql,
   TypingIndicatorGql,
 } from './graphql/message.types';
@@ -29,6 +30,7 @@ import {
   NEW_MESSAGE,
   ADMIN_MODERATOR_USER_MESSAGE,
   MESSAGE_READ,
+  MESSAGE_REACTION_CHANGED,
   TYPING_INDICATOR,
   USER_PRESENCE_CHANGED,
 } from '../pubsub';
@@ -186,6 +188,16 @@ export class MessagesResolver {
     return this.messagesService.markRead(user.id, conversationId);
   }
 
+  @Mutation(() => MessageGql)
+  @UseGuards(GqlAuthGuard)
+  async reactMessage(
+    @CurrentUser() user: ReqUser,
+    @Args('messageId', { type: () => ID }) messageId: string,
+    @Args('emoji', { type: () => String, nullable: true }) emoji: string | null,
+  ) {
+    return this.messagesService.reactMessage(user.id, messageId, emoji);
+  }
+
   @Mutation(() => Boolean)
   @UseGuards(GqlAuthGuard)
   async setTyping(
@@ -275,6 +287,22 @@ export class MessagesResolver {
   @UseGuards(GqlAuthGuard)
   messageRead() {
     return pubsub.asyncIterableIterator(MESSAGE_READ);
+  }
+
+  @Subscription(() => MessageReactionChangedGql, {
+    filter(payload, _variables, context) {
+      const userId: string = context?.req?.user?.id;
+      return (
+        userId &&
+        Array.isArray(payload.participantIds) &&
+        payload.participantIds.includes(userId)
+      );
+    },
+    resolve: (payload) => payload.messageReactionChanged,
+  })
+  @UseGuards(GqlAuthGuard)
+  messageReactionChanged() {
+    return pubsub.asyncIterableIterator(MESSAGE_REACTION_CHANGED);
   }
 
   @Subscription(() => TypingIndicatorGql, {

@@ -245,6 +245,7 @@ type MessageGql {
   createdAt: DateTime!
   id: ID!
   imageUrl: String
+  reactions: [MessageReactionCountGql!]!
   readBy: [ReadReceiptGql!]!
   senderAvatar: String
   senderId: ID!
@@ -253,6 +254,20 @@ type MessageGql {
   sentByAdminId: String
   sentByAdminName: String
   text: String!
+  viewerReaction: String
+}
+
+type MessageReactionChangedGql {
+  actorEmoji: String
+  actorUserId: ID!
+  conversationId: ID!
+  messageId: ID!
+  reactions: [MessageReactionCountGql!]!
+}
+
+type MessageReactionCountGql {
+  count: Int!
+  emoji: String!
 }
 
 type MessageReadGql {
@@ -321,6 +336,7 @@ type Mutation {
   markNotificationRead(id: ID!): Boolean!
   processMatchResult(campaignId: ID, fixtureId: ID!): CampaignWinnerGql!
   promoteToAdmin(email: String!): UserGql!
+  reactMessage(emoji: String, messageId: ID!): MessageGql!
   register(input: RegisterInput!): AuthPayloadGql!
   registerPushToken(platform: String, token: String!): Boolean!
   rejectAdminPromotion(token: String!): Boolean!
@@ -574,6 +590,7 @@ type SearchUserGql {
 
 type Subscription {
   adminModeratorUserMessage: AdminModeratorUserMessageGql!
+  messageReactionChanged: MessageReactionChangedGql!
   messageRead: MessageReadGql!
   messageReceived: MessageGql!
   newNotification: NotificationGql!

@@ -101,8 +101,7 @@ export class NotificationsService {
       // Same actor re-hyping after unhype: bump timestamp and re-notify.
       // Comment types always bump (new comment/reply). Others no-op on duplicate actor.
       const sameIdentifiedActor =
-        params.actorId != null &&
-        existing.latestActorId === params.actorId;
+        params.actorId != null && existing.latestActorId === params.actorId;
       if (
         sameIdentifiedActor &&
         params.type !== 'POST_HYPE' &&

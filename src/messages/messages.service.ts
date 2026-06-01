@@ -740,13 +740,7 @@ export class MessagesService {
     const viewerMap = await this.batchViewerReactionsMap(ids, viewerId);
     return Promise.all(
       msgs.map((m) =>
-        this.messageToGql(
-          m,
-          viewerId,
-          includeAdminMeta,
-          countsMap,
-          viewerMap,
-        ),
+        this.messageToGql(m, viewerId, includeAdminMeta, countsMap, viewerMap),
       ),
     );
   }
@@ -833,8 +827,7 @@ export class MessagesService {
   ): Promise<MessageGql> {
     const msgId = msg._id.toHexString();
     const reactions =
-      countsMap?.get(msgId) ??
-      (await this.reactionCountsForMessage(msg._id));
+      countsMap?.get(msgId) ?? (await this.reactionCountsForMessage(msg._id));
     const viewerReaction =
       viewerId && viewerMap
         ? viewerMap.get(msgId)

@@ -41,13 +41,32 @@ export class VotesResolver {
     );
   }
 
+  @Mutation(() => VoteResultGql)
+  @UseGuards(GqlAuthGuard)
+  async removeVote(
+    @CurrentUser() user: ReqUser,
+    @Args('postId', { type: () => ID }) postId: string,
+  ) {
+    return this.votesService.removeVote(user.id, postId);
+  }
+
   @Query(() => [PostVoterGql])
   async votersByPost(
     @Args('postId', { type: () => ID }) postId: string,
     @Args('optionIndex', { type: () => Int, nullable: true })
     optionIndex?: number,
+    @Args('search', { type: () => String, nullable: true })
+    search?: string,
+    @Args('skip', { type: () => Int, nullable: true }) skip?: number,
+    @Args('take', { type: () => Int, nullable: true }) take?: number,
   ) {
-    return this.votesService.listVoters(postId, optionIndex);
+    return this.votesService.listVoters(
+      postId,
+      optionIndex,
+      search,
+      skip ?? 0,
+      take,
+    );
   }
 
   @Subscription(() => VoteUpdateGql, {

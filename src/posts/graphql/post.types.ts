@@ -155,4 +155,14 @@ export class PostGql {
 
   @Field(() => Date, { nullable: true })
   scheduledAt?: Date;
+
+  @Field(() => Date, { nullable: true })
+  updatedAt?: Date;
+
+  /** Admins who edited this post (admin post management). */
+  @Field(() => [UserGql], { nullable: true })
+  editedBy?: UserGql[];
+
+  @Field(() => UserGql, { nullable: true })
+  lastEditedBy?: UserGql;
 }

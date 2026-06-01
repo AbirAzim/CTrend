@@ -1,6 +1,7 @@
 import {
   Args,
   ID,
+  Int,
   Mutation,
   Query,
   Resolver,
@@ -17,6 +18,10 @@ import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { PostStatus, UserRole } from '../common/enums';
+import {
+  AdminPlatformPostsFilterInput,
+  AdminPlatformPostsQueryInput,
+} from './dto/admin-platform-posts.input';
 import { POST_VOTE_UPDATED, pubsub } from '../pubsub';
 
 type ReqUser = { id: string; role: string };
@@ -133,7 +138,12 @@ export class PostsResolver {
     @Args('postId', { type: () => ID }) postId: string,
     @Args('input') input: UpdatePostInput,
   ) {
-    const post = await this.postsService.updatePost(user.id, postId, input);
+    const post = await this.postsService.updatePost(
+      user.id,
+      postId,
+      input,
+      user.role,
+    );
     return this.postsService.toGql(post, user.id);
   }
 
@@ -144,6 +154,44 @@ export class PostsResolver {
     @Args('postId', { type: () => ID }) postId: string,
   ) {
     return this.postsService.deletePost(user.id, user.role, postId);
+  }
+
+  @Query(() => [PostGql])
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async adminPlatformPosts(
+    @CurrentUser() user: ReqUser,
+    @Args('query', { nullable: true }) query?: AdminPlatformPostsQueryInput,
+    @Args('skip', { type: () => Int, nullable: true, defaultValue: 0 })
+    skip?: number,
+    @Args('take', { type: () => Int, nullable: true, defaultValue: 50 })
+    take?: number,
+  ) {
+    const rows = await this.postsService.listPlatformPostsAdmin({
+      search: query?.search,
+      status: query?.status,
+      categoryId: query?.categoryId,
+      votingFilter: query?.votingFilter,
+      sortBy: query?.sortBy,
+      sortOrder: query?.sortOrder,
+      skip: query?.skip ?? skip ?? 0,
+      take: query?.take ?? take ?? 50,
+    });
+    return Promise.all(rows.map((p) => this.postsService.toGql(p, user.id)));
+  }
+
+  @Query(() => Int)
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async adminPlatformPostsCount(
+    @Args('filter', { nullable: true }) filter?: AdminPlatformPostsFilterInput,
+  ) {
+    return this.postsService.countPlatformPostsAdmin({
+      search: filter?.search,
+      status: filter?.status,
+      categoryId: filter?.categoryId,
+      votingFilter: filter?.votingFilter,
+    });
   }
 
   @Query(() => [PostGql])
@@ -160,6 +208,19 @@ export class PostsResolver {
   @UseGuards(GqlAuthGuard)
   async mySavedPosts(@CurrentUser() user: ReqUser) {
     const rows = await this.postsService.listSavedPosts(user.id);
+    return Promise.all(rows.map((p) => this.postsService.toGql(p, user.id)));
+  }
+
+  @Query(() => [PostGql])
+  @UseGuards(GqlAuthGuard)
+  async myVotedPosts(
+    @CurrentUser() user: ReqUser,
+    @Args('anonymousOnly', { nullable: true }) anonymousOnly?: boolean,
+  ) {
+    const rows = await this.postsService.listVotedPosts(
+      user.id,
+      !!anonymousOnly,
+    );
     return Promise.all(rows.map((p) => this.postsService.toGql(p, user.id)));
   }
 

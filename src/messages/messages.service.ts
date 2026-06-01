@@ -8,6 +8,14 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Conversation, ConversationDocument } from './conversation.schema';
 import { Message, MessageDocument } from './message.schema';
+import {
+  MessageReaction,
+  MessageReactionDocument,
+} from './message-reaction.schema';
+import {
+  isMessageReactionEmoji,
+  MESSAGE_REACTION_EMOJIS,
+} from './message-reaction.constants';
 import { UsersService } from '../users/users.service';
 import { FollowsService } from '../follows/follows.service';
 import { PresenceService } from '../presence/presence.service';
@@ -16,6 +24,8 @@ import { PushService } from '../push/push.service';
 import {
   ConversationGql,
   MessageGql,
+  MessageReactionCountGql,
+  MessageReactionChangedGql,
   ModeratorMessageAdminGql,
   ModeratorThreadAdminGql,
   ParticipantGql,
@@ -26,6 +36,7 @@ import {
   NEW_MESSAGE,
   ADMIN_MODERATOR_USER_MESSAGE,
   MESSAGE_READ,
+  MESSAGE_REACTION_CHANGED,
   TYPING_INDICATOR,
 } from '../pubsub';
 import { UserRole } from '../common/enums';
@@ -44,6 +55,8 @@ export class MessagesService {
     private conversationModel: Model<ConversationDocument>,
     @InjectModel(Message.name)
     private messageModel: Model<MessageDocument>,
+    @InjectModel(MessageReaction.name)
+    private messageReactionModel: Model<MessageReactionDocument>,
     private usersService: UsersService,
     private followsService: FollowsService,
     private presenceService: PresenceService,
@@ -386,9 +399,7 @@ export class MessagesService {
       .sort({ createdAt: 1 })
       .exec();
 
-    return Promise.all(
-      msgs.map((m) => this.messageToGql(m, resolvedUserId, true)),
-    );
+    return this.messagesToGql(msgs, resolvedUserId, true);
   }
 
   async markModeratorThreadReadForAdmin(
@@ -533,9 +544,63 @@ export class MessagesService {
       .limit(take)
       .exec();
 
-    return Promise.all(
-      msgs.reverse().map((m) => this.messageToGql(m, viewerId)),
-    );
+    return this.messagesToGql(msgs.reverse(), viewerId);
+  }
+
+  async reactMessage(
+    viewerId: string,
+    messageId: string,
+    emoji: string | null,
+  ): Promise<MessageGql> {
+    const msg = await this.messageModel.findById(messageId).exec();
+    if (!msg) throw new NotFoundException('Message not found');
+
+    const convo = await this.conversationModel
+      .findById(msg.conversationId)
+      .exec();
+    if (!convo) throw new NotFoundException('Conversation not found');
+
+    const viewerOid = new Types.ObjectId(viewerId);
+    if (!convo.participantIds.some((id) => id.equals(viewerOid))) {
+      throw new ForbiddenException('Not a participant');
+    }
+
+    const mid = msg._id;
+    let actorEmoji: string | null = null;
+
+    if (emoji === null || emoji === '') {
+      await this.messageReactionModel.deleteOne({
+        messageId: mid,
+        userId: viewerOid,
+      });
+    } else {
+      if (!isMessageReactionEmoji(emoji)) {
+        throw new BadRequestException('Invalid reaction emoji');
+      }
+      await this.messageReactionModel.updateOne(
+        { messageId: mid, userId: viewerOid },
+        { $set: { emoji } },
+        { upsert: true },
+      );
+      actorEmoji = emoji;
+    }
+
+    const reactions = await this.reactionCountsForMessage(mid);
+    const gql = await this.messagesToGql([msg], viewerId);
+    const payload: MessageReactionChangedGql = {
+      messageId: mid.toHexString(),
+      conversationId: msg.conversationId.toHexString(),
+      reactions,
+      actorUserId: viewerId,
+      actorEmoji,
+    };
+
+    await pubsub.publish(MESSAGE_REACTION_CHANGED, {
+      messageReactionChanged: payload,
+      participantIds: convo.participantIds.map((id) => id.toHexString()),
+    });
+
+    return gql[0];
   }
 
   async markRead(viewerId: string, conversationId: string): Promise<boolean> {
@@ -584,6 +649,100 @@ export class MessagesService {
       typingIndicator: { conversationId, userId: viewerId, isTyping },
     });
     return true;
+  }
+
+  // ── Message reactions ─────────────────────────────────────────
+
+  private sortReactionCounts(
+    reactions: MessageReactionCountGql[],
+  ): MessageReactionCountGql[] {
+    const order = new Map(MESSAGE_REACTION_EMOJIS.map((e, i) => [e, i]));
+    return [...reactions].sort(
+      (a, b) =>
+        (order.get(a.emoji as (typeof MESSAGE_REACTION_EMOJIS)[number]) ?? 99) -
+        (order.get(b.emoji as (typeof MESSAGE_REACTION_EMOJIS)[number]) ?? 99),
+    );
+  }
+
+  private async reactionCountsForMessage(
+    messageId: Types.ObjectId,
+  ): Promise<MessageReactionCountGql[]> {
+    const map = await this.batchReactionCountsMap([messageId]);
+    return map.get(messageId.toHexString()) ?? [];
+  }
+
+  private async batchReactionCountsMap(
+    messageIds: Types.ObjectId[],
+  ): Promise<Map<string, MessageReactionCountGql[]>> {
+    if (messageIds.length === 0) return new Map();
+
+    const rows = await this.messageReactionModel
+      .aggregate<{
+        messageId: Types.ObjectId;
+        emoji: string;
+        count: number;
+      }>([
+        { $match: { messageId: { $in: messageIds } } },
+        {
+          $group: {
+            _id: { messageId: '$messageId', emoji: '$emoji' },
+            count: { $sum: 1 },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            messageId: '$_id.messageId',
+            emoji: '$_id.emoji',
+            count: 1,
+          },
+        },
+      ])
+      .exec();
+
+    const map = new Map<string, MessageReactionCountGql[]>();
+    for (const row of rows) {
+      const key = row.messageId.toHexString();
+      const list = map.get(key) ?? [];
+      list.push({ emoji: row.emoji, count: row.count });
+      map.set(key, list);
+    }
+    for (const [key, list] of map) {
+      map.set(key, this.sortReactionCounts(list));
+    }
+    return map;
+  }
+
+  private async batchViewerReactionsMap(
+    messageIds: Types.ObjectId[],
+    viewerId: string,
+  ): Promise<Map<string, string>> {
+    if (messageIds.length === 0) return new Map();
+    const rows = await this.messageReactionModel
+      .find({
+        messageId: { $in: messageIds },
+        userId: new Types.ObjectId(viewerId),
+      })
+      .select({ messageId: 1, emoji: 1 })
+      .lean()
+      .exec();
+    return new Map(rows.map((r) => [r.messageId.toHexString(), r.emoji]));
+  }
+
+  private async messagesToGql(
+    msgs: MessageDocument[],
+    viewerId: string,
+    includeAdminMeta = false,
+  ): Promise<MessageGql[]> {
+    if (msgs.length === 0) return [];
+    const ids = msgs.map((m) => m._id);
+    const countsMap = await this.batchReactionCountsMap(ids);
+    const viewerMap = await this.batchViewerReactionsMap(ids, viewerId);
+    return Promise.all(
+      msgs.map((m) =>
+        this.messageToGql(m, viewerId, includeAdminMeta, countsMap, viewerMap),
+      ),
+    );
   }
 
   // ── Serialisation ─────────────────────────────────────────────
@@ -663,10 +822,30 @@ export class MessagesService {
     msg: MessageDocument,
     viewerId?: string,
     includeAdminMeta = false,
+    countsMap?: Map<string, MessageReactionCountGql[]>,
+    viewerMap?: Map<string, string>,
   ): Promise<MessageGql> {
+    const msgId = msg._id.toHexString();
+    const reactions =
+      countsMap?.get(msgId) ?? (await this.reactionCountsForMessage(msg._id));
+    const viewerReaction =
+      viewerId && viewerMap
+        ? viewerMap.get(msgId)
+        : viewerId
+          ? (
+              await this.messageReactionModel
+                .findOne({
+                  messageId: msg._id,
+                  userId: new Types.ObjectId(viewerId),
+                })
+                .lean()
+                .exec()
+            )?.emoji
+          : undefined;
+
     if (msg.isModeratorMessage) {
       const gql: MessageGql = {
-        id: msg._id.toHexString(),
+        id: msgId,
         conversationId: msg.conversationId.toHexString(),
         senderId: MODERATOR_SENDER_GQL_ID,
         senderName: MODERATOR_DISPLAY_NAME,
@@ -677,6 +856,8 @@ export class MessagesService {
           userId: r.userId.toHexString(),
           readAt: r.readAt,
         })),
+        reactions,
+        viewerReaction: viewerReaction ?? undefined,
         createdAt: (msg as MessageDocument & { createdAt: Date }).createdAt,
       };
 
@@ -696,7 +877,7 @@ export class MessagesService {
 
     const sender = await this.usersService.findById(msg.senderId.toHexString());
     const gql: MessageGql = {
-      id: msg._id.toHexString(),
+      id: msgId,
       conversationId: msg.conversationId.toHexString(),
       senderId: msg.senderId.toHexString(),
       senderName: sender?.displayName?.trim() || sender?.username || 'User',
@@ -707,6 +888,8 @@ export class MessagesService {
         userId: r.userId.toHexString(),
         readAt: r.readAt,
       })),
+      reactions,
+      viewerReaction: viewerReaction ?? undefined,
       createdAt: (msg as MessageDocument & { createdAt: Date }).createdAt,
     };
 

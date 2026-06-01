@@ -30,6 +30,7 @@ import { VotesService } from '../votes/votes.service';
 import { CategoryDocument } from '../categories/category.schema';
 import { UserDocument } from '../users/user.schema';
 import { PostGql } from './graphql/post.types';
+import { UserGql } from '../users/graphql/user.types';
 import { NEW_POST, POST_DELETED, POST_VOTE_UPDATED, pubsub } from '../pubsub';
 import { Comment, CommentDocument } from '../comments/comment.schema';
 import { CommentsService } from '../comments/comments.service';
@@ -78,6 +79,91 @@ export class PostsService implements OnModuleInit {
   async findById(id: string): Promise<PostDocument | null> {
     if (!Types.ObjectId.isValid(id)) return null;
     return this.postModel.findById(id).exec();
+  }
+
+  /** Platform-wide (SYSTEM) posts for admin management — search, filter, sort. */
+  async listPlatformPostsAdmin(query: {
+    search?: string;
+    status?: PostStatus;
+    categoryId?: string;
+    votingFilter?: string;
+    sortBy?: string;
+    sortOrder?: string;
+    skip?: number;
+    take?: number;
+  }): Promise<PostDocument[]> {
+    const safeTake = Math.min(100, Math.max(1, query.take ?? 50));
+    return this.postModel
+      .find(this.buildPlatformPostsFilter(query))
+      .sort(this.platformPostsSort(query))
+      .skip(Math.max(0, query.skip ?? 0))
+      .limit(safeTake)
+      .exec();
+  }
+
+  async countPlatformPostsAdmin(query: {
+    search?: string;
+    status?: PostStatus;
+    categoryId?: string;
+    votingFilter?: string;
+  }): Promise<number> {
+    return this.postModel
+      .countDocuments(this.buildPlatformPostsFilter(query))
+      .exec();
+  }
+
+  private buildPlatformPostsFilter(query: {
+    search?: string;
+    status?: PostStatus;
+    categoryId?: string;
+    votingFilter?: string;
+  }): Record<string, unknown> {
+    const filter: Record<string, unknown> = { type: PostType.SYSTEM };
+    if (query.status) filter.status = query.status;
+    if (query.categoryId && Types.ObjectId.isValid(query.categoryId)) {
+      filter.categoryId = new Types.ObjectId(query.categoryId);
+    }
+    const now = new Date();
+    if (query.votingFilter === 'live') {
+      filter.$or = [
+        { votingEndsAt: { $exists: false } },
+        { votingEndsAt: null },
+        { votingEndsAt: { $gt: now } },
+      ];
+    } else if (query.votingFilter === 'closed') {
+      filter.votingEndsAt = { $lte: now };
+    }
+    const term = query.search?.trim();
+    if (term) {
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, 'i');
+      filter.$and = [
+        ...((filter.$and as unknown[]) ?? []),
+        {
+          $or: [{ contentText: regex }, { 'options.label': regex }],
+        },
+      ];
+    }
+    return filter;
+  }
+
+  private platformPostsSort(query: {
+    sortBy?: string;
+    sortOrder?: string;
+  }): Record<string, 1 | -1> {
+    const dir: 1 | -1 = query.sortOrder === 'asc' ? 1 : -1;
+    switch (query.sortBy) {
+      case 'votes':
+        return { voteCount: dir, createdAt: -1 };
+      case 'caption':
+        return { contentText: dir, createdAt: -1 };
+      case 'updatedAt':
+        return { updatedAt: dir };
+      case 'createdAt':
+        return { feedPriority: -1, createdAt: dir };
+      default:
+        return { feedPriority: -1, createdAt: -1 };
+    }
   }
 
   async findByAuthor(authorId: string, limit = 50): Promise<PostDocument[]> {
@@ -134,21 +220,41 @@ export class PostsService implements OnModuleInit {
     userId: string,
     postId: string,
     input: UpdatePostInput,
+    requesterRole?: string,
   ): Promise<PostDocument> {
     const post = await this.postModel.findById(postId).exec();
     if (!post) throw new NotFoundException('Post not found');
-    if (post.createdBy.toHexString() !== userId) {
+    const isAdmin =
+      requesterRole === UserRole.ADMIN || requesterRole === 'admin';
+    const isOwner = post.createdBy.toHexString() === userId;
+    if (!isOwner && !isAdmin) {
       throw new ForbiddenException('Only the author can edit this post');
+    }
+    if (!isOwner && isAdmin && post.type !== PostType.SYSTEM) {
+      throw new ForbiddenException(
+        'Admins can only edit platform-wide (system) posts',
+      );
     }
     if (input.caption !== undefined) post.contentText = input.caption;
     if (input.imageUrls && input.imageUrls.length >= 2) {
       post.imageUrls = input.imageUrls;
     }
     if (input.options && input.options.length >= 2) {
-      post.options = input.options as any;
+      post.options = input.options.map((o) => ({
+        label: o.label,
+        imageUrl: o.imageUrl,
+      }));
     }
     if (input.categoryId) {
       post.categoryId = new Types.ObjectId(input.categoryId);
+    }
+    if (isAdmin) {
+      const editorId = new Types.ObjectId(userId);
+      const existing = post.editedByIds ?? [];
+      if (!existing.some((id) => id.equals(editorId))) {
+        post.editedByIds = [...existing, editorId];
+      }
+      post.lastEditedById = editorId;
     }
     return post.save();
   }
@@ -181,6 +287,27 @@ export class PostsService implements OnModuleInit {
       postDeleted: { postId: pid.toHexString() },
     });
     return true;
+  }
+
+  async listVotedPosts(
+    userId: string,
+    anonymousOnly = false,
+    limit = 100,
+  ): Promise<PostDocument[]> {
+    const postIds = await this.votesService.listVotedPostIds(
+      userId,
+      anonymousOnly,
+    );
+    if (!postIds.length) return [];
+    const limited = postIds.slice(0, limit);
+    const posts = await this.postModel.find({ _id: { $in: limited } }).exec();
+    const byId = new Map(posts.map((p) => [p._id.toHexString(), p]));
+    const ordered: PostDocument[] = [];
+    for (const id of limited) {
+      const row = byId.get(id.toHexString());
+      if (row) ordered.push(row as PostDocument);
+    }
+    return ordered;
   }
 
   async listSavedPosts(userId: string, limit = 100): Promise<PostDocument[]> {
@@ -591,6 +718,31 @@ export class PostsService implements OnModuleInit {
     const now = Date.now();
     const isVotingOpen =
       !post.votingEndsAt || post.votingEndsAt.getTime() > now;
+
+    let editedBy: UserGql[] | undefined;
+    let lastEditedBy: UserGql | undefined;
+    const editorIdSet = new Set<string>();
+    for (const id of post.editedByIds ?? []) {
+      editorIdSet.add(id.toHexString());
+    }
+    if (post.lastEditedById) {
+      editorIdSet.add(post.lastEditedById.toHexString());
+    }
+    if (editorIdSet.size > 0) {
+      const editors = await this.usersService.findByIds([...editorIdSet]);
+      const byId = new Map(
+        editors.map((u) => [u._id.toHexString(), u] as const),
+      );
+      editedBy = (post.editedByIds ?? [])
+        .map((id) => byId.get(id.toHexString()))
+        .filter((u): u is NonNullable<typeof u> => Boolean(u))
+        .map((u) => this.usersService.toGql(u));
+      const lastDoc = post.lastEditedById
+        ? byId.get(post.lastEditedById.toHexString())
+        : undefined;
+      if (lastDoc) lastEditedBy = this.usersService.toGql(lastDoc);
+    }
+
     return {
       id: post._id.toHexString(),
       type: post.type,
@@ -631,8 +783,11 @@ export class PostsService implements OnModuleInit {
       votingEndsAt: post.votingEndsAt,
       isVotingOpen,
       createdAt: post.createdAt ?? new Date(),
+      updatedAt: (post as PostDocument).updatedAt ?? post.createdAt,
       status: post.status ?? PostStatus.PUBLISHED,
       scheduledAt: post.scheduledAt,
+      editedBy,
+      lastEditedBy,
     };
   }
 }

@@ -23,6 +23,9 @@ export class NotificationGql {
   @Field({ nullable: true })
   postId?: string;
 
+  @Field({ nullable: true })
+  commentId?: string;
+
   @Field(() => Int)
   actorCount: number;
 
@@ -38,6 +41,9 @@ export class NotificationGql {
 
   @Field()
   read: boolean;
+
+  @Field()
+  archived: boolean;
 
   @Field()
   createdAt: Date;

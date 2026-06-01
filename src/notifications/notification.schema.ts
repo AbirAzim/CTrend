@@ -5,8 +5,10 @@ export type NotificationType =
   | 'MESSAGE'
   | 'ANNOUNCEMENT'
   | 'FRIEND_REQUEST'
+  | 'FRIEND_REQUEST_ACCEPTED'
   | 'NEW_POST_FRIEND'
   | 'POST_HYPE'
+  | 'POST_VOTE'
   | 'POST_COMMENT'
   | 'COMMENT_REPLY'
   | 'COMMENT_REACTION'
@@ -25,8 +27,10 @@ export class Notification {
       'MESSAGE',
       'ANNOUNCEMENT',
       'FRIEND_REQUEST',
+      'FRIEND_REQUEST_ACCEPTED',
       'NEW_POST_FRIEND',
       'POST_HYPE',
+      'POST_VOTE',
       'POST_COMMENT',
       'COMMENT_REPLY',
       'COMMENT_REACTION',
@@ -52,6 +56,10 @@ export class Notification {
   @Prop({ type: String })
   postId?: string;
 
+  /** Comment id for deep-link `#comment-{id}` on post detail */
+  @Prop({ type: String })
+  commentId?: string;
+
   /** Number of distinct actors that triggered this grouped notification */
   @Prop({ type: Number, default: 1 })
   actorCount: number;
@@ -66,12 +74,16 @@ export class Notification {
 
   @Prop({ default: false })
   read: boolean;
+
+  @Prop({ default: false })
+  archived: boolean;
 }
 
 export const NotificationSchema = SchemaFactory.createForClass(Notification);
+NotificationSchema.index({ userId: 1, archived: 1, createdAt: -1 });
 NotificationSchema.index({ userId: 1, read: 1, createdAt: -1 });
 NotificationSchema.index({ userId: 1, createdAt: -1 });
-// Index for grouped-notification lookups (POST_HYPE, POST_COMMENT)
+// Index for grouped-notification lookups (POST_HYPE, POST_VOTE, POST_COMMENT)
 NotificationSchema.index({
   userId: 1,
   type: 1,

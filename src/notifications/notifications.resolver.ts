@@ -11,6 +11,7 @@ import {
 } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { NotificationsService } from './notifications.service';
+import { NotificationType } from './notification.schema';
 import {
   NotificationGql,
   NotificationsPageGql,
@@ -35,6 +36,10 @@ export class NotificationsResolver {
   ): Promise<string | null> {
     return this.notificationsService.resolveActorAvatar(
       notification.latestActorId,
+      {
+        type: notification.type as NotificationType,
+        latestActorName: notification.latestActorName,
+      },
     );
   }
 
@@ -67,6 +72,15 @@ export class NotificationsResolver {
   @UseGuards(GqlAuthGuard)
   async markAllNotificationsRead(@CurrentUser() user: ReqUser) {
     return this.notificationsService.markAllRead(user.id);
+  }
+
+  @Mutation(() => Boolean)
+  @UseGuards(GqlAuthGuard)
+  async archiveNotification(
+    @CurrentUser() user: ReqUser,
+    @Args('id', { type: () => ID }) id: string,
+  ) {
+    return this.notificationsService.archive(user.id, id);
   }
 
   @Mutation(() => Int)

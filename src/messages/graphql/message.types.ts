@@ -1,6 +1,34 @@
 import { Field, ID, Int, ObjectType } from '@nestjs/graphql';
 
 @ObjectType()
+export class MessageReactionCountGql {
+  @Field()
+  emoji: string;
+
+  @Field(() => Int)
+  count: number;
+}
+
+@ObjectType()
+export class MessageReactionChangedGql {
+  @Field(() => ID)
+  messageId: string;
+
+  @Field(() => ID)
+  conversationId: string;
+
+  @Field(() => [MessageReactionCountGql])
+  reactions: MessageReactionCountGql[];
+
+  /** User who added/changed/removed their reaction. */
+  @Field(() => ID)
+  actorUserId: string;
+
+  @Field(() => String, { nullable: true })
+  actorEmoji?: string | null;
+}
+
+@ObjectType()
 export class ReadReceiptGql {
   @Field(() => ID)
   userId: string;
@@ -45,6 +73,12 @@ export class MessageGql {
 
   @Field(() => [ReadReceiptGql])
   readBy: ReadReceiptGql[];
+
+  @Field(() => [MessageReactionCountGql], { defaultValue: [] })
+  reactions: MessageReactionCountGql[];
+
+  @Field(() => String, { nullable: true })
+  viewerReaction?: string;
 
   @Field()
   createdAt: Date;

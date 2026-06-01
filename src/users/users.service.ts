@@ -90,6 +90,17 @@ export class UsersService {
     return this.userModel.findById(id).exec();
   }
 
+  /** Batch load users for comment/feed hydration (single round-trip). */
+  async findByIds(ids: string[]): Promise<UserDocument[]> {
+    const objectIds = [
+      ...new Set(
+        ids.filter((id) => Types.ObjectId.isValid(id)).map((id) => id),
+      ),
+    ].map((id) => new Types.ObjectId(id));
+    if (objectIds.length === 0) return [];
+    return this.userModel.find({ _id: { $in: objectIds } }).exec();
+  }
+
   async updateProfile(
     userId: string,
     patch: {
@@ -268,6 +279,22 @@ export class UsersService {
   async findIdsByRole(role: UserRole): Promise<Types.ObjectId[]> {
     const docs = await this.userModel
       .find({ $or: [{ role }, { roles: role }] }, { _id: 1 })
+      .lean()
+      .exec();
+    return docs.map((d) => d._id as Types.ObjectId);
+  }
+
+  /**
+   * Find user ids whose display name or username matches `term`
+   * (case-insensitive substring). Used to filter voter lists server-side.
+   */
+  async findIdsByNameSearch(term: string): Promise<Types.ObjectId[]> {
+    const trimmed = term.trim();
+    if (!trimmed) return [];
+    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = { $regex: escaped, $options: 'i' };
+    const docs = await this.userModel
+      .find({ $or: [{ displayName: regex }, { username: regex }] }, { _id: 1 })
       .lean()
       .exec();
     return docs.map((d) => d._id as Types.ObjectId);

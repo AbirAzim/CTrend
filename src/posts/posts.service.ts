@@ -2,18 +2,19 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { Post, PostDocument } from './post.schema';
+import { Post, PostDocument, PostOption } from './post.schema';
 import {
   PostReaction,
   PostReactionDocument,
   PostReactionKind,
 } from './post-reaction.schema';
 import { SavedPost, SavedPostDocument } from './saved-post.schema';
-import { CreatePostInput } from './dto/create-post.input';
+import { CreatePostInput, PostOptionInput } from './dto/create-post.input';
 import { UpdatePostInput } from './dto/update-post.input';
 import {
   OrgPostReach,
@@ -30,13 +31,21 @@ import { VotesService } from '../votes/votes.service';
 import { CategoryDocument } from '../categories/category.schema';
 import { UserDocument } from '../users/user.schema';
 import { PostGql } from './graphql/post.types';
+import { PostCampaignSummaryGql } from './graphql/post-campaign-summary.types';
+import { PostVoteWinnerGql } from './graphql/post-vote-winner.types';
 import { UserGql } from '../users/graphql/user.types';
+import { CampaignsService } from '../campaigns/campaigns.service';
+import { CampaignDocument } from '../campaigns/campaign.schema';
 import { NEW_POST, POST_DELETED, POST_VOTE_UPDATED, pubsub } from '../pubsub';
 import { Comment, CommentDocument } from '../comments/comment.schema';
 import { CommentsService } from '../comments/comments.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { FollowsService } from '../follows/follows.service';
 import { OnModuleInit } from '@nestjs/common';
+import {
+  PLATFORM_BRAND_NAME,
+  PLATFORM_BRAND_USERNAME,
+} from '../common/platform-brand';
 
 const PREMIUM_GLOBAL_MONTHLY = 20;
 
@@ -47,6 +56,8 @@ function currentMonthKey(): string {
 
 @Injectable()
 export class PostsService implements OnModuleInit {
+  private readonly logger = new Logger(PostsService.name);
+
   async onModuleInit() {
     // Backfill: re-enable hype on existing system/admin posts that were
     // created with likesDisabled=true. New posts always start with hype enabled.
@@ -74,7 +85,121 @@ export class PostsService implements OnModuleInit {
     private commentsService: CommentsService,
     private notificationsService: NotificationsService,
     private followsService: FollowsService,
+    private campaignsService: CampaignsService,
   ) {}
+
+  private async resolveCampaignId(
+    campaignId?: string,
+  ): Promise<Types.ObjectId | undefined> {
+    const raw = campaignId?.trim();
+    if (!raw) return undefined;
+    const campaign = await this.campaignsService.findById(raw);
+    if (!campaign) {
+      throw new BadRequestException('Invalid campaign');
+    }
+    return campaign._id;
+  }
+
+  private toCampaignSummary(
+    doc: CampaignDocument,
+  ): PostCampaignSummaryGql {
+    return {
+      id: doc._id.toHexString(),
+      name: doc.name,
+      slug: doc.slug,
+      bannerText: doc.bannerText,
+      bannerImageUrl: doc.bannerImageUrl,
+      prizePerWinner: doc.prizePerWinner,
+    };
+  }
+
+  private clampFocal(value: number | undefined): number | undefined {
+    if (value === undefined || value === null) return undefined;
+    if (!Number.isFinite(value)) return undefined;
+    return Math.min(100, Math.max(0, Math.round(value)));
+  }
+
+  private mapOptionInput(o: PostOptionInput): PostOption {
+    const imageFocalX = this.clampFocal(o.imageFocalX);
+    const imageFocalY = this.clampFocal(o.imageFocalY);
+    return {
+      label: o.label,
+      imageUrl: o.imageUrl,
+      ...(imageFocalX !== undefined ? { imageFocalX } : {}),
+      ...(imageFocalY !== undefined ? { imageFocalY } : {}),
+    };
+  }
+
+  /** Winning option index(es) by vote count; all tied-at-max if draw. */
+  private winningOptionIndices(counts: number[]): number[] {
+    const max = counts.length ? Math.max(...counts) : 0;
+    if (max <= 0) return [];
+    return counts
+      .map((count, index) => (count === max ? index : -1))
+      .filter((index) => index >= 0);
+  }
+
+  /** Pick and persist vote giveaway winner once voting has closed (atomic — safe under parallel toGql). */
+  private async ensureVoteWinnerDrawn(
+    post: PostDocument,
+    countsPerOption: number[],
+  ): Promise<PostDocument> {
+    const now = Date.now();
+    const votingClosed =
+      !!post.votingEndsAt && post.votingEndsAt.getTime() <= now;
+    if (!votingClosed) {
+      return post;
+    }
+
+    const postId = post._id;
+    if (post.voteWinnerPickedAt) {
+      return post;
+    }
+
+    const existing = await this.postModel.findById(postId).lean().exec();
+    if (!existing || existing.voteWinnerPickedAt) {
+      if (existing) {
+        return (await this.postModel.findById(postId).exec()) ?? post;
+      }
+      return post;
+    }
+
+    const totalVotes = countsPerOption.reduce((a, b) => a + b, 0);
+    const pickedAt = new Date();
+    const $set: Record<string, unknown> = { voteWinnerPickedAt: pickedAt };
+
+    if (totalVotes > 0) {
+      const indices = this.winningOptionIndices(countsPerOption);
+      const drawn = await this.votesService.drawRandomEligibleVoter(
+        postId.toHexString(),
+        indices,
+      );
+      if (drawn) {
+        $set.voteWinnerUserId = drawn.userId;
+        $set.voteWinnerOptionIndex = drawn.selectedOptionIndex;
+      }
+    }
+
+    const updated = await this.postModel
+      .findOneAndUpdate(
+        {
+          _id: postId,
+          $or: [
+            { voteWinnerPickedAt: { $exists: false } },
+            { voteWinnerPickedAt: null },
+          ],
+        },
+        { $set },
+        { new: true },
+      )
+      .exec();
+
+    if (updated) {
+      return updated;
+    }
+
+    return (await this.postModel.findById(postId).exec()) ?? post;
+  }
 
   async findById(id: string): Promise<PostDocument | null> {
     if (!Types.ObjectId.isValid(id)) return null;
@@ -240,13 +365,18 @@ export class PostsService implements OnModuleInit {
       post.imageUrls = input.imageUrls;
     }
     if (input.options && input.options.length >= 2) {
-      post.options = input.options.map((o) => ({
-        label: o.label,
-        imageUrl: o.imageUrl,
-      }));
+      post.options = input.options.map((o) => this.mapOptionInput(o));
     }
     if (input.categoryId) {
       post.categoryId = new Types.ObjectId(input.categoryId);
+    }
+    if (input.campaignId !== undefined) {
+      const campaignOid = await this.resolveCampaignId(input.campaignId);
+      if (campaignOid) {
+        post.campaignId = campaignOid;
+      } else {
+        post.set('campaignId', undefined);
+      }
     }
     if (isAdmin) {
       const editorId = new Types.ObjectId(userId);
@@ -424,14 +554,12 @@ export class PostsService implements OnModuleInit {
     );
     const scheduledAt = this.parseFutureDate(input.scheduledAt, 'scheduledAt');
     const status = scheduledAt ? PostStatus.SCHEDULED : PostStatus.PUBLISHED;
+    const campaignOid = await this.resolveCampaignId(input.campaignId);
     const doc = await this.postModel.create({
       type: PostType.USER,
       contentText,
       imageUrls: input.imageUrls,
-      options: input.options.map((o) => ({
-        label: o.label,
-        imageUrl: o.imageUrl,
-      })),
+      options: input.options.map((o) => this.mapOptionInput(o)),
       categoryId: category._id,
       visibility,
       createdBy: new Types.ObjectId(authorId),
@@ -442,6 +570,7 @@ export class PostsService implements OnModuleInit {
       votingEndsAt,
       status,
       scheduledAt,
+      campaignId: campaignOid,
     });
     if (status === PostStatus.PUBLISHED) {
       await this.publishNewPost(doc._id.toHexString());
@@ -486,14 +615,12 @@ export class PostsService implements OnModuleInit {
     );
     const scheduledAt = this.parseFutureDate(input.scheduledAt, 'scheduledAt');
     const status = scheduledAt ? PostStatus.SCHEDULED : PostStatus.PUBLISHED;
+    const campaignOid = await this.resolveCampaignId(input.campaignId);
     const doc = await this.postModel.create({
       type: PostType.ORG,
       contentText,
       imageUrls: input.imageUrls,
-      options: input.options.map((o) => ({
-        label: o.label,
-        imageUrl: o.imageUrl,
-      })),
+      options: input.options.map((o) => this.mapOptionInput(o)),
       categoryId: category._id,
       visibility,
       createdBy: new Types.ObjectId(authorId),
@@ -506,6 +633,7 @@ export class PostsService implements OnModuleInit {
       votingEndsAt,
       status,
       scheduledAt,
+      campaignId: campaignOid,
     });
     if (status === PostStatus.PUBLISHED) {
       await this.publishNewPost(doc._id.toHexString());
@@ -531,14 +659,12 @@ export class PostsService implements OnModuleInit {
     );
     const scheduledAt = this.parseFutureDate(input.scheduledAt, 'scheduledAt');
     const status = scheduledAt ? PostStatus.SCHEDULED : PostStatus.PUBLISHED;
+    const campaignOid = await this.resolveCampaignId(input.campaignId);
     const doc = await this.postModel.create({
       type: PostType.SYSTEM,
       contentText,
       imageUrls: input.imageUrls,
-      options: input.options.map((o) => ({
-        label: o.label,
-        imageUrl: o.imageUrl,
-      })),
+      options: input.options.map((o) => this.mapOptionInput(o)),
       categoryId: category._id,
       visibility: Visibility.PUBLIC,
       createdBy: new Types.ObjectId(adminId),
@@ -549,6 +675,7 @@ export class PostsService implements OnModuleInit {
       votingEndsAt,
       status,
       scheduledAt,
+      campaignId: campaignOid,
     });
     if (status === PostStatus.PUBLISHED) {
       await this.publishNewPost(doc._id.toHexString());
@@ -556,39 +683,39 @@ export class PostsService implements OnModuleInit {
     return doc;
   }
 
+  /** Publish feed subscription + user notifications after a post goes live. */
+  async onPostPublished(postId: string): Promise<void> {
+    await this.publishNewPost(postId);
+  }
+
   private async publishNewPost(postId: string) {
-    await pubsub.publish(NEW_POST, { newPost: { postId } });
     try {
       const post = await this.postModel.findById(postId).exec();
-      if (!post) return;
+      if (!post || post.status !== PostStatus.PUBLISHED) {
+        return;
+      }
+      await pubsub.publish(NEW_POST, { newPost: { postId } });
       const authorId = post.createdBy.toHexString();
       const author = await this.usersService.findById(authorId);
       const authorName =
-        author?.displayName?.trim() || author?.username || 'Someone';
+        author?.displayName?.trim() || author?.username || 'CTrend';
       const caption = (post.contentText ?? '').trim();
 
       if (post.type === PostType.SYSTEM) {
-        // SYSTEM (admin/campaign) posts fan out to ALL users on the platform.
-        // The admin who created the post does not receive a notification.
-        const allUserIds = await this.usersService.findAllIds();
-        const recipients = allUserIds.filter((id) => id !== authorId);
-        const body = caption
-          ? caption.slice(0, 120)
-          : 'A new campaign is live — tap to view.';
-        await Promise.all(
-          recipients.map((userId) =>
-            this.notificationsService.create({
-              userId,
-              type: 'ANNOUNCEMENT',
-              title: `📢 ${authorName} posted a campaign`,
-              body,
-              referenceId: postId,
-              referenceType: 'Post',
-              actorId: authorId,
-              actorName: authorName,
-            }),
-          ),
-        );
+        // Platform-wide posts → every user (except author) gets a bell notification.
+        void this.notificationsService
+          .notifyAllUsersOfPlatformPost({
+            postId,
+            authorId,
+            authorName: PLATFORM_BRAND_NAME,
+            caption,
+          })
+          .catch((err) =>
+            this.logger.error(
+              `Platform post notification fan-out failed for ${postId}`,
+              err,
+            ),
+          );
         return;
       }
 
@@ -606,13 +733,18 @@ export class PostsService implements OnModuleInit {
             body,
             referenceId: postId,
             referenceType: 'Post',
+            postId,
             actorId: authorId,
             actorName: authorName,
           }),
         ),
       );
-    } catch {
-      // Don't fail post-create flow if notifications fan-out fails
+    } catch (err) {
+      this.logger.warn(
+        `Post notification fan-out failed for ${postId}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
     }
   }
 
@@ -719,6 +851,38 @@ export class PostsService implements OnModuleInit {
     const isVotingOpen =
       !post.votingEndsAt || post.votingEndsAt.getTime() > now;
 
+    let postForGql = post;
+    if (!isVotingOpen) {
+      postForGql = await this.ensureVoteWinnerDrawn(
+        post,
+        stats.countsPerOption,
+      );
+    }
+
+    let campaign: PostCampaignSummaryGql | null = null;
+    if (postForGql.campaignId) {
+      const campaignDoc = await this.campaignsService.findById(
+        postForGql.campaignId.toHexString(),
+      );
+      if (campaignDoc) {
+        campaign = this.toCampaignSummary(campaignDoc);
+      }
+    }
+
+    let voteWinner: PostVoteWinnerGql | null = null;
+    if (postForGql.voteWinnerUserId && postForGql.voteWinnerPickedAt) {
+      const winnerUser = await this.usersService.findById(
+        postForGql.voteWinnerUserId.toHexString(),
+      );
+      if (winnerUser) {
+        voteWinner = {
+          user: this.usersService.toGql(winnerUser),
+          selectedOptionIndex: postForGql.voteWinnerOptionIndex,
+          pickedAt: postForGql.voteWinnerPickedAt,
+        };
+      }
+    }
+
     let editedBy: UserGql[] | undefined;
     let lastEditedBy: UserGql | undefined;
     const editorIdSet = new Set<string>();
@@ -753,15 +917,25 @@ export class PostsService implements OnModuleInit {
       options: post.options.map((o) => ({
         label: o.label,
         imageUrl: o.imageUrl,
+        imageFocalX: o.imageFocalX,
+        imageFocalY: o.imageFocalY,
       })),
       category: this.categoriesService.toGql(category),
       visibility: post.visibility,
       author: this.usersService.toGql(author as UserDocument),
       authorId: (author as UserDocument)._id.toHexString(),
-      authorUsername: author.username,
-      authorDisplayName: author.displayName ?? null,
-      authorEmail: author.email,
-      authorProfileImageUrl: author.profileImageUrl ?? null,
+      authorUsername:
+        post.type === PostType.SYSTEM
+          ? PLATFORM_BRAND_USERNAME
+          : author.username,
+      authorDisplayName:
+        post.type === PostType.SYSTEM
+          ? PLATFORM_BRAND_NAME
+          : (author.displayName ?? null),
+      authorEmail:
+        post.type === PostType.SYSTEM ? null : author.email,
+      authorProfileImageUrl:
+        post.type === PostType.SYSTEM ? null : (author.profileImageUrl ?? null),
       orgReach: post.orgReach,
       commentsDisabled: post.commentsDisabled,
       likesDisabled: post.likesDisabled,
@@ -788,6 +962,8 @@ export class PostsService implements OnModuleInit {
       scheduledAt: post.scheduledAt,
       editedBy,
       lastEditedBy,
+      campaign,
+      voteWinner,
     };
   }
 }

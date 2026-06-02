@@ -138,6 +138,7 @@ input CreateCampaignInput {
 }
 
 input CreatePostInput {
+  campaignId: String
   caption: String
   categoryId: String!
   contentText: String
@@ -431,6 +432,15 @@ type ParticipantGql {
   online: Boolean!
 }
 
+type PostCampaignSummaryGql {
+  bannerImageUrl: String
+  bannerText: String
+  id: ID!
+  name: String!
+  prizePerWinner: Int!
+  slug: String!
+}
+
 type PostDeletedGql {
   postId: ID!
 }
@@ -438,10 +448,11 @@ type PostDeletedGql {
 type PostGql {
   author: UserGql!
   authorDisplayName: String
-  authorEmail: String!
+  authorEmail: String
   authorId: ID!
   authorProfileImageUrl: String
   authorUsername: String!
+  campaign: PostCampaignSummaryGql
   caption: String
   category: CategoryGql!
   commentCount: Int!
@@ -475,15 +486,20 @@ type PostGql {
   viewerHasSaved: Boolean!
   viewerVote: String
   visibility: Visibility!
+  voteWinner: PostVoteWinnerGql
   votingEndsAt: DateTime
 }
 
 type PostOptionGql {
+  imageFocalX: Int
+  imageFocalY: Int
   imageUrl: String
   label: String!
 }
 
 input PostOptionInput {
+  imageFocalX: Int
+  imageFocalY: Int
   imageUrl: String
   label: String!
 }
@@ -497,6 +513,12 @@ enum PostType {
   ORG
   SYSTEM
   USER
+}
+
+type PostVoteWinnerGql {
+  pickedAt: DateTime
+  selectedOptionIndex: Int
+  user: UserGql
 }
 
 type PostVoterGql {
@@ -629,6 +651,7 @@ input UpdateCampaignInput {
 }
 
 input UpdatePostInput {
+  campaignId: String
   caption: String
   categoryId: String
   imageUrls: [String!]

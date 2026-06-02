@@ -10,6 +10,12 @@ import {
 import { NotFoundException, UseGuards } from '@nestjs/common';
 import { PostsService } from './posts.service';
 import { PostGql } from './graphql/post.types';
+import { PostCampaignSummaryGql } from './graphql/post-campaign-summary.types';
+import { PostVoteWinnerGql } from './graphql/post-vote-winner.types';
+
+/** Ensure code-first schema registers nested post types. */
+void PostCampaignSummaryGql;
+void PostVoteWinnerGql;
 import { CreatePostInput } from './dto/create-post.input';
 import { UpdatePostInput } from './dto/update-post.input';
 import { GqlAuthGuard } from '../common/guards/gql-auth.guard';

@@ -260,6 +260,33 @@ export class VotesService {
     };
   }
 
+  /**
+   * Random eligible voter for post giveaway after voting ends.
+   * Excludes anonymous votes. If `winningOptionIndices` is empty, uses all options.
+   */
+  async drawRandomEligibleVoter(
+    postId: string,
+    winningOptionIndices: number[],
+  ): Promise<{
+    userId: Types.ObjectId;
+    selectedOptionIndex: number;
+  } | null> {
+    const query: Record<string, unknown> = {
+      postId: new Types.ObjectId(postId),
+      anonymous: { $ne: true },
+    };
+    if (winningOptionIndices.length > 0) {
+      query.selectedOptionIndex = { $in: winningOptionIndices };
+    }
+    const votes = await this.voteModel.find(query).lean().exec();
+    if (!votes.length) return null;
+    const drawn = votes[Math.floor(Math.random() * votes.length)];
+    return {
+      userId: drawn.userId as Types.ObjectId,
+      selectedOptionIndex: drawn.selectedOptionIndex,
+    };
+  }
+
   async listVoters(
     postId: string,
     optionIndex?: number,

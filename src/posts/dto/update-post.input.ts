@@ -37,4 +37,10 @@ export class UpdatePostInput {
   @IsOptional()
   @IsString()
   categoryId?: string;
+
+  /** Set to attach a campaign; send empty string to detach. */
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  campaignId?: string;
 }

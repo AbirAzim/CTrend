@@ -31,8 +31,9 @@ export class FeedService {
     take: number,
     viewerId?: string,
     viewerRole?: string,
+    campaignId?: string,
   ) {
-    const filter = await this.buildFilter(scope, viewerId, viewerRole);
+    const filter = await this.buildFilter(scope, viewerId, viewerRole, campaignId);
     const sortSpec = this.buildSort(sort);
     const q = this.postModel.find(filter).sort(sortSpec).skip(skip).limit(take);
     const [rows, totalCount] = await Promise.all([
@@ -62,17 +63,22 @@ export class FeedService {
     _scope: FeedScope,
     viewerId?: string,
     viewerRole?: string,
+    campaignId?: string,
   ): Promise<Record<string, unknown>> {
     const notScheduled = { status: { $ne: PostStatus.SCHEDULED } };
+    const campaignFilter =
+      campaignId && Types.ObjectId.isValid(campaignId)
+        ? { campaignId: new Types.ObjectId(campaignId) }
+        : {};
 
     // Admins see every post on the platform — but never the SCHEDULED ones in
     // the main feed (those have their own /profile/scheduled view).
-    if (viewerRole === 'admin') return notScheduled;
+    if (viewerRole === 'admin') return { ...notScheduled, ...campaignFilter };
 
     // Unauthenticated: only SYSTEM posts (explicitly platform-wide by admin choice).
     // Regular USER posts by admins are friends-only, same as any other user.
     if (!viewerId) {
-      return { type: PostType.SYSTEM, ...notScheduled };
+      return { type: PostType.SYSTEM, ...notScheduled, ...campaignFilter };
     }
 
     // Authenticated user: own posts (any status) + friends' posts + SYSTEM + org posts.
@@ -110,7 +116,7 @@ export class FeedService {
       ...notScheduled,
     });
 
-    return { $or: parts };
+    return { $or: parts, ...campaignFilter };
   }
 
   private async orgIdsForFollowedOwners(

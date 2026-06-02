@@ -152,6 +152,9 @@ export class PostGql {
   @Field(() => Date, { nullable: true })
   votingEndsAt?: Date;
 
+  @Field(() => Int)
+  endingSoonLeadMinutes: number;
+
   @Field()
   isVotingOpen: boolean;
 

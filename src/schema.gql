@@ -53,6 +53,7 @@ type CampaignGql {
   fixturesEnabled: Boolean!
   id: ID!
   isActive: Boolean!
+  isDefault: Boolean!
   name: String!
   prizePerWinner: Int!
   rules: String
@@ -129,6 +130,7 @@ input CreateCampaignInput {
   description: String
   endDate: DateTime
   fixturesEnabled: Boolean
+  isDefault: Boolean
   name: String!
   prizePerWinner: Int
   rules: String
@@ -461,6 +463,7 @@ type PostGql {
   createdAt: DateTime!
   downvoteCount: Int!
   editedBy: [UserGql!]
+  endingSoonLeadMinutes: Int!
   hypeCount: Int!
   id: ID!
   imageUrl: String
@@ -556,7 +559,7 @@ type Query {
   categories: [CategoryGql!]!
   categoryPostCount(categoryId: ID!): Int!
   commentsByPost(postId: ID!): [CommentGql!]!
-  feedPosts(scope: FeedScope, skip: Int = 0, sort: FeedSort, take: Int = 20): [PostGql!]!
+  feedPosts(campaignId: ID, scope: FeedScope, skip: Int = 0, sort: FeedSort, take: Int = 20): [PostGql!]!
   friendRequests: FriendRequestsGql!
   friendSuggestions(limit: Int, search: String): [UserGql!]!
   friendshipStatus(userId: ID!): String!
@@ -643,6 +646,7 @@ input UpdateCampaignInput {
   endDate: DateTime
   fixturesEnabled: Boolean
   isActive: Boolean
+  isDefault: Boolean
   name: String
   prizePerWinner: Int
   rules: String
@@ -654,6 +658,7 @@ input UpdatePostInput {
   campaignId: String
   caption: String
   categoryId: String
+  endingSoonLeadMinutes: Int
   imageUrls: [String!]
   options: [PostOptionInput!]
 }

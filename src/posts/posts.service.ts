@@ -48,6 +48,7 @@ import {
 } from '../common/platform-brand';
 
 const PREMIUM_GLOBAL_MONTHLY = 20;
+const DEFAULT_ENDING_SOON_LEAD_MINUTES = 5;
 
 function currentMonthKey(): string {
   const d = new Date();
@@ -378,6 +379,12 @@ export class PostsService implements OnModuleInit {
         post.set('campaignId', undefined);
       }
     }
+    if (input.endingSoonLeadMinutes !== undefined) {
+      post.endingSoonLeadMinutes = Math.max(
+        1,
+        Math.min(1440, Math.round(input.endingSoonLeadMinutes)),
+      );
+    }
     if (isAdmin) {
       const editorId = new Types.ObjectId(userId);
       const existing = post.editedByIds ?? [];
@@ -568,6 +575,7 @@ export class PostsService implements OnModuleInit {
       commentsDisabled: false,
       likesDisabled: false,
       votingEndsAt,
+      endingSoonLeadMinutes: DEFAULT_ENDING_SOON_LEAD_MINUTES,
       status,
       scheduledAt,
       campaignId: campaignOid,
@@ -631,6 +639,7 @@ export class PostsService implements OnModuleInit {
       commentsDisabled: false,
       likesDisabled: false,
       votingEndsAt,
+      endingSoonLeadMinutes: DEFAULT_ENDING_SOON_LEAD_MINUTES,
       status,
       scheduledAt,
       campaignId: campaignOid,
@@ -673,6 +682,7 @@ export class PostsService implements OnModuleInit {
       commentsDisabled: false,
       likesDisabled: false,
       votingEndsAt,
+      endingSoonLeadMinutes: DEFAULT_ENDING_SOON_LEAD_MINUTES,
       status,
       scheduledAt,
       campaignId: campaignOid,
@@ -955,6 +965,8 @@ export class PostsService implements OnModuleInit {
       viewerVote:
         mySelected === undefined ? null : mySelected === 0 ? 'up' : 'down',
       votingEndsAt: post.votingEndsAt,
+      endingSoonLeadMinutes:
+        post.endingSoonLeadMinutes ?? DEFAULT_ENDING_SOON_LEAD_MINUTES,
       isVotingOpen,
       createdAt: post.createdAt ?? new Date(),
       updatedAt: (post as PostDocument).updatedAt ?? post.createdAt,

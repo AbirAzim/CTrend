@@ -18,15 +18,27 @@ export class CampaignsService {
     @InjectModel(Campaign.name) private campaignModel: Model<CampaignDocument>,
   ) {}
 
+  private async clearDefaultExcept(exceptId?: Types.ObjectId): Promise<void> {
+    const filter = exceptId
+      ? { _id: { $ne: exceptId }, isDefault: true }
+      : { isDefault: true };
+    await this.campaignModel
+      .updateMany(filter, { $set: { isDefault: false } })
+      .exec();
+  }
+
   async findActive(): Promise<CampaignDocument[]> {
     return this.campaignModel
       .find({ isActive: true })
-      .sort({ createdAt: -1 })
+      .sort({ isDefault: -1, createdAt: -1 })
       .exec();
   }
 
   async findAll(): Promise<CampaignDocument[]> {
-    return this.campaignModel.find().sort({ createdAt: -1 }).exec();
+    return this.campaignModel
+      .find()
+      .sort({ isDefault: -1, isActive: -1, createdAt: -1 })
+      .exec();
   }
 
   async findById(id: string): Promise<CampaignDocument | null> {
@@ -45,7 +57,8 @@ export class CampaignsService {
         `Campaign with slug "${input.slug}" already exists`,
       );
     }
-    return this.campaignModel.create({
+    const makeDefault = !!input.isDefault;
+    const created = await this.campaignModel.create({
       name: input.name,
       slug: input.slug.toLowerCase(),
       description: input.description,
@@ -53,7 +66,8 @@ export class CampaignsService {
       bannerImageUrl: input.bannerImageUrl,
       ctaLabel: input.ctaLabel,
       ctaUrl: input.ctaUrl,
-      isActive: false,
+      isActive: makeDefault ? true : false,
+      isDefault: makeDefault,
       prizePerWinner: input.prizePerWinner ?? 100,
       rules: input.rules,
       rulesBn: input.rulesBn,
@@ -61,6 +75,10 @@ export class CampaignsService {
       startDate: input.startDate,
       endDate: input.endDate,
     });
+    if (makeDefault) {
+      await this.clearDefaultExcept(created._id);
+    }
+    return created;
   }
 
   async update(
@@ -70,7 +88,16 @@ export class CampaignsService {
     const doc = await this.findById(id);
     if (!doc) throw new NotFoundException('Campaign not found');
     Object.assign(doc, input);
+    if (input.isActive === false) {
+      doc.isDefault = false;
+    }
+    if (input.isDefault === true) {
+      doc.isActive = true;
+    }
     await doc.save();
+    if (doc.isDefault) {
+      await this.clearDefaultExcept(doc._id);
+    }
     return doc;
   }
 
@@ -78,6 +105,9 @@ export class CampaignsService {
     const doc = await this.findById(id);
     if (!doc) throw new NotFoundException('Campaign not found');
     doc.isActive = isActive;
+    if (!isActive) {
+      doc.isDefault = false;
+    }
     await doc.save();
     return doc;
   }
@@ -93,6 +123,7 @@ export class CampaignsService {
       ctaLabel: doc.ctaLabel,
       ctaUrl: doc.ctaUrl,
       isActive: doc.isActive,
+      isDefault: !!doc.isDefault,
       prizePerWinner: doc.prizePerWinner,
       rules: doc.rules,
       rulesBn: doc.rulesBn,

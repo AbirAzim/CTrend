@@ -76,6 +76,10 @@ export class Post {
   @Prop({ type: Date })
   votingEndsAt?: Date;
 
+  /** Minutes before voting end to show "ending soon" urgency UI. */
+  @Prop({ type: Number, min: 1, max: 1440, default: 5 })
+  endingSoonLeadMinutes: number;
+
   @Prop({ type: String, enum: PostStatus, default: PostStatus.PUBLISHED })
   status: PostStatus;
 

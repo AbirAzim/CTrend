@@ -16,6 +16,7 @@ import { OrganizationsService } from '../organizations/organizations.service';
 @Injectable()
 export class FeedService {
   private readonly logger = new Logger(FeedService.name);
+  private lastScheduledSyncAt = 0;
 
   constructor(
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
@@ -33,6 +34,7 @@ export class FeedService {
     viewerRole?: string,
     campaignId?: string,
   ) {
+    await this.syncDueScheduledPosts();
     const filter = await this.buildFilter(scope, viewerId, viewerRole, campaignId);
     const sortSpec = this.buildSort(sort);
     const q = this.postModel.find(filter).sort(sortSpec).skip(skip).limit(take);
@@ -44,6 +46,27 @@ export class FeedService {
       rows.map((p) => this.postsService.toGql(p, viewerId)),
     );
     return { nodes, totalCount };
+  }
+
+  /**
+   * Backstop for scheduled publishing: if cron missed due to transient infra
+   * issues (DB reconnect, process restart), feed reads still self-heal by
+   * publishing overdue scheduled posts.
+   */
+  private async syncDueScheduledPosts(): Promise<void> {
+    const now = Date.now();
+    // Throttle to avoid running expensive checks on every request.
+    if (now - this.lastScheduledSyncAt < 20_000) return;
+    this.lastScheduledSyncAt = now;
+    try {
+      await this.postsService.publishScheduledPosts();
+    } catch (err) {
+      this.logger.warn(
+        `Scheduled sync during feed read failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
   }
 
   private buildSort(sort: FeedSort): Record<string, 1 | -1> {

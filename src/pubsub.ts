@@ -17,3 +17,21 @@ export const pubsub = new PubSub();
 // Setting 0 removes the cap entirely (safe for a single-process pubsub).
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 (pubsub as any).ee?.setMaxListeners(0);
+
+// Guard against transient socket write failures from stale websocket clients.
+const rawPublish: (triggerName: string, payload: unknown) => Promise<void> =
+  pubsub.publish.bind(pubsub);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(pubsub as any).publish = async (...args: any[]) => {
+  try {
+    return await rawPublish(args[0], args[1]);
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException)?.code;
+    if (code === 'EPIPE' || code === 'ECONNRESET') {
+      // Keep app flows alive even when a websocket client disconnects abruptly.
+      console.warn('[PubSub] Ignored transient websocket publish error:', code);
+      return;
+    }
+    throw err;
+  }
+};

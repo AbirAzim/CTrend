@@ -223,6 +223,20 @@ export class VotesService {
     return votes.map((v) => v.postId as Types.ObjectId);
   }
 
+  /** Distinct user ids who participated on a post (identified + anonymous). */
+  async listParticipantUserIds(postId: string): Promise<string[]> {
+    if (!Types.ObjectId.isValid(postId)) return [];
+    const rows = await this.voteModel
+      .find({ postId: new Types.ObjectId(postId) }, { userId: 1 })
+      .lean()
+      .exec();
+    return [
+      ...new Set(
+        rows.map((row) => (row.userId as Types.ObjectId).toHexString()),
+      ),
+    ];
+  }
+
   /** Remove the current user's vote on a post (withdraw). No-op if not voted. */
   async removeVote(userId: string, postId: string) {
     if (!Types.ObjectId.isValid(postId)) {

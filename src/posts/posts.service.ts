@@ -46,6 +46,8 @@ import {
   PLATFORM_BRAND_NAME,
   PLATFORM_BRAND_USERNAME,
 } from '../common/platform-brand';
+import { NotificationType } from '../notifications/notification.schema';
+import { MessagesService } from '../messages/messages.service';
 
 const PREMIUM_GLOBAL_MONTHLY = 20;
 const DEFAULT_ENDING_SOON_LEAD_MINUTES = 5;
@@ -58,6 +60,21 @@ function currentMonthKey(): string {
 @Injectable()
 export class PostsService implements OnModuleInit {
   private readonly logger = new Logger(PostsService.name);
+  private async safePubsubPublish(
+    topic: string,
+    payload: Record<string, unknown>,
+  ): Promise<void> {
+    try {
+      await pubsub.publish(topic, payload);
+    } catch (err) {
+      this.logger.warn(
+        `PubSub publish failed for ${topic}: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
+
 
   async onModuleInit() {
     // Backfill: re-enable hype on existing system/admin posts that were
@@ -87,6 +104,7 @@ export class PostsService implements OnModuleInit {
     private notificationsService: NotificationsService,
     private followsService: FollowsService,
     private campaignsService: CampaignsService,
+    private messagesService: MessagesService,
   ) {}
 
   private async resolveCampaignId(
@@ -196,10 +214,134 @@ export class PostsService implements OnModuleInit {
       .exec();
 
     if (updated) {
+      if (!updated.voteEndedNotifiedAt) {
+        void this.notifyVoteEndedAndWinner(updated).catch((err) =>
+          this.logger.warn(
+            `Vote-ended notification fanout failed for ${updated._id.toHexString()}: ${
+              err instanceof Error ? err.message : String(err)
+            }`,
+          ),
+        );
+      }
       return updated;
     }
 
     return (await this.postModel.findById(postId).exec()) ?? post;
+  }
+
+  private isFriendPost(post: PostDocument): boolean {
+    return post.type === PostType.USER;
+  }
+
+  private isPrizeClaimEligiblePost(post: PostDocument): boolean {
+    return post.type === PostType.USER || post.type === PostType.SYSTEM;
+  }
+
+  private async notifyVoteEndedAndWinner(post: PostDocument): Promise<void> {
+    if (post.voteEndedNotifiedAt) return;
+    if (!post.voteWinnerPickedAt) return;
+
+    const postId = post._id.toHexString();
+    const authorId = post.createdBy.toHexString();
+    const participantIds = await this.votesService.listParticipantUserIds(postId);
+    const winnerId = post.voteWinnerUserId?.toHexString() ?? null;
+    const canClaimPrize = this.isPrizeClaimEligiblePost(post);
+    const recipients = new Set<string>([authorId, ...participantIds]);
+
+    if (winnerId) {
+      recipients.delete(winnerId);
+    }
+
+    await Promise.all([
+      ...[...recipients].map((userId) =>
+        this.notificationsService.create({
+          userId,
+          type: 'VOTE_ENDED' as NotificationType,
+          title: 'Vote has ended',
+          body: 'Vote has ended. Check out the winner.',
+          referenceId: postId,
+          referenceType: 'Post',
+          postId,
+        }),
+      ),
+      ...(winnerId
+        ? [
+            this.notificationsService.create({
+              userId: winnerId,
+              type: 'VOTE_WINNER' as NotificationType,
+              title: canClaimPrize
+                ? 'You won this post! Claim your prize'
+                : 'You won this post!',
+              body: canClaimPrize
+                ? 'You won this post. Claim your prize now and celebrate your win.'
+                : 'You won this post. Check the result and celebrate your win.',
+              referenceId: postId,
+              referenceType: 'Post',
+              postId,
+            }),
+          ]
+        : []),
+    ]);
+
+    await this.postModel.updateOne(
+      { _id: post._id, voteEndedNotifiedAt: { $exists: false } },
+      { $set: { voteEndedNotifiedAt: new Date() } },
+    );
+  }
+
+  async claimVotePrize(userId: string, postId: string): Promise<PostDocument> {
+    const post = await this.postModel.findById(postId).exec();
+    if (!post) throw new NotFoundException('Post not found');
+    if (!this.isPrizeClaimEligiblePost(post)) {
+      throw new BadRequestException(
+        'Prize claim is available only for friend or platform posts',
+      );
+    }
+    if (!post.voteWinnerPickedAt || !post.voteWinnerUserId) {
+      throw new BadRequestException('Winner is not available yet');
+    }
+    if (post.voteWinnerUserId.toHexString() !== userId) {
+      throw new ForbiddenException('Only the selected winner can claim prize');
+    }
+    if (post.votePrizeClaimedAt) {
+      return post;
+    }
+
+    const now = new Date();
+    post.votePrizeClaimedAt = now;
+    post.votePrizeClaimedByUserId = new Types.ObjectId(userId);
+    await post.save();
+
+    const adminIds = (await this.usersService.findIdsByRole(UserRole.ADMIN)).map(
+      (id) => id.toHexString(),
+    );
+    const winner = await this.usersService.findById(userId);
+    const winnerName =
+      winner?.displayName?.trim() || winner?.username || 'A winner';
+    const shortPostId = post._id.toHexString().slice(-8);
+
+    await Promise.all(
+      adminIds.map((adminId) =>
+        this.notificationsService.create({
+          userId: adminId,
+          type: 'VOTE_PRIZE_CLAIMED' as NotificationType,
+          title: 'Winner claimed prize',
+          body: `${winnerName} is claiming prize for post #${shortPostId}.`,
+          referenceId: post._id.toHexString(),
+          referenceType: 'Post',
+          postId: post._id.toHexString(),
+          actorId: userId,
+          actorName: winnerName,
+        }),
+      ),
+    );
+
+    await this.messagesService.sendSystemModeratorAutoMessage(
+      userId,
+      'Your prize claim is received. A moderator will connect with you soon.',
+    );
+
+    return post;
   }
 
   async findById(id: string): Promise<PostDocument | null> {
@@ -316,16 +458,53 @@ export class PostsService implements OnModuleInit {
   }
 
   async publishScheduledPosts(): Promise<void> {
+    const now = new Date();
     const due = await this.postModel
-      .find({ status: PostStatus.SCHEDULED, scheduledAt: { $lte: new Date() } })
+      .find(
+        { status: PostStatus.SCHEDULED, scheduledAt: { $lte: now } },
+        { _id: 1, scheduledAt: 1 },
+      )
+      .lean()
       .exec();
-    for (const post of due) {
-      const goLiveAt = post.scheduledAt ?? new Date();
-      post.status = PostStatus.PUBLISHED;
-      // Feed "posted" time should reflect go-live, not draft creation time.
-      post.createdAt = goLiveAt;
-      await post.save();
-      await this.publishNewPost(post._id.toHexString());
+
+    for (const row of due) {
+      const postId = row._id.toString();
+      const goLiveAt = row.scheduledAt ?? now;
+      try {
+        // Atomic flip prevents race issues across multiple app instances.
+        const updated = await this.postModel
+          .findOneAndUpdate(
+            { _id: row._id, status: PostStatus.SCHEDULED },
+            {
+              $set: {
+                status: PostStatus.PUBLISHED,
+                createdAt: goLiveAt, // feed time should reflect go-live
+              },
+            },
+            { new: true },
+          )
+          .exec();
+        if (!updated) continue;
+        this.logger.log(
+          `Published scheduled post ${postId} at ${goLiveAt.toISOString()}`,
+        );
+        await this.publishNewPost(postId);
+        await this.notificationsService.create({
+          userId: updated.createdBy.toHexString(),
+          type: 'ANNOUNCEMENT',
+          title: 'Scheduled post is now live',
+          body: 'Your scheduled post has been published to the feed.',
+          referenceId: postId,
+          referenceType: 'Post',
+          postId,
+        });
+      } catch (err) {
+        this.logger.warn(
+          `Failed to publish scheduled post ${postId}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
     }
   }
 
@@ -420,7 +599,7 @@ export class PostsService implements OnModuleInit {
       this.commentModel.deleteMany({ postId: pid }),
     ]);
     // Notify all connected feed clients so the post disappears in real time.
-    await pubsub.publish(POST_DELETED, {
+    await this.safePubsubPublish(POST_DELETED, {
       postDeleted: { postId: pid.toHexString() },
     });
     return true;
@@ -704,7 +883,7 @@ export class PostsService implements OnModuleInit {
       if (!post || post.status !== PostStatus.PUBLISHED) {
         return;
       }
-      await pubsub.publish(NEW_POST, { newPost: { postId } });
+      await this.safePubsubPublish(NEW_POST, { newPost: { postId } });
       const authorId = post.createdBy.toHexString();
       const author = await this.usersService.findById(authorId);
       const authorName =
@@ -713,19 +892,12 @@ export class PostsService implements OnModuleInit {
 
       if (post.type === PostType.SYSTEM) {
         // Platform-wide posts → every user (except author) gets a bell notification.
-        void this.notificationsService
-          .notifyAllUsersOfPlatformPost({
-            postId,
-            authorId,
-            authorName: PLATFORM_BRAND_NAME,
-            caption,
-          })
-          .catch((err) =>
-            this.logger.error(
-              `Platform post notification fan-out failed for ${postId}`,
-              err,
-            ),
-          );
+        await this.notificationsService.notifyAllUsersOfPlatformPost({
+          postId,
+          authorId,
+          authorName: PLATFORM_BRAND_NAME,
+          caption,
+        });
         return;
       }
 
@@ -798,7 +970,7 @@ export class PostsService implements OnModuleInit {
     }
     post.votingEndsAt = nextEndAt;
     await post.save();
-    await pubsub.publish(POST_VOTE_UPDATED, {
+    await this.safePubsubPublish(POST_VOTE_UPDATED, {
       postVoteUpdated: { postId: post._id.toHexString() },
     });
     return post;
@@ -860,6 +1032,16 @@ export class PostsService implements OnModuleInit {
     const now = Date.now();
     const isVotingOpen =
       !post.votingEndsAt || post.votingEndsAt.getTime() > now;
+    const isPrizeClaimed = Boolean(post.votePrizeClaimedAt);
+    const viewerIsWinner =
+      Boolean(viewerId) &&
+      Boolean(post.voteWinnerUserId) &&
+      post.voteWinnerUserId!.toHexString() === viewerId;
+    const canClaimPrize =
+      this.isPrizeClaimEligiblePost(post) &&
+      !isVotingOpen &&
+      viewerIsWinner &&
+      !isPrizeClaimed;
 
     let postForGql = post;
     if (!isVotingOpen) {
@@ -976,6 +1158,9 @@ export class PostsService implements OnModuleInit {
       lastEditedBy,
       campaign,
       voteWinner,
+      isPrizeClaimed,
+      votePrizeClaimedAt: post.votePrizeClaimedAt,
+      canClaimPrize,
     };
   }
 }

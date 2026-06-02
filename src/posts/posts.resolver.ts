@@ -104,6 +104,16 @@ export class PostsResolver {
     return this.postsService.toGql(post, user.id);
   }
 
+  @Mutation(() => PostGql)
+  @UseGuards(GqlAuthGuard)
+  async claimPostVotePrize(
+    @CurrentUser() user: ReqUser,
+    @Args('postId', { type: () => ID }) postId: string,
+  ) {
+    const post = await this.postsService.claimVotePrize(user.id, postId);
+    return this.postsService.toGql(post, user.id);
+  }
+
   @Query(() => PostGql)
   @UseGuards(OptionalJwtGqlGuard)
   async getPostById(

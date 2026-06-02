@@ -26,15 +26,12 @@ export class PostSchedulerService {
   async publishDuePosts() {
     if (this.disabled) return;
 
-    if (this.connection.readyState !== 1) {
-      this.logger.warn(
-        'Skipping scheduled publish — MongoDB not connected (readyState=%s)',
-        this.connection.readyState,
-      );
-      return;
-    }
-
     try {
+      if (this.connection.readyState !== 1) {
+        this.logger.warn(
+          `MongoDB connection is not ready (readyState=${this.connection.readyState}); attempting scheduled publish anyway`,
+        );
+      }
       await this.postsService.publishScheduledPosts();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

@@ -107,6 +107,18 @@ export class Post {
   /** Set when draw ran (even if no eligible winner). */
   @Prop({ type: Date })
   voteWinnerPickedAt?: Date;
+
+  /** Set once vote-ended notifications were fanned out. */
+  @Prop({ type: Date })
+  voteEndedNotifiedAt?: Date;
+
+  /** Set when the winner claims the prize (friend posts only). */
+  @Prop({ type: Date })
+  votePrizeClaimedAt?: Date;
+
+  /** Winner user id who claimed the prize. */
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  votePrizeClaimedByUserId?: Types.ObjectId;
 }
 
 export const PostSchema = SchemaFactory.createForClass(Post);

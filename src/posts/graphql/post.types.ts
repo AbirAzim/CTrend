@@ -182,4 +182,13 @@ export class PostGql {
 
   @Field(() => PostVoteWinnerGql, { nullable: true })
   voteWinner?: PostVoteWinnerGql | null;
+
+  @Field()
+  isPrizeClaimed: boolean;
+
+  @Field(() => Date, { nullable: true })
+  votePrizeClaimedAt?: Date;
+
+  @Field()
+  canClaimPrize: boolean;
 }

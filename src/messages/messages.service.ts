@@ -280,6 +280,76 @@ export class MessagesService {
     return results;
   }
 
+  /**
+   * System-generated moderator auto-reply (no specific admin actor).
+   * Used for automated operational flows (e.g. prize-claim acknowledgement).
+   */
+  async sendSystemModeratorAutoMessage(
+    targetUserId: string,
+    text: string,
+  ): Promise<void> {
+    const trimmedText = text?.trim() ?? '';
+    if (!trimmedText) return;
+    const target = await this.usersService.findById(targetUserId);
+    if (!target) throw new NotFoundException('User not found');
+
+    const targetOid = this.requireUserObjectId(targetUserId);
+    const existing = await this.conversationModel
+      .findOne({
+        type: 'moderator',
+        participantIds: targetOid,
+      })
+      .exec();
+
+    const convo =
+      existing ??
+      (await this.conversationModel.create({
+        type: 'moderator',
+        participantIds: [targetOid],
+        name: MODERATOR_DISPLAY_NAME,
+        // System-generated thread bootstrap; no specific admin owner.
+        createdBy: targetOid,
+        unreadCounts: {},
+      }));
+
+    const msg = await this.messageModel.create({
+      conversationId: convo._id,
+      senderId: new Types.ObjectId(MODERATOR_SENDER_OBJECT_ID),
+      isModeratorMessage: true,
+      text: trimmedText,
+      imageUrl: null,
+      readBy: [],
+    });
+
+    await this.conversationModel.updateOne(
+      { _id: convo._id },
+      {
+        $set: {
+          lastMessageText: trimmedText.slice(0, 100),
+          lastMessageAt: msg.createdAt,
+          [`unreadCounts.${targetUserId}`]:
+            (convo.unreadCounts?.[targetUserId] ?? 0) + 1,
+        },
+      },
+    );
+
+    const userGql = await this.messageToGql(msg, targetUserId);
+    await pubsub.publish(NEW_MESSAGE, {
+      newMessage: userGql,
+      conversationId: convo._id.toHexString(),
+      participantIds: [targetUserId],
+    });
+
+    await this.notificationsService.create({
+      userId: targetUserId,
+      type: 'MESSAGE',
+      title: 'Official admin message',
+      body: trimmedText.slice(0, 140),
+      referenceId: convo._id.toHexString(),
+      referenceType: 'moderator_conversation',
+    });
+  }
+
   async listModeratorMessagesForAdmin(
     skip = 0,
     take = 50,

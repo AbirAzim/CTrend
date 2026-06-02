@@ -313,6 +313,7 @@ type Mutation {
   cancelInvitation(id: ID!): Boolean!
   cancelScheduledPost(postId: ID!): Boolean!
   cancelSubscription(organizationId: ID): Boolean!
+  claimPostVotePrize(postId: ID!): PostGql!
   commentPost(input: CommentPostInput!, postId: ID!): CommentGql!
   createCampaign(input: CreateCampaignInput!): CampaignGql!
   createCategory(name: String!): CategoryGql!
@@ -455,6 +456,7 @@ type PostGql {
   authorProfileImageUrl: String
   authorUsername: String!
   campaign: PostCampaignSummaryGql
+  canClaimPrize: Boolean!
   caption: String
   category: CategoryGql!
   commentCount: Int!
@@ -468,6 +470,7 @@ type PostGql {
   id: ID!
   imageUrl: String
   imageUrls: [String!]!
+  isPrizeClaimed: Boolean!
   isVotingOpen: Boolean!
   lastEditedBy: UserGql
   likeCount: Int!
@@ -489,6 +492,7 @@ type PostGql {
   viewerHasSaved: Boolean!
   viewerVote: String
   visibility: Visibility!
+  votePrizeClaimedAt: DateTime
   voteWinner: PostVoteWinnerGql
   votingEndsAt: DateTime
 }

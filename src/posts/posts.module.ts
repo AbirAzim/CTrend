@@ -14,6 +14,8 @@ import { VotesModule } from '../votes/votes.module';
 import { CommentsModule } from '../comments/comments.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { FollowsModule } from '../follows/follows.module';
+import { CampaignsModule } from '../campaigns/campaigns.module';
+import { MessagesModule } from '../messages/messages.module';
 
 @Module({
   imports: [
@@ -30,6 +32,8 @@ import { FollowsModule } from '../follows/follows.module';
     CommentsModule,
     NotificationsModule,
     FollowsModule,
+    CampaignsModule,
+    MessagesModule,
   ],
   providers: [PostsService, PostsResolver, PostSchedulerService],
   exports: [PostsService],

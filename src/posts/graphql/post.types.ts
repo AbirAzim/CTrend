@@ -8,6 +8,8 @@ import {
 import { CategoryGql } from '../../categories/graphql/category.types';
 import { UserGql } from '../../users/graphql/user.types';
 import { CommentGql } from '../../comments/graphql/comment.types';
+import { PostCampaignSummaryGql } from './post-campaign-summary.types';
+import { PostVoteWinnerGql } from './post-vote-winner.types';
 
 @ObjectType()
 export class PostOptionGql {
@@ -16,6 +18,12 @@ export class PostOptionGql {
 
   @Field({ nullable: true })
   imageUrl?: string;
+
+  @Field(() => Int, { nullable: true })
+  imageFocalX?: number;
+
+  @Field(() => Int, { nullable: true })
+  imageFocalY?: number;
 }
 
 @ObjectType()
@@ -71,8 +79,8 @@ export class PostGql {
   @Field(() => String, { nullable: true })
   authorDisplayName?: string | null;
 
-  @Field()
-  authorEmail: string;
+  @Field(() => String, { nullable: true })
+  authorEmail?: string | null;
 
   /** Legacy frontend alias: author.profileImageUrl (nullable) */
   @Field(() => String, { nullable: true })
@@ -144,6 +152,9 @@ export class PostGql {
   @Field(() => Date, { nullable: true })
   votingEndsAt?: Date;
 
+  @Field(() => Int)
+  endingSoonLeadMinutes: number;
+
   @Field()
   isVotingOpen: boolean;
 
@@ -165,4 +176,19 @@ export class PostGql {
 
   @Field(() => UserGql, { nullable: true })
   lastEditedBy?: UserGql;
+
+  @Field(() => PostCampaignSummaryGql, { nullable: true })
+  campaign?: PostCampaignSummaryGql | null;
+
+  @Field(() => PostVoteWinnerGql, { nullable: true })
+  voteWinner?: PostVoteWinnerGql | null;
+
+  @Field()
+  isPrizeClaimed: boolean;
+
+  @Field(() => Date, { nullable: true })
+  votePrizeClaimedAt?: Date;
+
+  @Field()
+  canClaimPrize: boolean;
 }

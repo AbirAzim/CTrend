@@ -223,6 +223,20 @@ export class VotesService {
     return votes.map((v) => v.postId as Types.ObjectId);
   }
 
+  /** Distinct user ids who participated on a post (identified + anonymous). */
+  async listParticipantUserIds(postId: string): Promise<string[]> {
+    if (!Types.ObjectId.isValid(postId)) return [];
+    const rows = await this.voteModel
+      .find({ postId: new Types.ObjectId(postId) }, { userId: 1 })
+      .lean()
+      .exec();
+    return [
+      ...new Set(
+        rows.map((row) => (row.userId as Types.ObjectId).toHexString()),
+      ),
+    ];
+  }
+
   /** Remove the current user's vote on a post (withdraw). No-op if not voted. */
   async removeVote(userId: string, postId: string) {
     if (!Types.ObjectId.isValid(postId)) {
@@ -257,6 +271,33 @@ export class VotesService {
       totalVotes: stats.totalVotes,
       countsPerOption: stats.countsPerOption,
       percentages: stats.percentages,
+    };
+  }
+
+  /**
+   * Random eligible voter for post giveaway after voting ends.
+   * Excludes anonymous votes. If `winningOptionIndices` is empty, uses all options.
+   */
+  async drawRandomEligibleVoter(
+    postId: string,
+    winningOptionIndices: number[],
+  ): Promise<{
+    userId: Types.ObjectId;
+    selectedOptionIndex: number;
+  } | null> {
+    const query: Record<string, unknown> = {
+      postId: new Types.ObjectId(postId),
+      anonymous: { $ne: true },
+    };
+    if (winningOptionIndices.length > 0) {
+      query.selectedOptionIndex = { $in: winningOptionIndices };
+    }
+    const votes = await this.voteModel.find(query).lean().exec();
+    if (!votes.length) return null;
+    const drawn = votes[Math.floor(Math.random() * votes.length)];
+    return {
+      userId: drawn.userId as Types.ObjectId,
+      selectedOptionIndex: drawn.selectedOptionIndex,
     };
   }
 

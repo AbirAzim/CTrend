@@ -11,7 +11,7 @@ import { Post, PostDocument } from '../posts/post.schema';
 import { Category, CategoryDocument } from '../categories/category.schema';
 import { FixtureFilterInput, FixtureGql } from './graphql/fixture.types';
 import { PostStatus, PostType, Visibility } from '../common/enums';
-import { NEW_POST, pubsub } from '../pubsub';
+import { PostsService } from '../posts/posts.service';
 
 const WC_API_BASE = 'https://api.football-data.org/v4';
 const WC_COMPETITION = 'WC';
@@ -48,6 +48,7 @@ export class FixturesService {
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
     @InjectModel(Category.name) private categoryModel: Model<CategoryDocument>,
     private configService: ConfigService,
+    private postsService: PostsService,
   ) {
     this.apiKey = this.configService.get<string>('FOOTBALL_DATA_API_KEY') ?? '';
   }
@@ -180,9 +181,7 @@ export class FixturesService {
     await fixture.save();
 
     if (status === PostStatus.PUBLISHED) {
-      await pubsub.publish(NEW_POST, {
-        newPost: { postId: post._id.toHexString() },
-      });
+      await this.postsService.onPostPublished(post._id.toHexString());
     }
 
     return post;

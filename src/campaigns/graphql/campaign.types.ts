@@ -30,6 +30,9 @@ export class CampaignGql {
   @Field()
   isActive: boolean;
 
+  @Field()
+  isDefault: boolean;
+
   @Field(() => Int)
   prizePerWinner: number;
 
@@ -104,6 +107,11 @@ export class CreateCampaignInput {
   @IsOptional()
   fixturesEnabled?: boolean;
 
+  @Field(() => Boolean, { nullable: true })
+  @IsBoolean()
+  @IsOptional()
+  isDefault?: boolean;
+
   @Field(() => Date, { nullable: true })
   @IsOptional()
   startDate?: Date;
@@ -143,6 +151,11 @@ export class UpdateCampaignInput {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @Field(() => Boolean, { nullable: true })
+  @IsBoolean()
+  @IsOptional()
+  isDefault?: boolean;
 
   @Field(() => Int, { nullable: true })
   @IsInt()

@@ -7,7 +7,14 @@ import {
   Visibility,
 } from '../common/enums';
 
-export type PostOption = { label: string; imageUrl?: string };
+export type PostOption = {
+  label: string;
+  imageUrl?: string;
+  /** 0–100 CSS object-position X (default center). */
+  imageFocalX?: number;
+  /** 0–100 CSS object-position Y (default center). */
+  imageFocalY?: number;
+};
 
 export type PostDocument = HydratedDocument<Post> & {
   createdAt: Date;
@@ -30,6 +37,8 @@ export class Post {
       {
         label: { type: String, required: true },
         imageUrl: { type: String },
+        imageFocalX: { type: Number, min: 0, max: 100 },
+        imageFocalY: { type: Number, min: 0, max: 100 },
       },
     ],
     required: true,
@@ -67,6 +76,10 @@ export class Post {
   @Prop({ type: Date })
   votingEndsAt?: Date;
 
+  /** Minutes before voting end to show "ending soon" urgency UI. */
+  @Prop({ type: Number, min: 1, max: 1440, default: 5 })
+  endingSoonLeadMinutes: number;
+
   @Prop({ type: String, enum: PostStatus, default: PostStatus.PUBLISHED })
   status: PostStatus;
 
@@ -79,6 +92,33 @@ export class Post {
 
   @Prop({ type: Types.ObjectId, ref: 'User' })
   lastEditedById?: Types.ObjectId;
+
+  /** Optional promotional campaign this compare belongs to. */
+  @Prop({ type: Types.ObjectId, ref: 'Campaign' })
+  campaignId?: Types.ObjectId;
+
+  /** Random draw winner after voting ends (identified voters only). */
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  voteWinnerUserId?: Types.ObjectId;
+
+  @Prop({ type: Number })
+  voteWinnerOptionIndex?: number;
+
+  /** Set when draw ran (even if no eligible winner). */
+  @Prop({ type: Date })
+  voteWinnerPickedAt?: Date;
+
+  /** Set once vote-ended notifications were fanned out. */
+  @Prop({ type: Date })
+  voteEndedNotifiedAt?: Date;
+
+  /** Set when the winner claims the prize (friend posts only). */
+  @Prop({ type: Date })
+  votePrizeClaimedAt?: Date;
+
+  /** Winner user id who claimed the prize. */
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  votePrizeClaimedByUserId?: Types.ObjectId;
 }
 
 export const PostSchema = SchemaFactory.createForClass(Post);

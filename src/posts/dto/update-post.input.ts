@@ -1,10 +1,13 @@
-import { Field, InputType } from '@nestjs/graphql';
+import { Field, InputType, Int } from '@nestjs/graphql';
 import {
   ArrayMinSize,
   IsArray,
+  IsInt,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -37,4 +40,17 @@ export class UpdatePostInput {
   @IsOptional()
   @IsString()
   categoryId?: string;
+
+  /** Set to attach a campaign; send empty string to detach. */
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  campaignId?: string;
+
+  @Field(() => Int, { nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(1440)
+  endingSoonLeadMinutes?: number;
 }

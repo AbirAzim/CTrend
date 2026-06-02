@@ -1,4 +1,4 @@
-import { Args, Int, Query, Resolver } from '@nestjs/graphql';
+import { Args, ID, Int, Query, Resolver } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { FeedService } from './feed.service';
 import { FeedConnectionGql } from './graphql/feed.types';
@@ -49,6 +49,7 @@ export class FeedResolver {
     skip: number,
     @Args('take', { type: () => Int, nullable: true, defaultValue: 20 })
     take: number,
+    @Args('campaignId', { type: () => ID, nullable: true }) campaignId?: string,
     @CurrentUser() user?: ReqUser,
   ) {
     const result = await this.feedService.getFeed(
@@ -58,6 +59,7 @@ export class FeedResolver {
       take,
       user?.id,
       user?.role,
+      campaignId,
     );
     return result.nodes;
   }

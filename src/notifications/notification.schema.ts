@@ -12,6 +12,9 @@ export type NotificationType =
   | 'POST_COMMENT'
   | 'COMMENT_REPLY'
   | 'COMMENT_REACTION'
+  | 'VOTE_ENDED'
+  | 'VOTE_WINNER'
+  | 'VOTE_PRIZE_CLAIMED'
   | 'SYSTEM';
 
 export type NotificationDocument = HydratedDocument<Notification>;
@@ -34,6 +37,9 @@ export class Notification {
       'POST_COMMENT',
       'COMMENT_REPLY',
       'COMMENT_REACTION',
+      'VOTE_ENDED',
+      'VOTE_WINNER',
+      'VOTE_PRIZE_CLAIMED',
       'SYSTEM',
     ],
     required: true,

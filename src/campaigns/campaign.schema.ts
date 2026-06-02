@@ -45,6 +45,10 @@ export class Campaign {
   @Prop({ default: false })
   isActive: boolean;
 
+  /** Admin-selected default campaign shown first in listings. */
+  @Prop({ default: false })
+  isDefault: boolean;
+
   /** Prize per winner in BDT */
   @Prop({ type: Number, default: 100 })
   prizePerWinner: number;
@@ -70,3 +74,4 @@ export class Campaign {
 
 export const CampaignSchema = SchemaFactory.createForClass(Campaign);
 CampaignSchema.index({ isActive: 1 });
+CampaignSchema.index({ isDefault: 1 });

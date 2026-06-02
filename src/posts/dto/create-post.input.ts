@@ -1,12 +1,15 @@
-import { Field, InputType } from '@nestjs/graphql';
+import { Field, InputType, Int } from '@nestjs/graphql';
 import {
   ArrayMinSize,
   IsArray,
   IsDate,
   IsEnum,
+  IsInt,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
+  Min,
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -24,6 +27,20 @@ export class PostOptionInput {
   @IsString()
   @MaxLength(2000)
   imageUrl?: string;
+
+  @Field(() => Int, { nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  imageFocalX?: number;
+
+  @Field(() => Int, { nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(100)
+  imageFocalY?: number;
 }
 
 @InputType()
@@ -84,4 +101,9 @@ export class CreatePostInput {
   @Type(() => Date)
   @IsDate()
   scheduledAt?: Date;
+
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  campaignId?: string;
 }

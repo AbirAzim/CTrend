@@ -2,6 +2,14 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 
+process.on('uncaughtException', (err) => {
+  if ((err as NodeJS.ErrnoException)?.code === 'EPIPE') {
+    Logger.warn('Ignored transient websocket EPIPE', 'Bootstrap');
+    return;
+  }
+  throw err;
+});
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, { rawBody: true });
   app.enableCors({

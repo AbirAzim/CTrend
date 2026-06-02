@@ -53,6 +53,7 @@ type CampaignGql {
   fixturesEnabled: Boolean!
   id: ID!
   isActive: Boolean!
+  isDefault: Boolean!
   name: String!
   prizePerWinner: Int!
   rules: String
@@ -129,6 +130,7 @@ input CreateCampaignInput {
   description: String
   endDate: DateTime
   fixturesEnabled: Boolean
+  isDefault: Boolean
   name: String!
   prizePerWinner: Int
   rules: String
@@ -138,6 +140,7 @@ input CreateCampaignInput {
 }
 
 input CreatePostInput {
+  campaignId: String
   caption: String
   categoryId: String!
   contentText: String
@@ -310,6 +313,7 @@ type Mutation {
   cancelInvitation(id: ID!): Boolean!
   cancelScheduledPost(postId: ID!): Boolean!
   cancelSubscription(organizationId: ID): Boolean!
+  claimPostVotePrize(postId: ID!): PostGql!
   commentPost(input: CommentPostInput!, postId: ID!): CommentGql!
   createCampaign(input: CreateCampaignInput!): CampaignGql!
   createCategory(name: String!): CategoryGql!
@@ -431,6 +435,15 @@ type ParticipantGql {
   online: Boolean!
 }
 
+type PostCampaignSummaryGql {
+  bannerImageUrl: String
+  bannerText: String
+  id: ID!
+  name: String!
+  prizePerWinner: Int!
+  slug: String!
+}
+
 type PostDeletedGql {
   postId: ID!
 }
@@ -438,10 +451,12 @@ type PostDeletedGql {
 type PostGql {
   author: UserGql!
   authorDisplayName: String
-  authorEmail: String!
+  authorEmail: String
   authorId: ID!
   authorProfileImageUrl: String
   authorUsername: String!
+  campaign: PostCampaignSummaryGql
+  canClaimPrize: Boolean!
   caption: String
   category: CategoryGql!
   commentCount: Int!
@@ -450,10 +465,12 @@ type PostGql {
   createdAt: DateTime!
   downvoteCount: Int!
   editedBy: [UserGql!]
+  endingSoonLeadMinutes: Int!
   hypeCount: Int!
   id: ID!
   imageUrl: String
   imageUrls: [String!]!
+  isPrizeClaimed: Boolean!
   isVotingOpen: Boolean!
   lastEditedBy: UserGql
   likeCount: Int!
@@ -475,15 +492,21 @@ type PostGql {
   viewerHasSaved: Boolean!
   viewerVote: String
   visibility: Visibility!
+  votePrizeClaimedAt: DateTime
+  voteWinner: PostVoteWinnerGql
   votingEndsAt: DateTime
 }
 
 type PostOptionGql {
+  imageFocalX: Int
+  imageFocalY: Int
   imageUrl: String
   label: String!
 }
 
 input PostOptionInput {
+  imageFocalX: Int
+  imageFocalY: Int
   imageUrl: String
   label: String!
 }
@@ -497,6 +520,12 @@ enum PostType {
   ORG
   SYSTEM
   USER
+}
+
+type PostVoteWinnerGql {
+  pickedAt: DateTime
+  selectedOptionIndex: Int
+  user: UserGql
 }
 
 type PostVoterGql {
@@ -534,7 +563,7 @@ type Query {
   categories: [CategoryGql!]!
   categoryPostCount(categoryId: ID!): Int!
   commentsByPost(postId: ID!): [CommentGql!]!
-  feedPosts(scope: FeedScope, skip: Int = 0, sort: FeedSort, take: Int = 20): [PostGql!]!
+  feedPosts(campaignId: ID, scope: FeedScope, skip: Int = 0, sort: FeedSort, take: Int = 20): [PostGql!]!
   friendRequests: FriendRequestsGql!
   friendSuggestions(limit: Int, search: String): [UserGql!]!
   friendshipStatus(userId: ID!): String!
@@ -621,6 +650,7 @@ input UpdateCampaignInput {
   endDate: DateTime
   fixturesEnabled: Boolean
   isActive: Boolean
+  isDefault: Boolean
   name: String
   prizePerWinner: Int
   rules: String
@@ -629,8 +659,10 @@ input UpdateCampaignInput {
 }
 
 input UpdatePostInput {
+  campaignId: String
   caption: String
   categoryId: String
+  endingSoonLeadMinutes: Int
   imageUrls: [String!]
   options: [PostOptionInput!]
 }

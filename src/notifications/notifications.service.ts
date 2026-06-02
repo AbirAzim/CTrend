@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import {
@@ -14,9 +14,14 @@ import {
 import { pubsub, NEW_NOTIFICATION } from '../pubsub';
 import { UsersService } from '../users/users.service';
 import { PushService } from '../push/push.service';
+import { PLATFORM_BRAND_NAME } from '../common/platform-brand';
+
+const PLATFORM_NOTIFY_BATCH = 250;
 
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
+
   constructor(
     @InjectModel(Notification.name)
     private notificationModel: Model<NotificationDocument>,
@@ -166,6 +171,72 @@ export class NotificationsService {
     if (count <= 1) return `${latestName} ${verbPhrase}`;
     const others = count - 1;
     return `${latestName} and ${others} more ${verbPhrase}`;
+  }
+
+  /**
+   * Fan-out in-app + push notifications when a platform-wide (SYSTEM) post goes live.
+   * Uses batched insertMany so one failure does not block the rest of the platform.
+   */
+  async notifyAllUsersOfPlatformPost(params: {
+    postId: string;
+    authorId: string;
+    authorName: string;
+    caption?: string;
+  }): Promise<number> {
+    const allUserIds = await this.usersService.findAllIds();
+    const recipients = allUserIds.filter((id) => id !== params.authorId);
+    if (!recipients.length) return 0;
+
+    const trimmedCaption = params.caption?.trim() ?? '';
+    const body = trimmedCaption
+      ? trimmedCaption.slice(0, 120)
+      : 'A new platform-wide compare is live — tap to vote.';
+    const brandName = params.authorName?.trim() || PLATFORM_BRAND_NAME;
+    const title = `📢 ${brandName}`;
+
+    for (let i = 0; i < recipients.length; i += PLATFORM_NOTIFY_BATCH) {
+      const chunk = recipients.slice(i, i + PLATFORM_NOTIFY_BATCH);
+      const docs = chunk.map((userId) => ({
+        userId: new Types.ObjectId(userId),
+        type: 'ANNOUNCEMENT' as NotificationType,
+        title,
+        body,
+        referenceId: params.postId,
+        referenceType: 'Post',
+        postId: params.postId,
+        actorCount: 1,
+        latestActorName: brandName,
+        read: false,
+        archived: false,
+      }));
+
+      let inserted: NotificationDocument[];
+      try {
+        inserted = (await this.notificationModel.insertMany(docs, {
+          ordered: false,
+        })) as NotificationDocument[];
+      } catch (err) {
+        this.logger.error(
+          `Platform post notify batch failed (offset ${i})`,
+          err,
+        );
+        continue;
+      }
+
+      await Promise.allSettled(
+        inserted.map(async (doc) => {
+          const recipientId = doc.userId.toHexString();
+          const gql = this.toGql(doc);
+          await pubsub.publish(NEW_NOTIFICATION, {
+            newNotification: gql,
+            recipientId,
+          });
+          await this.sendBellPush(recipientId, gql);
+        }),
+      );
+    }
+
+    return recipients.length;
   }
 
   async sendBroadcast(
@@ -393,6 +464,12 @@ export class NotificationsService {
     if (
       opts?.type === 'POST_VOTE' &&
       (!actorId || opts.latestActorName === 'Someone')
+    ) {
+      return null;
+    }
+    if (
+      opts?.type === 'ANNOUNCEMENT' &&
+      opts.latestActorName === PLATFORM_BRAND_NAME
     ) {
       return null;
     }

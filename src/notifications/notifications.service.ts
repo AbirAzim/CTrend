@@ -515,20 +515,34 @@ export class NotificationsService {
         : gql.body;
     }
 
-    await this.pushService.sendDataToUser(recipientId, {
-      type: 'BELL',
-      notifType: gql.type,
-      title: pushTitle,
-      body: pushBody,
-      actorAvatar: actorAvatar ?? '',
-      referenceType: gql.referenceType ?? '',
-      referenceId: gql.referenceId ?? '',
-      postId: gql.postId ?? '',
-      commentId: gql.commentId ?? '',
-      conversationId: '',
-      senderName: '',
-      senderAvatar: '',
-    });
+    // OS-rendered notification block. Actor-driven: sender name + avatar.
+    // System/announcement: the announcement title (or brand) and no image.
+    const notifTitle = isSystem
+      ? gql.title?.trim() || PLATFORM_BRAND_NAME
+      : senderName || gql.title?.trim() || PLATFORM_BRAND_NAME;
+
+    await this.pushService.sendDataToUser(
+      recipientId,
+      {
+        type: 'BELL',
+        notifType: gql.type,
+        title: pushTitle,
+        body: pushBody,
+        actorAvatar: actorAvatar ?? '',
+        referenceType: gql.referenceType ?? '',
+        referenceId: gql.referenceId ?? '',
+        postId: gql.postId ?? '',
+        commentId: gql.commentId ?? '',
+        conversationId: '',
+        senderName: '',
+        senderAvatar: '',
+      },
+      {
+        title: notifTitle,
+        body: pushBody,
+        imageUrl: isSystem ? undefined : (actorAvatar ?? undefined),
+      },
+    );
   }
 
   private toGql(doc: NotificationDocument): NotificationGql {

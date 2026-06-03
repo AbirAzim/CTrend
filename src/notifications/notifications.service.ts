@@ -482,20 +482,52 @@ export class NotificationsService {
    * Send a data-only, high-priority FCM "BELL" push for a freshly created or
    * updated notification. Failures are swallowed inside PushService so they
    * never break the originating action.
+   *
+   * The payload follows the app-side display contract: the client renders the
+   * notification itself (round actor avatar + sender name + action text), so
+   * `title` carries the sender display name and `body` carries the action
+   * sentence (e.g. "commented on your post"). System/announcement pushes have
+   * no actor — `title` and `actorAvatar` are blank so the app shows the brand
+   * logo. `notifType` exposes the specific type for deep-link routing, and
+   * `commentId` lets comment notifications scroll to the exact comment.
    */
   private async sendBellPush(
     recipientId: string,
     gql: NotificationGql,
   ): Promise<void> {
-    const actorAvatar = await this.resolveActorAvatar(gql.latestActorId);
+    const actorAvatar = await this.resolveActorAvatar(gql.latestActorId, {
+      type: gql.type as NotificationType,
+      latestActorName: gql.latestActorName,
+    });
+
+    const isSystem = gql.type === 'ANNOUNCEMENT' || gql.type === 'SYSTEM';
+    const senderName = gql.latestActorName?.trim() ?? '';
+
+    // Actor-driven notifications: title = sender, body = action sentence with
+    // the leading name stripped (grouped bodies are "{name} <verb>" /
+    // "{name} and N more <verb>"). System/announcement: title blank, full body.
+    let pushTitle = '';
+    let pushBody = gql.body;
+    if (!isSystem && senderName) {
+      pushTitle = senderName;
+      pushBody = gql.body.startsWith(`${senderName} `)
+        ? gql.body.slice(senderName.length + 1)
+        : gql.body;
+    }
+
     await this.pushService.sendDataToUser(recipientId, {
       type: 'BELL',
+      notifType: gql.type,
+      title: pushTitle,
+      body: pushBody,
+      actorAvatar: actorAvatar ?? '',
       referenceType: gql.referenceType ?? '',
       referenceId: gql.referenceId ?? '',
       postId: gql.postId ?? '',
-      title: gql.title,
-      body: gql.body,
-      actorAvatar: actorAvatar ?? '',
+      commentId: gql.commentId ?? '',
+      conversationId: '',
+      senderName: '',
+      senderAvatar: '',
     });
   }
 

@@ -582,10 +582,19 @@ export class MessagesService {
       recipientIds.map((recipientId) =>
         this.pushService.sendDataToUser(recipientId, {
           type: 'MESSAGE',
-          conversationId: convo._id.toHexString(),
-          senderName: gql.senderName,
-          senderAvatar: gql.senderAvatar ?? '',
+          notifType: 'MESSAGE',
+          // Generic display fields so the app can render chat pushes through the
+          // same path as bell pushes: title = sender, body = message text.
+          title: gql.senderName ?? '',
           body: gql.text ?? '',
+          actorAvatar: gql.senderAvatar ?? '',
+          referenceType: 'Conversation',
+          referenceId: convo._id.toHexString(),
+          postId: '',
+          commentId: '',
+          conversationId: convo._id.toHexString(),
+          senderName: gql.senderName ?? '',
+          senderAvatar: gql.senderAvatar ?? '',
         }),
       ),
     );

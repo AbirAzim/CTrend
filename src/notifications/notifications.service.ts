@@ -515,34 +515,23 @@ export class NotificationsService {
         : gql.body;
     }
 
-    // OS-rendered notification block. Actor-driven: sender name + avatar.
-    // System/announcement: the announcement title (or brand) and no image.
-    const notifTitle = isSystem
-      ? gql.title?.trim() || PLATFORM_BRAND_NAME
-      : senderName || gql.title?.trim() || PLATFORM_BRAND_NAME;
-
-    await this.pushService.sendDataToUser(
-      recipientId,
-      {
-        type: 'BELL',
-        notifType: gql.type,
-        title: pushTitle,
-        body: pushBody,
-        actorAvatar: actorAvatar ?? '',
-        referenceType: gql.referenceType ?? '',
-        referenceId: gql.referenceId ?? '',
-        postId: gql.postId ?? '',
-        commentId: gql.commentId ?? '',
-        conversationId: '',
-        senderName: '',
-        senderAvatar: '',
-      },
-      {
-        title: notifTitle,
-        body: pushBody,
-        imageUrl: isSystem ? undefined : (actorAvatar ?? undefined),
-      },
-    );
+    // Data-only: the app's native FirebaseMessagingService renders the round
+    // avatar (largeIcon) + sender name + body and deep-links on tap. A
+    // `notification` block would make Firebase auto-display its own version.
+    await this.pushService.sendDataToUser(recipientId, {
+      type: 'BELL',
+      notifType: gql.type,
+      title: pushTitle,
+      body: pushBody,
+      actorAvatar: actorAvatar ?? '',
+      referenceType: gql.referenceType ?? '',
+      referenceId: gql.referenceId ?? '',
+      postId: gql.postId ?? '',
+      commentId: gql.commentId ?? '',
+      conversationId: '',
+      senderName: '',
+      senderAvatar: '',
+    });
   }
 
   private toGql(doc: NotificationDocument): NotificationGql {

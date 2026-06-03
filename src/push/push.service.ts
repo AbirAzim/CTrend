@@ -9,28 +9,18 @@ const DEAD_TOKEN_CODES = new Set([
   'messaging/invalid-argument',
 ]);
 
-/** Notification-block fields the OS renders directly (even when the app is killed). */
-export interface PushNotification {
-  /** Sender display name (system/announcement: brand name or announcement title). */
-  title: string;
-  /** Action sentence / chat message text. */
-  body: string;
-  /** Absolute https avatar URL → big-picture image. Omit for system/announcement. */
-  imageUrl?: string | null;
-}
-
 /**
- * Sends hybrid (notification + data), high-priority FCM messages to a user's
- * registered devices.
+ * Sends data-only, high-priority FCM messages to a user's registered devices.
  *
  * Lazily initialised (mirrors the Stripe pattern in BillingService): if no
  * `FIREBASE_SERVICE_ACCOUNT` is configured, every send becomes a no-op so the
  * app still boots and runs in environments without push credentials.
  *
- * Each message carries a `notification` block so the OS renders it instantly —
- * reliable even when the RN app is terminated (waking a killed app to render
- * from JS is throttled/dropped on Android) — plus a `data` block the app reads
- * on tap for deep-linking. Sent with `android.priority: 'high'`.
+ * Messages are sent data-only (no `notification` block) so the app's native
+ * FirebaseMessagingService renders them itself (round avatar largeIcon + sender
+ * name + body, deep-link on tap). A `notification` block would make Firebase
+ * auto-display its own big-picture version and bypass that service. Sent with
+ * `android.priority: 'high'` so frozen/backgrounded Android apps are woken.
  */
 @Injectable()
 export class PushService {
@@ -78,19 +68,13 @@ export class PushService {
   }
 
   /**
-   * Send a hybrid (notification + data) high-priority push to every device
-   * registered to `userId`. The OS renders `notification` directly; `data` is
-   * delivered to the app on tap for deep-linking. All `data` values are coerced
-   * to strings (FCM data payloads must be string maps). Invalid/unregistered
-   * tokens reported by FCM are pruned from the user.
-   *
-   * `notification` is optional: when omitted (or with no title/body), the
-   * message falls back to data-only.
+   * Send a data-only high-priority push to every device registered to `userId`.
+   * All values are coerced to strings (FCM data payloads must be string maps).
+   * Invalid/unregistered tokens reported by FCM are pruned from the user.
    */
   async sendDataToUser(
     userId: string,
     data: Record<string, string | undefined | null>,
-    notification?: PushNotification,
   ): Promise<void> {
     if (!this.messaging || !userId) return;
 
@@ -102,38 +86,16 @@ export class PushService {
       stringData[key] = value == null ? '' : String(value);
     }
 
-    const hasNotification = !!(
-      notification &&
-      (notification.title || notification.body)
-    );
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const message: any = {
-      tokens,
-      data: stringData,
-      android: { priority: 'high' },
-    };
-
-    if (hasNotification) {
-      message.notification = {
-        title: notification!.title || '',
-        body: notification!.body || '',
-        ...(notification!.imageUrl ? { imageUrl: notification!.imageUrl } : {}),
-      };
-      // OS-rendered alert on iOS too (no silent/background push when visible).
-      message.apns = {
-        headers: { 'apns-priority': '10', 'apns-push-type': 'alert' },
-      };
-    } else {
-      // Data-only fallback: wake the app to render it itself.
-      message.apns = {
-        headers: { 'apns-priority': '10', 'apns-push-type': 'background' },
-        payload: { aps: { 'content-available': 1 } },
-      };
-    }
-
     try {
-      const res = await this.messaging.sendEachForMulticast(message);
+      const res = await this.messaging.sendEachForMulticast({
+        tokens,
+        data: stringData,
+        android: { priority: 'high' },
+        apns: {
+          headers: { 'apns-priority': '10', 'apns-push-type': 'background' },
+          payload: { aps: { 'content-available': 1 } },
+        },
+      });
 
       if (res.failureCount > 0) {
         const dead: string[] = [];

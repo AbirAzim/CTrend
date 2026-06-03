@@ -580,29 +580,22 @@ export class MessagesService {
       .map((pid) => pid.toHexString());
     await Promise.all(
       recipientIds.map((recipientId) =>
-        this.pushService.sendDataToUser(
-          recipientId,
-          {
-            type: 'MESSAGE',
-            notifType: 'MESSAGE',
-            // Display fields kept for app-side use; OS renders the block below.
-            title: gql.senderName ?? '',
-            body: gql.text ?? '',
-            actorAvatar: gql.senderAvatar ?? '',
-            referenceType: 'Conversation',
-            referenceId: convo._id.toHexString(),
-            postId: '',
-            commentId: '',
-            conversationId: convo._id.toHexString(),
-            senderName: gql.senderName ?? '',
-            senderAvatar: gql.senderAvatar ?? '',
-          },
-          {
-            title: gql.senderName ?? '',
-            body: gql.text ?? '',
-            imageUrl: gql.senderAvatar ?? undefined,
-          },
-        ),
+        this.pushService.sendDataToUser(recipientId, {
+          type: 'MESSAGE',
+          notifType: 'MESSAGE',
+          // Data-only: the app's native FirebaseMessagingService renders the
+          // sender's round avatar + name + message text and deep-links on tap.
+          title: gql.senderName ?? '',
+          body: gql.text ?? '',
+          actorAvatar: gql.senderAvatar ?? '',
+          referenceType: 'Conversation',
+          referenceId: convo._id.toHexString(),
+          postId: '',
+          commentId: '',
+          conversationId: convo._id.toHexString(),
+          senderName: gql.senderName ?? '',
+          senderAvatar: gql.senderAvatar ?? '',
+        }),
       ),
     );
 

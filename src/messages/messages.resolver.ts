@@ -170,12 +170,14 @@ export class MessagesResolver {
     @Args('conversationId', { type: () => ID }) conversationId: string,
     @Args('text', { defaultValue: '' }) text: string,
     @Args('imageUrl', { nullable: true }) imageUrl?: string,
+    @Args('replyToId', { type: () => ID, nullable: true }) replyToId?: string,
   ) {
     return this.messagesService.sendMessage(
       user.id,
       conversationId,
       text,
       imageUrl,
+      replyToId,
     );
   }
 
@@ -216,12 +218,14 @@ export class MessagesResolver {
     @Args('userId', { type: () => ID }) userId: string,
     @Args('text', { defaultValue: '' }) text: string,
     @Args('imageUrl', { nullable: true }) imageUrl?: string,
+    @Args('replyToId', { type: () => ID, nullable: true }) replyToId?: string,
   ) {
     return this.messagesService.sendModeratorMessage(
       user.id,
       userId,
       text,
       imageUrl,
+      replyToId,
     );
   }
 
@@ -233,12 +237,14 @@ export class MessagesResolver {
     @Args('userIds', { type: () => [ID] }) userIds: string[],
     @Args('text', { defaultValue: '' }) text: string,
     @Args('imageUrl', { nullable: true }) imageUrl?: string,
+    @Args('replyToId', { type: () => ID, nullable: true }) replyToId?: string,
   ) {
     return this.messagesService.sendModeratorMessages(
       user.id,
       userIds,
       text,
       imageUrl,
+      replyToId,
     );
   }
 

@@ -10,6 +10,25 @@ export class MessageReactionCountGql {
 }
 
 @ObjectType()
+export class MessageReplyPreviewGql {
+  @Field(() => ID)
+  messageId: string;
+
+  /** Client-facing sender id of the quoted message ('moderator' or user hex). */
+  @Field(() => ID)
+  senderId: string;
+
+  @Field()
+  senderName: string;
+
+  @Field({ defaultValue: '' })
+  text: string;
+
+  @Field({ nullable: true })
+  imageUrl?: string;
+}
+
+@ObjectType()
 export class MessageReactionChangedGql {
   @Field(() => ID)
   messageId: string;
@@ -79,6 +98,10 @@ export class MessageGql {
 
   @Field(() => String, { nullable: true })
   viewerReaction?: string;
+
+  /** Quoted message snapshot when this message is a reply. */
+  @Field(() => MessageReplyPreviewGql, { nullable: true })
+  replyTo?: MessageReplyPreviewGql;
 
   @Field()
   createdAt: Date;

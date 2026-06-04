@@ -250,6 +250,7 @@ type MessageGql {
   imageUrl: String
   reactions: [MessageReactionCountGql!]!
   readBy: [ReadReceiptGql!]!
+  replyTo: MessageReplyPreviewGql
   senderAvatar: String
   senderId: ID!
   senderName: String!
@@ -277,6 +278,14 @@ type MessageReadGql {
   conversationId: ID!
   readAt: DateTime!
   userId: ID!
+}
+
+type MessageReplyPreviewGql {
+  imageUrl: String
+  messageId: ID!
+  senderId: ID!
+  senderName: String!
+  text: String!
 }
 
 type ModeratorMessageAdminGql {
@@ -353,9 +362,9 @@ type Mutation {
   resetPassword(newPassword: String!, token: String!): Boolean!
   respondFriendRequest(accept: Boolean!, requesterId: ID!): Boolean!
   sendAdminBroadcast(body: String!, title: String!): Int!
-  sendMessage(conversationId: ID!, imageUrl: String, text: String! = ""): MessageGql!
-  sendModeratorMessage(imageUrl: String, text: String! = "", userId: ID!): ModeratorMessageAdminGql!
-  sendModeratorMessages(imageUrl: String, text: String! = "", userIds: [ID!]!): [ModeratorMessageAdminGql!]!
+  sendMessage(conversationId: ID!, imageUrl: String, replyToId: ID, text: String! = ""): MessageGql!
+  sendModeratorMessage(imageUrl: String, replyToId: ID, text: String! = "", userId: ID!): ModeratorMessageAdminGql!
+  sendModeratorMessages(imageUrl: String, replyToId: ID, text: String! = "", userIds: [ID!]!): [ModeratorMessageAdminGql!]!
   setCommentLike(commentId: ID!, liked: Boolean!): CommentGql!
   setCommentReaction(commentId: ID!, emoji: String): CommentGql!
   setPostHype(active: Boolean!, postId: ID!): Boolean!

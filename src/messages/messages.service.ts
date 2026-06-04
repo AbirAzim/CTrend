@@ -7,7 +7,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Conversation, ConversationDocument } from './conversation.schema';
-import { Message, MessageDocument } from './message.schema';
+import { Message, MessageDocument, ReplyPreview } from './message.schema';
 import {
   MessageReaction,
   MessageReactionDocument,
@@ -26,6 +26,7 @@ import {
   MessageGql,
   MessageReactionCountGql,
   MessageReactionChangedGql,
+  MessageReplyPreviewGql,
   ModeratorMessageAdminGql,
   ModeratorThreadAdminGql,
   ParticipantGql,
@@ -207,6 +208,7 @@ export class MessagesService {
     targetUserId: string,
     text: string,
     imageUrl?: string,
+    replyToId?: string | null,
   ): Promise<ModeratorMessageAdminGql> {
     const trimmedText = text?.trim() ?? '';
     if (!trimmedText && !imageUrl) {
@@ -219,6 +221,8 @@ export class MessagesService {
     );
     const moderatorSenderOid = new Types.ObjectId(MODERATOR_SENDER_OBJECT_ID);
 
+    const replyTo = await this.buildReplySnapshot(convo._id, replyToId);
+
     const msg = await this.messageModel.create({
       conversationId: convo._id,
       senderId: moderatorSenderOid,
@@ -227,6 +231,7 @@ export class MessagesService {
       text: trimmedText,
       imageUrl: imageUrl ?? null,
       readBy: [],
+      replyTo,
     });
 
     const previewText = trimmedText || '📷 Image';
@@ -266,15 +271,26 @@ export class MessagesService {
     userIds: string[],
     text: string,
     imageUrl?: string,
+    replyToId?: string | null,
   ): Promise<ModeratorMessageAdminGql[]> {
     const unique = Array.from(new Set(userIds.filter(Boolean)));
     if (unique.length === 0) {
       throw new BadRequestException('At least one recipient is required');
     }
+    // A quoted reply only makes sense within a single thread — ignore it for
+    // multi-recipient broadcasts so we never quote a message into a stranger's
+    // conversation.
+    const effectiveReplyToId = unique.length === 1 ? replyToId : null;
     const results: ModeratorMessageAdminGql[] = [];
     for (const userId of unique) {
       results.push(
-        await this.sendModeratorMessage(adminId, userId, text, imageUrl),
+        await this.sendModeratorMessage(
+          adminId,
+          userId,
+          text,
+          imageUrl,
+          effectiveReplyToId,
+        ),
       );
     }
     return results;
@@ -493,6 +509,7 @@ export class MessagesService {
     conversationId: string,
     text: string,
     imageUrl?: string,
+    replyToId?: string | null,
   ): Promise<MessageGql> {
     const trimmedText = text?.trim() ?? '';
     if (!trimmedText && !imageUrl) {
@@ -507,12 +524,15 @@ export class MessagesService {
       throw new ForbiddenException('Not a participant');
     }
 
+    const replyTo = await this.buildReplySnapshot(convo._id, replyToId);
+
     const msg = await this.messageModel.create({
       conversationId: convo._id,
       senderId: viewerOid,
       text: trimmedText,
       imageUrl: imageUrl ?? null,
       readBy: [{ userId: viewerOid, readAt: new Date() }],
+      replyTo,
     });
 
     // Increment unread counts for all other participants
@@ -897,6 +917,58 @@ export class MessagesService {
     return this.toGql(convo, viewerId);
   }
 
+  /**
+   * Resolve a reply target into a denormalised snapshot stored on the new
+   * message. Returns null when no (valid) reply target is given.
+   */
+  private async buildReplySnapshot(
+    convoId: Types.ObjectId,
+    replyToId?: string | null,
+  ): Promise<ReplyPreview | null> {
+    const trimmed = replyToId?.trim();
+    if (!trimmed || !Types.ObjectId.isValid(trimmed)) return null;
+
+    const parent = await this.messageModel.findById(trimmed).exec();
+    if (!parent) throw new NotFoundException('Replied-to message not found');
+    if (!parent.conversationId.equals(convoId)) {
+      throw new BadRequestException(
+        'Cannot reply to a message from another conversation',
+      );
+    }
+
+    let senderId: string;
+    let senderName: string;
+    if (parent.isModeratorMessage) {
+      senderId = MODERATOR_SENDER_GQL_ID;
+      senderName = MODERATOR_DISPLAY_NAME;
+    } else {
+      senderId = parent.senderId.toHexString();
+      const sender = await this.usersService.findById(senderId);
+      senderName = sender?.displayName?.trim() || sender?.username || 'User';
+    }
+
+    return {
+      messageId: parent._id,
+      senderId,
+      senderName,
+      text: (parent.text ?? '').slice(0, 140),
+      imageUrl: parent.imageUrl ?? null,
+    };
+  }
+
+  private replyPreviewToGql(
+    rp?: ReplyPreview | null,
+  ): MessageReplyPreviewGql | undefined {
+    if (!rp) return undefined;
+    return {
+      messageId: String(rp.messageId),
+      senderId: rp.senderId,
+      senderName: rp.senderName,
+      text: rp.text ?? '',
+      imageUrl: rp.imageUrl ?? undefined,
+    };
+  }
+
   private async messageToGql(
     msg: MessageDocument,
     viewerId?: string,
@@ -937,6 +1009,7 @@ export class MessagesService {
         })),
         reactions,
         viewerReaction: viewerReaction ?? undefined,
+        replyTo: this.replyPreviewToGql(msg.replyTo),
         createdAt: (msg as MessageDocument & { createdAt: Date }).createdAt,
       };
 
@@ -969,6 +1042,7 @@ export class MessagesService {
       })),
       reactions,
       viewerReaction: viewerReaction ?? undefined,
+      replyTo: this.replyPreviewToGql(msg.replyTo),
       createdAt: (msg as MessageDocument & { createdAt: Date }).createdAt,
     };
 

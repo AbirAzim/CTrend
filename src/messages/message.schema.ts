@@ -11,6 +11,20 @@ export class ReadReceipt {
   readAt: Date;
 }
 
+/**
+ * Denormalised snapshot of the message this one is replying to.
+ * Stored inline so the quoted preview renders without an extra lookup and
+ * stays stable even if the original is later deleted.
+ */
+export class ReplyPreview {
+  messageId: Types.ObjectId;
+  /** Client-facing sender id of the quoted message ('moderator' or user hex). */
+  senderId: string;
+  senderName: string;
+  text: string;
+  imageUrl?: string | null;
+}
+
 @Schema({ timestamps: true })
 export class Message {
   @Prop({ type: Types.ObjectId, ref: 'Conversation', required: true })
@@ -38,6 +52,21 @@ export class Message {
     default: [],
   })
   readBy: ReadReceipt[];
+
+  /** Quoted message snapshot when this message is a reply (Messenger-style). */
+  @Prop({
+    type: {
+      messageId: { type: Types.ObjectId, ref: 'Message' },
+      senderId: String,
+      senderName: String,
+      text: String,
+      imageUrl: { type: String, default: null },
+    },
+    required: false,
+    default: null,
+    _id: false,
+  })
+  replyTo?: ReplyPreview | null;
 }
 
 export const MessageSchema = SchemaFactory.createForClass(Message);

@@ -35,6 +35,7 @@ import { PresenceModule } from './presence/presence.module';
 import { SearchModule } from './search/search.module';
 import { PresenceService } from './presence/presence.service';
 import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
+import { ContentReportsModule } from './content-reports/content-reports.module';
 
 @Module({
   imports: [
@@ -216,6 +217,7 @@ import { PlatformSettingsModule } from './platform-settings/platform-settings.mo
     MessagesModule,
     SearchModule,
     PlatformSettingsModule,
+    ContentReportsModule,
   ],
   providers: [
     {

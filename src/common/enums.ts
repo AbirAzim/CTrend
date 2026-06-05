@@ -54,6 +54,21 @@ export enum PostStatus {
   SCHEDULED = 'scheduled',
 }
 
+export enum ContentReportTargetType {
+  POST = 'post',
+  COMMENT = 'comment',
+  USER = 'user',
+}
+
+export enum ContentReportReasonId {
+  SPAM = 'spam',
+  HARASSMENT = 'harassment',
+  VIOLENCE = 'violence',
+  NUDITY = 'nudity',
+  COPYRIGHT = 'copyright',
+  OTHER = 'other',
+}
+
 export enum InvitationStatus {
   PENDING = 'pending',
   ACCEPTED = 'accepted',
@@ -70,3 +85,5 @@ registerEnumType(SubscriptionPlan, { name: 'SubscriptionPlan' });
 registerEnumType(SubscriptionStatus, { name: 'SubscriptionStatus' });
 registerEnumType(PaymentProvider, { name: 'PaymentProvider' });
 registerEnumType(PostStatus, { name: 'PostStatus' });
+registerEnumType(ContentReportTargetType, { name: 'ContentReportTargetType' });
+registerEnumType(ContentReportReasonId, { name: 'ContentReportReasonId' });

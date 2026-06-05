@@ -126,6 +126,10 @@ export class Post {
   /** Winner user id who claimed the prize. */
   @Prop({ type: Types.ObjectId, ref: 'User' })
   votePrizeClaimedByUserId?: Types.ObjectId;
+
+  /** Denormalized count of user content reports (moderation queue). */
+  @Prop({ default: 0, min: 0 })
+  reportCount: number;
 }
 
 export const PostSchema = SchemaFactory.createForClass(Post);
@@ -135,3 +139,4 @@ PostSchema.index({ status: 1, scheduledAt: 1 });
 // Feed filter queries: type + createdBy, and type + status + orgReach
 PostSchema.index({ type: 1, createdBy: 1, status: 1 });
 PostSchema.index({ type: 1, orgReach: 1, status: 1 });
+PostSchema.index({ reportCount: -1, createdAt: -1 });

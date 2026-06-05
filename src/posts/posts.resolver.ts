@@ -28,6 +28,10 @@ import {
   AdminPlatformPostsFilterInput,
   AdminPlatformPostsQueryInput,
 } from './dto/admin-platform-posts.input';
+import {
+  AdminReportedPostsFilterInput,
+  AdminReportedPostsQueryInput,
+} from './dto/admin-reported-posts.input';
 import { POST_VOTE_UPDATED, pubsub } from '../pubsub';
 
 type ReqUser = { id: string; role: string };
@@ -209,6 +213,40 @@ export class PostsResolver {
       categoryId: filter?.categoryId,
       votingFilter: filter?.votingFilter,
       scope: filter?.scope,
+    });
+  }
+
+  @Query(() => [PostGql])
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async adminReportedPosts(
+    @CurrentUser() user: ReqUser,
+    @Args('query', { nullable: true }) query?: AdminReportedPostsQueryInput,
+    @Args('skip', { type: () => Int, nullable: true, defaultValue: 0 })
+    skip?: number,
+    @Args('take', { type: () => Int, nullable: true, defaultValue: 50 })
+    take?: number,
+  ) {
+    const rows = await this.postsService.listReportedPostsAdmin({
+      search: query?.search,
+      minReportCount: query?.minReportCount,
+      sortBy: query?.sortBy,
+      sortOrder: query?.sortOrder,
+      skip: query?.skip ?? skip ?? 0,
+      take: query?.take ?? take ?? 50,
+    });
+    return Promise.all(rows.map((p) => this.postsService.toGql(p, user.id)));
+  }
+
+  @Query(() => Int)
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async adminReportedPostsCount(
+    @Args('filter', { nullable: true }) filter?: AdminReportedPostsFilterInput,
+  ) {
+    return this.postsService.countReportedPostsAdmin({
+      search: filter?.search,
+      minReportCount: filter?.minReportCount,
     });
   }
 

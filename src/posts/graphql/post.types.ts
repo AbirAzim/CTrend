@@ -195,4 +195,8 @@ export class PostGql {
   /** True when a normal user posted platform-wide (not admin SYSTEM). */
   @Field()
   isUserGlobalBroadcast: boolean;
+
+  /** Number of user-submitted content reports (admin moderation). */
+  @Field(() => Int)
+  reportCount: number;
 }

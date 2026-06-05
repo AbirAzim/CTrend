@@ -49,6 +49,7 @@ import {
 import { NotificationType } from '../notifications/notification.schema';
 import { MessagesService } from '../messages/messages.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
+import { ContentReportsService } from '../content-reports/content-reports.service';
 
 const PREMIUM_GLOBAL_MONTHLY = 20;
 const DEFAULT_ENDING_SOON_LEAD_MINUTES = 5;
@@ -107,6 +108,7 @@ export class PostsService implements OnModuleInit {
     private campaignsService: CampaignsService,
     private messagesService: MessagesService,
     private platformSettingsService: PlatformSettingsService,
+    private contentReportsService: ContentReportsService,
   ) {}
 
   private async resolveCampaignId(
@@ -387,6 +389,70 @@ export class PostsService implements OnModuleInit {
       .exec();
   }
 
+  /** Posts with one or more user content reports — admin moderation queue. */
+  async listReportedPostsAdmin(query: {
+    search?: string;
+    minReportCount?: number;
+    sortBy?: string;
+    sortOrder?: string;
+    skip?: number;
+    take?: number;
+  }): Promise<PostDocument[]> {
+    const safeTake = Math.min(100, Math.max(1, query.take ?? 50));
+    return this.postModel
+      .find(this.buildReportedPostsFilter(query))
+      .sort(this.reportedPostsSort(query))
+      .skip(Math.max(0, query.skip ?? 0))
+      .limit(safeTake)
+      .exec();
+  }
+
+  async countReportedPostsAdmin(query: {
+    search?: string;
+    minReportCount?: number;
+  }): Promise<number> {
+    return this.postModel
+      .countDocuments(this.buildReportedPostsFilter(query))
+      .exec();
+  }
+
+  private buildReportedPostsFilter(query: {
+    search?: string;
+    minReportCount?: number;
+  }): Record<string, unknown> {
+    const min = Math.max(1, query.minReportCount ?? 1);
+    const filter: Record<string, unknown> = { reportCount: { $gte: min } };
+    const term = query.search?.trim();
+    if (term) {
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const regex = new RegExp(escaped, 'i');
+      filter.$and = [
+        { reportCount: { $gte: min } },
+        {
+          $or: [{ contentText: regex }, { 'options.label': regex }],
+        },
+      ];
+      delete filter.reportCount;
+    }
+    return filter;
+  }
+
+  private reportedPostsSort(query: {
+    sortBy?: string;
+    sortOrder?: string;
+  }): Record<string, 1 | -1> {
+    const dir: 1 | -1 = query.sortOrder === 'asc' ? 1 : -1;
+    switch (query.sortBy) {
+      case 'createdAt':
+        return { createdAt: dir };
+      case 'updatedAt':
+        return { updatedAt: dir };
+      case 'reportCount':
+      default:
+        return { reportCount: dir, createdAt: -1 };
+    }
+  }
+
   private buildPlatformPostsFilter(query: {
     search?: string;
     status?: PostStatus;
@@ -610,6 +676,7 @@ export class PostsService implements OnModuleInit {
       this.savedPostModel.deleteMany({ postId: pid }),
       this.postReactionModel.deleteMany({ postId: pid }),
       this.commentModel.deleteMany({ postId: pid }),
+      this.contentReportsService.deleteReportsForPost(pid.toHexString()),
     ]);
     // Notify all connected feed clients so the post disappears in real time.
     await this.safePubsubPublish(POST_DELETED, {
@@ -1202,6 +1269,7 @@ export class PostsService implements OnModuleInit {
       votePrizeClaimedAt: post.votePrizeClaimedAt,
       canClaimPrize,
       isUserGlobalBroadcast: Boolean(post.isUserGlobalBroadcast),
+      reportCount: post.reportCount ?? 0,
     };
   }
 }

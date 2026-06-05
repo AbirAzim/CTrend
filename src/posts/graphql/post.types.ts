@@ -191,4 +191,8 @@ export class PostGql {
 
   @Field()
   canClaimPrize: boolean;
+
+  /** True when a normal user posted platform-wide (not admin SYSTEM). */
+  @Field()
+  isUserGlobalBroadcast: boolean;
 }

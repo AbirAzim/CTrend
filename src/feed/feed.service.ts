@@ -98,10 +98,19 @@ export class FeedService {
     // the main feed (those have their own /profile/scheduled view).
     if (viewerRole === 'admin') return { ...notScheduled, ...campaignFilter };
 
-    // Unauthenticated: only SYSTEM posts (explicitly platform-wide by admin choice).
-    // Regular USER posts by admins are friends-only, same as any other user.
+    // Unauthenticated: admin SYSTEM posts + user global broadcasts only.
     if (!viewerId) {
-      return { type: PostType.SYSTEM, ...notScheduled, ...campaignFilter };
+      return {
+        $or: [
+          { type: PostType.SYSTEM, ...notScheduled },
+          {
+            type: PostType.USER,
+            isUserGlobalBroadcast: true,
+            ...notScheduled,
+          },
+        ],
+        ...campaignFilter,
+      };
     }
 
     // Authenticated user: own posts (any status) + friends' posts + SYSTEM + org posts.
@@ -112,6 +121,11 @@ export class FeedService {
 
     const parts: Record<string, unknown>[] = [
       { type: PostType.SYSTEM, ...notScheduled },
+      {
+        type: PostType.USER,
+        isUserGlobalBroadcast: true,
+        ...notScheduled,
+      },
       // Own posts in feed exclude SCHEDULED — they live in /profile/scheduled
       { type: PostType.USER, createdBy: viewerOid, ...notScheduled },
     ];

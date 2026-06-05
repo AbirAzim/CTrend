@@ -2,6 +2,7 @@ import { Field, InputType, Int } from '@nestjs/graphql';
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsDate,
   IsEnum,
   IsInt,
@@ -106,4 +107,10 @@ export class CreatePostInput {
   @IsOptional()
   @IsString()
   campaignId?: string;
+
+  /** When true (and platform setting allows), post is visible + notified platform-wide as the user. */
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  broadcastGlobally?: boolean;
 }

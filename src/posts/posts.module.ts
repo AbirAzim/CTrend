@@ -16,6 +16,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
 import { FollowsModule } from '../follows/follows.module';
 import { CampaignsModule } from '../campaigns/campaigns.module';
 import { MessagesModule } from '../messages/messages.module';
+import { PlatformSettingsModule } from '../platform-settings/platform-settings.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { MessagesModule } from '../messages/messages.module';
     FollowsModule,
     CampaignsModule,
     MessagesModule,
+    PlatformSettingsModule,
   ],
   providers: [PostsService, PostsResolver, PostSchedulerService],
   exports: [PostsService],

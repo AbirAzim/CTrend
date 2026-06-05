@@ -239,6 +239,72 @@ export class NotificationsService {
     return recipients.length;
   }
 
+  /**
+   * Fan-out when a normal user posts globally (distinct from admin SYSTEM posts).
+   */
+  async notifyAllUsersOfUserGlobalPost(params: {
+    postId: string;
+    authorId: string;
+    authorName: string;
+    caption?: string;
+  }): Promise<number> {
+    const allUserIds = await this.usersService.findAllIds();
+    const recipients = allUserIds.filter((id) => id !== params.authorId);
+    if (!recipients.length) return 0;
+
+    const trimmedCaption = params.caption?.trim() ?? '';
+    const authorName = params.authorName?.trim() || 'Someone';
+    const body = trimmedCaption
+      ? trimmedCaption.slice(0, 120)
+      : `${authorName} shared a new compare with everyone — tap to vote.`;
+    const title = `🌍 ${authorName}`;
+
+    for (let i = 0; i < recipients.length; i += PLATFORM_NOTIFY_BATCH) {
+      const chunk = recipients.slice(i, i + PLATFORM_NOTIFY_BATCH);
+      const docs = chunk.map((userId) => ({
+        userId: new Types.ObjectId(userId),
+        type: 'USER_GLOBAL_POST' as NotificationType,
+        title,
+        body,
+        referenceId: params.postId,
+        referenceType: 'Post',
+        postId: params.postId,
+        actorCount: 1,
+        latestActorId: params.authorId,
+        latestActorName: authorName,
+        read: false,
+        archived: false,
+      }));
+
+      let inserted: NotificationDocument[];
+      try {
+        inserted = (await this.notificationModel.insertMany(docs, {
+          ordered: false,
+        })) as NotificationDocument[];
+      } catch (err) {
+        this.logger.error(
+          `User global post notify batch failed (offset ${i})`,
+          err,
+        );
+        continue;
+      }
+
+      await Promise.allSettled(
+        inserted.map(async (doc) => {
+          const recipientId = doc.userId.toHexString();
+          const gql = this.toGql(doc);
+          await pubsub.publish(NEW_NOTIFICATION, {
+            newNotification: gql,
+            recipientId,
+          });
+          await this.sendBellPush(recipientId, gql);
+        }),
+      );
+    }
+
+    return recipients.length;
+  }
+
   async sendBroadcast(
     adminId: string,
     title: string,
@@ -500,7 +566,10 @@ export class NotificationsService {
       latestActorName: gql.latestActorName,
     });
 
-    const isSystem = gql.type === 'ANNOUNCEMENT' || gql.type === 'SYSTEM';
+    const isSystem =
+      gql.type === 'ANNOUNCEMENT' ||
+      gql.type === 'SYSTEM' ||
+      (gql.type === 'USER_GLOBAL_POST' && !gql.latestActorId);
     const senderName = gql.latestActorName?.trim() ?? '';
 
     // Actor-driven notifications: title = sender, body = action sentence with

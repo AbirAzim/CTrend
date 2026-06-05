@@ -48,6 +48,7 @@ import {
 } from '../common/platform-brand';
 import { NotificationType } from '../notifications/notification.schema';
 import { MessagesService } from '../messages/messages.service';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 
 const PREMIUM_GLOBAL_MONTHLY = 20;
 const DEFAULT_ENDING_SOON_LEAD_MINUTES = 5;
@@ -105,6 +106,7 @@ export class PostsService implements OnModuleInit {
     private followsService: FollowsService,
     private campaignsService: CampaignsService,
     private messagesService: MessagesService,
+    private platformSettingsService: PlatformSettingsService,
   ) {}
 
   private async resolveCampaignId(
@@ -732,6 +734,22 @@ export class PostsService implements OnModuleInit {
       // admin can still post as user-style compare post
     }
 
+    const wantsGlobal = Boolean(input.broadcastGlobally);
+    if (wantsGlobal) {
+      if (author.role === UserRole.ADMIN) {
+        throw new BadRequestException(
+          'Admins: use createSystemPost for platform-wide posts',
+        );
+      }
+      const allowed =
+        await this.platformSettingsService.isUserGlobalPostsAllowed();
+      if (!allowed) {
+        throw new ForbiddenException(
+          'Global posting for users is disabled by the platform',
+        );
+      }
+    }
+
     const visibility = input.visibility ?? Visibility.PUBLIC;
     const contentText = input.contentText ?? input.caption;
     const votingEndsAt = this.parseFutureDate(
@@ -749,7 +767,8 @@ export class PostsService implements OnModuleInit {
       categoryId: category._id,
       visibility,
       createdBy: new Types.ObjectId(authorId),
-      feedPriority: 0,
+      isUserGlobalBroadcast: wantsGlobal,
+      feedPriority: wantsGlobal ? 50 : 0,
       voteCount: 0,
       commentsDisabled: false,
       likesDisabled: false,
@@ -896,6 +915,16 @@ export class PostsService implements OnModuleInit {
           postId,
           authorId,
           authorName: PLATFORM_BRAND_NAME,
+          caption,
+        });
+        return;
+      }
+
+      if (post.type === PostType.USER && post.isUserGlobalBroadcast) {
+        await this.notificationsService.notifyAllUsersOfUserGlobalPost({
+          postId,
+          authorId,
+          authorName,
           caption,
         });
         return;
@@ -1161,6 +1190,7 @@ export class PostsService implements OnModuleInit {
       isPrizeClaimed,
       votePrizeClaimedAt: post.votePrizeClaimedAt,
       canClaimPrize,
+      isUserGlobalBroadcast: Boolean(post.isUserGlobalBroadcast),
     };
   }
 }

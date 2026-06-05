@@ -34,6 +34,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { PresenceModule } from './presence/presence.module';
 import { SearchModule } from './search/search.module';
 import { PresenceService } from './presence/presence.service';
+import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
 
 @Module({
   imports: [
@@ -214,6 +215,7 @@ import { PresenceService } from './presence/presence.service';
     NotificationsModule,
     MessagesModule,
     SearchModule,
+    PlatformSettingsModule,
   ],
   providers: [
     {

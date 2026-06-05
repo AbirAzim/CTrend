@@ -140,6 +140,7 @@ input CreateCampaignInput {
 }
 
 input CreatePostInput {
+  broadcastGlobally: Boolean
   campaignId: String
   caption: String
   categoryId: String!
@@ -365,6 +366,7 @@ type Mutation {
   sendMessage(conversationId: ID!, imageUrl: String, replyToId: ID, text: String! = ""): MessageGql!
   sendModeratorMessage(imageUrl: String, replyToId: ID, text: String! = "", userId: ID!): ModeratorMessageAdminGql!
   sendModeratorMessages(imageUrl: String, replyToId: ID, text: String! = "", userIds: [ID!]!): [ModeratorMessageAdminGql!]!
+  setAllowUserGlobalPosts(enabled: Boolean!): PlatformSettingsGql!
   setCommentLike(commentId: ID!, liked: Boolean!): CommentGql!
   setCommentReaction(commentId: ID!, emoji: String): CommentGql!
   setPostHype(active: Boolean!, postId: ID!): Boolean!
@@ -444,6 +446,10 @@ type ParticipantGql {
   online: Boolean!
 }
 
+type PlatformSettingsGql {
+  allowUserGlobalPosts: Boolean!
+}
+
 type PostCampaignSummaryGql {
   bannerImageUrl: String
   bannerText: String
@@ -480,6 +486,7 @@ type PostGql {
   imageUrl: String
   imageUrls: [String!]!
   isPrizeClaimed: Boolean!
+  isUserGlobalBroadcast: Boolean!
   isVotingOpen: Boolean!
   lastEditedBy: UserGql
   likeCount: Int!
@@ -597,6 +604,7 @@ type Query {
   myVotedPosts(anonymousOnly: Boolean): [PostGql!]!
   onlineUserIds: [String!]!
   organizationDashboard(organizationId: String!): OrganizationDashboardGql!
+  platformSettings: PlatformSettingsGql!
   previewInvites(emails: [String!]!): [InvitePreviewGql!]!
   unreadNotificationCount: Int!
   votersByPost(optionIndex: Int, postId: ID!, search: String, skip: Int, take: Int): [PostVoterGql!]!

@@ -93,6 +93,13 @@ export class Post {
   @Prop({ type: Types.ObjectId, ref: 'User' })
   lastEditedById?: Types.ObjectId;
 
+  /**
+   * Normal user chose "post globally" (platform-wide USER post).
+   * Distinct from SYSTEM posts which show the platform brand, not the user.
+   */
+  @Prop({ default: false })
+  isUserGlobalBroadcast: boolean;
+
   /** Optional promotional campaign this compare belongs to. */
   @Prop({ type: Types.ObjectId, ref: 'Campaign' })
   campaignId?: Types.ObjectId;

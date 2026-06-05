@@ -351,7 +351,10 @@ export class PostsService implements OnModuleInit {
     return this.postModel.findById(id).exec();
   }
 
-  /** Platform-wide (SYSTEM) posts for admin management — search, filter, sort. */
+  /**
+   * Platform-wide posts for admin management — search, filter, sort.
+   * `scope` selects admin SYSTEM posts (default) or user global broadcasts.
+   */
   async listPlatformPostsAdmin(query: {
     search?: string;
     status?: PostStatus;
@@ -359,6 +362,7 @@ export class PostsService implements OnModuleInit {
     votingFilter?: string;
     sortBy?: string;
     sortOrder?: string;
+    scope?: string;
     skip?: number;
     take?: number;
   }): Promise<PostDocument[]> {
@@ -376,6 +380,7 @@ export class PostsService implements OnModuleInit {
     status?: PostStatus;
     categoryId?: string;
     votingFilter?: string;
+    scope?: string;
   }): Promise<number> {
     return this.postModel
       .countDocuments(this.buildPlatformPostsFilter(query))
@@ -387,8 +392,14 @@ export class PostsService implements OnModuleInit {
     status?: PostStatus;
     categoryId?: string;
     votingFilter?: string;
+    scope?: string;
   }): Record<string, unknown> {
-    const filter: Record<string, unknown> = { type: PostType.SYSTEM };
+    // `user` scope → normal-user posts broadcast platform-wide.
+    // `admin` (default) → admin SYSTEM platform posts.
+    const filter: Record<string, unknown> =
+      query.scope === 'user'
+        ? { type: PostType.USER, isUserGlobalBroadcast: true }
+        : { type: PostType.SYSTEM };
     if (query.status) filter.status = query.status;
     if (query.categoryId && Types.ObjectId.isValid(query.categoryId)) {
       filter.categoryId = new Types.ObjectId(query.categoryId);

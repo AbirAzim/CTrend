@@ -188,6 +188,7 @@ export class PostsResolver {
       status: query?.status,
       categoryId: query?.categoryId,
       votingFilter: query?.votingFilter,
+      scope: query?.scope,
       sortBy: query?.sortBy,
       sortOrder: query?.sortOrder,
       skip: query?.skip ?? skip ?? 0,
@@ -207,6 +208,7 @@ export class PostsResolver {
       status: filter?.status,
       categoryId: filter?.categoryId,
       votingFilter: filter?.votingFilter,
+      scope: filter?.scope,
     });
   }
 

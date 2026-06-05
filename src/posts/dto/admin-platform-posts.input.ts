@@ -24,6 +24,16 @@ export class AdminPlatformPostsFilterInput {
   @IsIn(['live', 'closed'])
   votingFilter?: string;
 
+  /**
+   * Which platform-wide posts to manage:
+   * `admin` (default) → admin SYSTEM posts; `user` → normal-user posts that were
+   * broadcast platform-wide (`isUserGlobalBroadcast`).
+   */
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsIn(['admin', 'user'])
+  scope?: string;
+
   @Field({ nullable: true })
   @IsOptional()
   @IsIn(['createdAt', 'votes', 'caption', 'updatedAt'])

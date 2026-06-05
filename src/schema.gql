@@ -13,6 +13,7 @@ type AdminModeratorUserMessageGql {
 
 input AdminPlatformPostsFilterInput {
   categoryId: String
+  scope: String
   search: String
   sortBy: String
   sortOrder: String
@@ -22,6 +23,7 @@ input AdminPlatformPostsFilterInput {
 
 input AdminPlatformPostsQueryInput {
   categoryId: String
+  scope: String
   search: String
   skip: Int = 0
   sortBy: String

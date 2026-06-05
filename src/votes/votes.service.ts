@@ -16,7 +16,7 @@ import { POST_VOTE_UPDATED, pubsub, VOTE_UPDATED } from '../pubsub';
 import { UsersService } from '../users/users.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/notification.schema';
-import { PostType } from '../common/enums';
+import { OrgPostReach, PostType } from '../common/enums';
 import { PostVoterGql } from './graphql/vote.types';
 
 @Injectable()
@@ -136,9 +136,18 @@ export class VotesService {
       throw new BadRequestException('Invalid option');
     }
 
-    // Friendship gate: USER and ORG posts require mutual friendship with the author
+    // Global broadcasts are visible to everyone in the feed, so anyone may vote
+    // on them regardless of friendship: normal-user global posts
+    // (isUserGlobalBroadcast) and org posts with GLOBAL reach.
+    const isGlobalBroadcast =
+      (post.type === PostType.USER && post.isUserGlobalBroadcast === true) ||
+      (post.type === PostType.ORG && post.orgReach === OrgPostReach.GLOBAL);
+
+    // Friendship gate: non-global USER and ORG posts require mutual friendship
+    // with the author.
     if (
       post.type !== PostType.SYSTEM &&
+      !isGlobalBroadcast &&
       post.createdBy.toHexString() !== userId
     ) {
       const vid = new Types.ObjectId(userId);

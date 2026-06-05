@@ -18,19 +18,19 @@ export class ContentReportGql {
   @Field(() => ContentReportReasonId)
   reasonId: ContentReportReasonId;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   details?: string;
 
   @Field(() => ID)
   reporterId: string;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   reporterUsername?: string;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   reporterDisplayName?: string | null;
 
-  @Field({ nullable: true })
+  @Field(() => String, { nullable: true })
   contextUrl?: string;
 
   @Field()

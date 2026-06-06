@@ -36,7 +36,13 @@ import { PostVoteWinnerGql } from './graphql/post-vote-winner.types';
 import { UserGql } from '../users/graphql/user.types';
 import { CampaignsService } from '../campaigns/campaigns.service';
 import { CampaignDocument } from '../campaigns/campaign.schema';
-import { NEW_POST, POST_DELETED, POST_VOTE_UPDATED, pubsub } from '../pubsub';
+import {
+  NEW_POST,
+  POST_DELETED,
+  POST_UPDATED,
+  POST_VOTE_UPDATED,
+  pubsub,
+} from '../pubsub';
 import { Comment, CommentDocument } from '../comments/comment.schema';
 import { CommentsService } from '../comments/comments.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -620,12 +626,24 @@ export class PostsService implements OnModuleInit {
       );
     }
     if (input.caption !== undefined) post.contentText = input.caption;
+
+    // Item edits: appending new images keeps existing votes, but changing or
+    // removing an EXISTING image invalidates prior votes, so they're wiped.
+    // Detection is based on imageUrls (the actual compare images) so that
+    // caption / label / category / focal-point edits never reset votes — and so
+    // older clients that send label-only options stay backward compatible.
+    let resetVotes = false;
     if (input.imageUrls && input.imageUrls.length >= 2) {
+      resetVotes = this.existingImageUrlsChanged(
+        post.imageUrls,
+        input.imageUrls,
+      );
       post.imageUrls = input.imageUrls;
     }
     if (input.options && input.options.length >= 2) {
       post.options = input.options.map((o) => this.mapOptionInput(o));
     }
+
     if (input.categoryId) {
       post.categoryId = new Types.ObjectId(input.categoryId);
     }
@@ -643,6 +661,42 @@ export class PostsService implements OnModuleInit {
         Math.min(1440, Math.round(input.endingSoonLeadMinutes)),
       );
     }
+    if (input.votingEndsAt !== undefined) {
+      // Empty string clears the end date; otherwise must be a future date-time.
+      post.votingEndsAt = this.parseFutureDate(
+        input.votingEndsAt,
+        'votingEndsAt',
+      );
+    }
+    if (input.scheduledAt !== undefined) {
+      const scheduledAt = this.parseFutureDate(
+        input.scheduledAt,
+        'scheduledAt',
+      );
+      if (scheduledAt) {
+        post.scheduledAt = scheduledAt;
+        post.status = PostStatus.SCHEDULED;
+      } else {
+        post.set('scheduledAt', undefined);
+        if (post.status === PostStatus.SCHEDULED) {
+          post.status = PostStatus.PUBLISHED;
+        }
+      }
+    }
+    if (input.broadcastGlobally !== undefined && post.type === PostType.USER) {
+      const wantsGlobal = Boolean(input.broadcastGlobally);
+      if (wantsGlobal && !post.isUserGlobalBroadcast) {
+        const allowed =
+          await this.platformSettingsService.isUserGlobalPostsAllowed();
+        if (!allowed) {
+          throw new ForbiddenException(
+            'Global posting for users is disabled by the platform',
+          );
+        }
+      }
+      post.isUserGlobalBroadcast = wantsGlobal;
+      post.feedPriority = wantsGlobal ? 50 : 0;
+    }
     if (isAdmin) {
       const editorId = new Types.ObjectId(userId);
       const existing = post.editedByIds ?? [];
@@ -651,7 +705,30 @@ export class PostsService implements OnModuleInit {
       }
       post.lastEditedById = editorId;
     }
-    return post.save();
+    if (resetVotes) {
+      await this.votesService.resetForPost(postId);
+      post.voteCount = 0;
+    }
+    const saved = await post.save();
+    await this.safePubsubPublish(POST_UPDATED, {
+      postUpdated: { postId: saved._id.toHexString() },
+    });
+    return saved;
+  }
+
+  /**
+   * True when an edit changed or removed any *existing* compare image (vs only
+   * appending new ones) — which means prior votes must be reset.
+   */
+  private existingImageUrlsChanged(
+    oldUrls: string[],
+    newUrls: string[],
+  ): boolean {
+    if (newUrls.length < oldUrls.length) return true;
+    for (let i = 0; i < oldUrls.length; i++) {
+      if ((oldUrls[i] ?? '') !== (newUrls[i] ?? '')) return true;
+    }
+    return false;
   }
 
   async deletePost(

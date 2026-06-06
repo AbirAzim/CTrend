@@ -32,7 +32,7 @@ import {
   AdminReportedPostsFilterInput,
   AdminReportedPostsQueryInput,
 } from './dto/admin-reported-posts.input';
-import { POST_VOTE_UPDATED, pubsub } from '../pubsub';
+import { POST_UPDATED, POST_VOTE_UPDATED, pubsub } from '../pubsub';
 
 type ReqUser = { id: string; role: string };
 
@@ -301,5 +301,26 @@ export class PostsResolver {
   postVoteUpdated(@Args('postId', { type: () => ID }) postId: string) {
     void postId;
     return pubsub.asyncIterableIterator(POST_VOTE_UPDATED);
+  }
+
+  @Subscription(() => PostGql, {
+    filter: (
+      payload: { postUpdated: { postId: string } },
+      variables: { postId: string },
+    ) => payload.postUpdated.postId === variables.postId,
+    resolve: async function (
+      this: PostsResolver,
+      payload: { postUpdated: { postId: string } },
+      _variables: { postId: string },
+      context: { req?: { user?: ReqUser } },
+    ) {
+      const post = await this.postsService.findById(payload.postUpdated.postId);
+      if (!post) throw new NotFoundException('Post not found');
+      return this.postsService.toGql(post, context.req?.user?.id);
+    },
+  })
+  postUpdated(@Args('postId', { type: () => ID }) postId: string) {
+    void postId;
+    return pubsub.asyncIterableIterator(POST_UPDATED);
   }
 }

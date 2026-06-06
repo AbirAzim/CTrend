@@ -284,6 +284,19 @@ export class VotesService {
   }
 
   /**
+   * Wipe every vote on a post and zero its voteCount. Used when an author edits
+   * an existing compare option (image/label) — the prior votes no longer map to
+   * the same choices, so they're reset. Returns the number of votes removed.
+   */
+  async resetForPost(postId: string): Promise<number> {
+    if (!Types.ObjectId.isValid(postId)) return 0;
+    const pid = new Types.ObjectId(postId);
+    const res = await this.voteModel.deleteMany({ postId: pid }).exec();
+    await this.postModel.updateOne({ _id: pid }, { $set: { voteCount: 0 } });
+    return res.deletedCount ?? 0;
+  }
+
+  /**
    * Random eligible voter for post giveaway after voting ends.
    * Excludes anonymous votes. If `winningOptionIndices` is empty, uses all options.
    */

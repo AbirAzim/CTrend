@@ -2,6 +2,7 @@ import { Field, InputType, Int } from '@nestjs/graphql';
 import {
   ArrayMinSize,
   IsArray,
+  IsBoolean,
   IsInt,
   IsOptional,
   IsString,
@@ -53,4 +54,22 @@ export class UpdatePostInput {
   @Min(1)
   @Max(1440)
   endingSoonLeadMinutes?: number;
+
+  /** New voting end date-time (ISO). Must be in the future. */
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  votingEndsAt?: string;
+
+  /** Reschedule a SCHEDULED post to a new future time (ISO). */
+  @Field(() => String, { nullable: true })
+  @IsOptional()
+  @IsString()
+  scheduledAt?: string;
+
+  /** Toggle a normal-user post between platform-wide (global) and friends-only. */
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  broadcastGlobally?: boolean;
 }

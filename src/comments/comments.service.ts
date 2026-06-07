@@ -50,6 +50,9 @@ export class CommentsService {
     }
 
     let parentComment: CommentDocument | null = null;
+    let effectiveParentId: Types.ObjectId | undefined;
+    let replyToUserId: Types.ObjectId | undefined;
+    let replyToName: string | undefined;
     if (parentId) {
       parentComment = await this.commentModel.findById(parentId).exec();
       if (!parentComment)
@@ -57,18 +60,20 @@ export class CommentsService {
       if (parentComment.postId.toHexString() !== postId) {
         throw new BadRequestException('Reply must be on the same post');
       }
-      if (parentComment.parentId) {
-        throw new BadRequestException(
-          'Replies are only allowed on top-level comments',
-        );
-      }
+      // Flatten to a single nesting level (Facebook-style): a reply to a reply
+      // attaches to the top-level comment but records who it addresses.
+      effectiveParentId = parentComment.parentId ?? parentComment._id;
+      replyToUserId = parentComment.userId;
+      replyToName = await this.actorName(parentComment.userId.toHexString());
     }
 
     const doc = await this.commentModel.create({
       postId: new Types.ObjectId(postId),
       userId: new Types.ObjectId(userId),
       content,
-      parentId: parentId ? new Types.ObjectId(parentId) : undefined,
+      parentId: effectiveParentId,
+      replyToUserId,
+      replyToName,
     });
 
     const name = await this.actorName(userId);
@@ -213,6 +218,8 @@ export class CommentsService {
         viewerHasLiked: viewerReaction === '❤️' || viewerReaction === '👍',
         createdAt: c.createdAt ?? new Date(),
         editedAt: c.editedAt,
+        replyToName: c.replyToName,
+        replyToUserId: c.replyToUserId?.toHexString(),
       };
     });
   }

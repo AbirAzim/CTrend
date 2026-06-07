@@ -20,6 +20,15 @@ export class Comment {
   @Prop({ type: Types.ObjectId, ref: 'Comment' })
   parentId?: Types.ObjectId;
 
+  /** The user this reply addresses ("Replying to <name>"). Flattened: a reply to
+   * a reply still has `parentId` = top-level comment, but records who it answers. */
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  replyToUserId?: Types.ObjectId;
+
+  /** Denormalised display name of `replyToUserId`, for the reply label. */
+  @Prop({ trim: true })
+  replyToName?: string;
+
   /** Set when the author edits the comment — clients show an "edited" label. */
   @Prop({ type: Date })
   editedAt?: Date;

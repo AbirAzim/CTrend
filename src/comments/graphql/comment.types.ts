@@ -27,6 +27,13 @@ export class CommentGql {
   @Field(() => ID, { nullable: true })
   parentId?: string;
 
+  /** Name of the user this reply addresses ("Replying to <name>"). */
+  @Field({ nullable: true })
+  replyToName?: string;
+
+  @Field(() => ID, { nullable: true })
+  replyToUserId?: string;
+
   @Field(() => [CommentReactionCountGql])
   reactions: CommentReactionCountGql[];
 

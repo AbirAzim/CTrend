@@ -13,6 +13,10 @@ export class PlatformSettings {
   /** When true, normal users may publish a compare to the entire platform (not as the brand). */
   @Prop({ default: false })
   allowUserGlobalPosts: boolean;
+
+  /** Minimum Android versionCode; users below this see a blocking update prompt. 0 = off. */
+  @Prop({ default: 0 })
+  minAndroidVersionCode: number;
 }
 
 export const PlatformSettingsSchema =

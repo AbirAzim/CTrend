@@ -369,6 +369,7 @@ type Mutation {
   sendModeratorMessage(imageUrl: String, replyToId: ID, text: String! = "", userId: ID!): ModeratorMessageAdminGql!
   sendModeratorMessages(imageUrl: String, replyToId: ID, text: String! = "", userIds: [ID!]!): [ModeratorMessageAdminGql!]!
   setAllowUserGlobalPosts(enabled: Boolean!): PlatformSettingsGql!
+  setMinAndroidVersionCode(versionCode: Int!): PlatformSettingsGql!
   setCommentLike(commentId: ID!, liked: Boolean!): CommentGql!
   setCommentReaction(commentId: ID!, emoji: String): CommentGql!
   setPostHype(active: Boolean!, postId: ID!): Boolean!
@@ -450,6 +451,7 @@ type ParticipantGql {
 
 type PlatformSettingsGql {
   allowUserGlobalPosts: Boolean!
+  minAndroidVersionCode: Int!
 }
 
 type PostCampaignSummaryGql {

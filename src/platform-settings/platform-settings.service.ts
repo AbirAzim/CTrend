@@ -23,12 +23,16 @@ export class PlatformSettingsService {
     return this.model.create({
       key: PLATFORM_SETTINGS_KEY,
       allowUserGlobalPosts: false,
+      minAndroidVersionCode: 0,
     });
   }
 
   async toGql(): Promise<PlatformSettingsGql> {
     const doc = await this.getDocument();
-    return { allowUserGlobalPosts: doc.allowUserGlobalPosts ?? false };
+    return {
+      allowUserGlobalPosts: doc.allowUserGlobalPosts ?? false,
+      minAndroidVersionCode: doc.minAndroidVersionCode ?? 0,
+    };
   }
 
   async isUserGlobalPostsAllowed(): Promise<boolean> {
@@ -44,6 +48,21 @@ export class PlatformSettingsService {
         { upsert: true, new: true },
       )
       .exec();
-    return { allowUserGlobalPosts: doc?.allowUserGlobalPosts ?? false };
+    return { allowUserGlobalPosts: doc?.allowUserGlobalPosts ?? false, minAndroidVersionCode: doc?.minAndroidVersionCode ?? 0 };
+  }
+
+  async setMinAndroidVersionCode(versionCode: number): Promise<PlatformSettingsGql> {
+    const safe = Math.max(0, Math.floor(Number(versionCode) || 0));
+    const doc = await this.model
+      .findOneAndUpdate(
+        { key: PLATFORM_SETTINGS_KEY },
+        { $set: { minAndroidVersionCode: safe } },
+        { upsert: true, new: true },
+      )
+      .exec();
+    return {
+      allowUserGlobalPosts: doc?.allowUserGlobalPosts ?? false,
+      minAndroidVersionCode: doc?.minAndroidVersionCode ?? 0,
+    };
   }
 }

@@ -1,4 +1,4 @@
-import { Args, Mutation, Query, Resolver } from '@nestjs/graphql';
+import { Args, Int, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { PlatformSettingsService } from './platform-settings.service';
 import { PlatformSettingsGql } from './graphql/platform-settings.types';
@@ -23,5 +23,14 @@ export class PlatformSettingsResolver {
     @Args('enabled') enabled: boolean,
   ): Promise<PlatformSettingsGql> {
     return this.platformSettingsService.setAllowUserGlobalPosts(enabled);
+  }
+
+  @Mutation(() => PlatformSettingsGql)
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async setMinAndroidVersionCode(
+    @Args('versionCode', { type: () => Int }) versionCode: number,
+  ): Promise<PlatformSettingsGql> {
+    return this.platformSettingsService.setMinAndroidVersionCode(versionCode);
   }
 }

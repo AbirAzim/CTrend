@@ -71,4 +71,24 @@ export class CommentsResolver {
   ) {
     return this.commentsService.setCommentLike(user.id, commentId, liked);
   }
+
+  @Mutation(() => CommentGql)
+  @UseGuards(GqlAuthGuard)
+  async editComment(
+    @CurrentUser() user: ReqUser,
+    @Args('commentId', { type: () => ID }) commentId: string,
+    @Args('content') content: string,
+  ) {
+    return this.commentsService.editComment(user.id, commentId, content);
+  }
+
+  /** Deletes a comment (and its replies if top-level). Returns removed ids. */
+  @Mutation(() => [ID])
+  @UseGuards(GqlAuthGuard)
+  async deleteComment(
+    @CurrentUser() user: ReqUser,
+    @Args('commentId', { type: () => ID }) commentId: string,
+  ) {
+    return this.commentsService.deleteComment(user.id, commentId);
+  }
 }

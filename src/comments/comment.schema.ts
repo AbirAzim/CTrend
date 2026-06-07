@@ -19,6 +19,10 @@ export class Comment {
 
   @Prop({ type: Types.ObjectId, ref: 'Comment' })
   parentId?: Types.ObjectId;
+
+  /** Set when the author edits the comment — clients show an "edited" label. */
+  @Prop({ type: Date })
+  editedAt?: Date;
 }
 
 export const CommentSchema = SchemaFactory.createForClass(Comment);

@@ -31,6 +31,7 @@ import {
   ADMIN_MODERATOR_USER_MESSAGE,
   MESSAGE_READ,
   MESSAGE_REACTION_CHANGED,
+  MESSAGE_DELETED,
   TYPING_INDICATOR,
   USER_PRESENCE_CHANGED,
 } from '../pubsub';
@@ -200,6 +201,15 @@ export class MessagesResolver {
     return this.messagesService.reactMessage(user.id, messageId, emoji);
   }
 
+  @Mutation(() => MessageGql)
+  @UseGuards(GqlAuthGuard)
+  async deleteMessage(
+    @CurrentUser() user: ReqUser,
+    @Args('messageId', { type: () => ID }) messageId: string,
+  ) {
+    return this.messagesService.deleteMessage(user.id, messageId);
+  }
+
   @Mutation(() => Boolean)
   @UseGuards(GqlAuthGuard)
   async setTyping(
@@ -309,6 +319,22 @@ export class MessagesResolver {
   @UseGuards(GqlAuthGuard)
   messageReactionChanged() {
     return pubsub.asyncIterableIterator(MESSAGE_REACTION_CHANGED);
+  }
+
+  @Subscription(() => MessageGql, {
+    filter(payload, _variables, context) {
+      const userId: string = context?.req?.user?.id;
+      return (
+        userId &&
+        Array.isArray(payload.participantIds) &&
+        payload.participantIds.includes(userId)
+      );
+    },
+    resolve: (payload) => payload.messageDeleted,
+  })
+  @UseGuards(GqlAuthGuard)
+  messageDeleted() {
+    return pubsub.asyncIterableIterator(MESSAGE_DELETED);
   }
 
   @Subscription(() => TypingIndicatorGql, {

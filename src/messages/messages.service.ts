@@ -38,6 +38,7 @@ import {
   ADMIN_MODERATOR_USER_MESSAGE,
   MESSAGE_READ,
   MESSAGE_REACTION_CHANGED,
+  MESSAGE_DELETED,
   TYPING_INDICATOR,
 } from '../pubsub';
 import { UserRole } from '../common/enums';
@@ -704,6 +705,54 @@ export class MessagesService {
     return gql[0];
   }
 
+  /**
+   * Soft-deletes a message ("unsend"): only the sender may do it. The text/image
+   * are cleared and `deleted` is flagged so clients render "message deleted".
+   * Broadcasts to participants so open chats update in real time.
+   */
+  async deleteMessage(viewerId: string, messageId: string): Promise<MessageGql> {
+    const msg = await this.messageModel.findById(messageId).exec();
+    if (!msg) throw new NotFoundException('Message not found');
+    if (!msg.senderId.equals(new Types.ObjectId(viewerId))) {
+      throw new ForbiddenException('You can only delete your own messages');
+    }
+
+    const convo = await this.conversationModel
+      .findById(msg.conversationId)
+      .exec();
+
+    if (!msg.deleted) {
+      msg.deleted = true;
+      msg.text = '';
+      msg.imageUrl = null;
+      await msg.save();
+
+      // Keep the conversation-list preview in sync if this was the last message.
+      if (convo) {
+        const latest = await this.messageModel
+          .findOne({ conversationId: convo._id })
+          .sort({ createdAt: -1 })
+          .exec();
+        if (latest && latest._id.equals(msg._id)) {
+          await this.conversationModel.updateOne(
+            { _id: convo._id },
+            { $set: { lastMessageText: 'Message deleted' } },
+          );
+        }
+      }
+    }
+
+    const [gql] = await this.messagesToGql([msg], viewerId);
+
+    await pubsub.publish(MESSAGE_DELETED, {
+      messageDeleted: gql,
+      participantIds:
+        convo?.participantIds.map((id) => id.toHexString()) ?? [],
+    });
+
+    return gql;
+  }
+
   async markRead(viewerId: string, conversationId: string): Promise<boolean> {
     const convo = await this.conversationModel.findById(conversationId).exec();
     if (!convo) return false;
@@ -1005,6 +1054,7 @@ export class MessagesService {
         senderAvatar: MODERATOR_AVATAR_URL,
         text: msg.text ?? '',
         imageUrl: msg.imageUrl ?? undefined,
+        deleted: msg.deleted ?? false,
         readBy: msg.readBy.map((r) => ({
           userId: r.userId.toHexString(),
           readAt: r.readAt,
@@ -1038,6 +1088,7 @@ export class MessagesService {
       senderAvatar: sender?.profileImageUrl ?? undefined,
       text: msg.text ?? '',
       imageUrl: msg.imageUrl ?? undefined,
+      deleted: msg.deleted ?? false,
       readBy: msg.readBy.map((r) => ({
         userId: r.userId.toHexString(),
         readAt: r.readAt,

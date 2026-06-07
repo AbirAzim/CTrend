@@ -212,8 +212,61 @@ export class CommentsService {
         likeCount,
         viewerHasLiked: viewerReaction === '❤️' || viewerReaction === '👍',
         createdAt: c.createdAt ?? new Date(),
+        editedAt: c.editedAt,
       };
     });
+  }
+
+  /** Edits a top-level or reply comment — author only. Flags it as edited. */
+  async editComment(
+    userId: string,
+    commentId: string,
+    content: string,
+  ): Promise<CommentGql> {
+    const trimmed = content.trim();
+    if (!trimmed) throw new BadRequestException('Comment cannot be empty');
+
+    const comment = await this.commentModel.findById(commentId).exec();
+    if (!comment) throw new NotFoundException('Comment not found');
+    if (comment.userId.toHexString() !== userId) {
+      throw new ForbiddenException('You can only edit your own comment');
+    }
+
+    comment.content = trimmed;
+    comment.editedAt = new Date();
+    await comment.save();
+
+    return this.toGql(comment, userId);
+  }
+
+  /**
+   * Deletes a comment — author only. Deleting a top-level comment cascades to all
+   * its replies (and every comment's reactions). Returns the removed comment ids.
+   */
+  async deleteComment(userId: string, commentId: string): Promise<string[]> {
+    const comment = await this.commentModel.findById(commentId).exec();
+    if (!comment) throw new NotFoundException('Comment not found');
+    if (comment.userId.toHexString() !== userId) {
+      throw new ForbiddenException('You can only delete your own comment');
+    }
+
+    // Top-level comment → also remove its replies.
+    const replyIds = comment.parentId
+      ? []
+      : (
+          await this.commentModel
+            .find({ parentId: comment._id })
+            .select('_id')
+            .exec()
+        ).map((r) => r._id);
+    const allIds = [comment._id, ...replyIds];
+
+    await this.commentReactionModel
+      .deleteMany({ commentId: { $in: allIds } })
+      .exec();
+    await this.commentModel.deleteMany({ _id: { $in: allIds } }).exec();
+
+    return allIds.map((id) => id.toHexString());
   }
 
   private async hydrateCommentsToGql(

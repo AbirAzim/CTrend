@@ -90,6 +90,10 @@ export class MessageGql {
   @Field({ nullable: true })
   imageUrl?: string;
 
+  /** True when the sender unsent the message — clients show "message deleted". */
+  @Field({ defaultValue: false })
+  deleted: boolean;
+
   @Field(() => [ReadReceiptGql])
   readBy: ReadReceiptGql[];
 

@@ -43,4 +43,8 @@ export class CommentGql {
 
   @Field()
   createdAt: Date;
+
+  /** Set when the comment has been edited by its author. */
+  @Field({ nullable: true })
+  editedAt?: Date;
 }

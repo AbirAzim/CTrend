@@ -47,6 +47,10 @@ export class Message {
   @Prop({ required: false, type: String, default: null })
   imageUrl?: string | null;
 
+  /** Soft-delete: sender unsent the message ("message deleted" placeholder). */
+  @Prop({ default: false })
+  deleted: boolean;
+
   @Prop({
     type: [{ userId: Types.ObjectId, readAt: Date }],
     default: [],

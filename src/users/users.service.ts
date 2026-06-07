@@ -378,6 +378,44 @@ export class UsersService {
       )
       .exec();
   }
+
+  async updateLastAndroidVersionCode(
+    userId: string,
+    versionCode: number,
+  ): Promise<void> {
+    if (!Types.ObjectId.isValid(userId)) return;
+    const safe = Math.max(0, Math.floor(Number(versionCode) || 0));
+    if (safe <= 0) return;
+    await this.userModel
+      .updateOne(
+        { _id: new Types.ObjectId(userId) },
+        { $max: { lastAndroidVersionCode: safe } },
+      )
+      .exec();
+  }
+
+  /** User ids on Android with a version below min (or unknown) — for update broadcasts. */
+  async findIdsNeedingAndroidUpdate(minVersion: number): Promise<string[]> {
+    if (minVersion <= 0) return [];
+    const docs = await this.userModel
+      .find({
+        pushTokens: {
+          $elemMatch: {
+            platform: { $in: ['android', 'Android', 'ANDROID'] },
+          },
+        },
+        $or: [
+          { lastAndroidVersionCode: { $lt: minVersion } },
+          { lastAndroidVersionCode: { $exists: false } },
+          { lastAndroidVersionCode: 0 },
+          { lastAndroidVersionCode: null },
+        ],
+      })
+      .select('_id')
+      .lean<{ _id: Types.ObjectId }[]>()
+      .exec();
+    return docs.map((d) => d._id.toHexString());
+  }
 }
 
 export function normalizeEmail(email: string): string {

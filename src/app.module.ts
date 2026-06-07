@@ -35,6 +35,8 @@ import { PresenceModule } from './presence/presence.module';
 import { SearchModule } from './search/search.module';
 import { PresenceService } from './presence/presence.service';
 import { PlatformSettingsModule } from './platform-settings/platform-settings.module';
+import { PlatformSettingsService } from './platform-settings/platform-settings.service';
+import { createAndroidVersionEnforcementPlugin } from './common/plugins/android-version-enforcement.plugin';
 import { ContentReportsModule } from './content-reports/content-reports.module';
 
 @Module({
@@ -78,13 +80,14 @@ import { ContentReportsModule } from './content-reports/content-reports.module';
     ]),
     GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
-      imports: [ConfigModule, UsersModule, AuthModule, PresenceModule],
-      inject: [ConfigService, JwtService, UsersService, PresenceService],
+      imports: [ConfigModule, UsersModule, AuthModule, PresenceModule, PlatformSettingsModule],
+      inject: [ConfigService, JwtService, UsersService, PresenceService, PlatformSettingsService],
       useFactory: (
         config: ConfigService,
         jwtService: JwtService,
         usersService: UsersService,
         presenceService: PresenceService,
+        platformSettingsService: PlatformSettingsService,
       ) => ({
         autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
         sortSchema: true,
@@ -192,6 +195,12 @@ import { ContentReportsModule } from './content-reports/content-reports.module';
           },
         },
         playground: config.get('NODE_ENV') !== 'production',
+        plugins: [
+          createAndroidVersionEnforcementPlugin(
+            platformSettingsService,
+            usersService,
+          ),
+        ],
       }),
     }),
     MailModule,

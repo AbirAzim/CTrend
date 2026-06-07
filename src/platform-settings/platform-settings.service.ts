@@ -24,6 +24,8 @@ export class PlatformSettingsService {
       key: PLATFORM_SETTINGS_KEY,
       allowUserGlobalPosts: false,
       minAndroidVersionCode: 0,
+      androidUpdateTitle: '',
+      androidUpdateBody: '',
     });
   }
 
@@ -32,6 +34,8 @@ export class PlatformSettingsService {
     return {
       allowUserGlobalPosts: doc.allowUserGlobalPosts ?? false,
       minAndroidVersionCode: doc.minAndroidVersionCode ?? 0,
+      androidUpdateTitle: doc.androidUpdateTitle ?? '',
+      androidUpdateBody: doc.androidUpdateBody ?? '',
     };
   }
 
@@ -48,7 +52,12 @@ export class PlatformSettingsService {
         { upsert: true, new: true },
       )
       .exec();
-    return { allowUserGlobalPosts: doc?.allowUserGlobalPosts ?? false, minAndroidVersionCode: doc?.minAndroidVersionCode ?? 0 };
+    return {
+      allowUserGlobalPosts: doc?.allowUserGlobalPosts ?? false,
+      minAndroidVersionCode: doc?.minAndroidVersionCode ?? 0,
+      androidUpdateTitle: doc?.androidUpdateTitle ?? '',
+      androidUpdateBody: doc?.androidUpdateBody ?? '',
+    };
   }
 
   async setMinAndroidVersionCode(versionCode: number): Promise<PlatformSettingsGql> {
@@ -63,6 +72,35 @@ export class PlatformSettingsService {
     return {
       allowUserGlobalPosts: doc?.allowUserGlobalPosts ?? false,
       minAndroidVersionCode: doc?.minAndroidVersionCode ?? 0,
+      androidUpdateTitle: doc?.androidUpdateTitle ?? '',
+      androidUpdateBody: doc?.androidUpdateBody ?? '',
+    };
+  }
+
+  async publishAndroidUpdateNotice(
+    title: string,
+    body: string,
+    minVersionCode: number,
+  ): Promise<PlatformSettingsGql> {
+    const safeMin = Math.max(0, Math.floor(Number(minVersionCode) || 0));
+    const doc = await this.model
+      .findOneAndUpdate(
+        { key: PLATFORM_SETTINGS_KEY },
+        {
+          $set: {
+            minAndroidVersionCode: safeMin,
+            androidUpdateTitle: title.trim(),
+            androidUpdateBody: body.trim(),
+          },
+        },
+        { upsert: true, new: true },
+      )
+      .exec();
+    return {
+      allowUserGlobalPosts: doc?.allowUserGlobalPosts ?? false,
+      minAndroidVersionCode: doc?.minAndroidVersionCode ?? 0,
+      androidUpdateTitle: doc?.androidUpdateTitle ?? '',
+      androidUpdateBody: doc?.androidUpdateBody ?? '',
     };
   }
 }

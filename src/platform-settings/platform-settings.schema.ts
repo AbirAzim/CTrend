@@ -17,6 +17,13 @@ export class PlatformSettings {
   /** Minimum Android versionCode; users below this see a blocking update prompt. 0 = off. */
   @Prop({ default: 0 })
   minAndroidVersionCode: number;
+
+  /** Title/body shown in the blocking update modal (admin publish). */
+  @Prop({ default: '' })
+  androidUpdateTitle: string;
+
+  @Prop({ default: '' })
+  androidUpdateBody: string;
 }
 
 export const PlatformSettingsSchema =

@@ -8,4 +8,10 @@ export class PlatformSettingsGql {
   /** Minimum Android versionCode required; 0 = no force-update gate. */
   @Field(() => Int)
   minAndroidVersionCode: number;
+
+  @Field()
+  androidUpdateTitle: string;
+
+  @Field()
+  androidUpdateBody: string;
 }

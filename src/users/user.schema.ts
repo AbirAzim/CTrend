@@ -82,6 +82,10 @@ export class User {
     default: [],
   })
   pushTokens: PushToken[];
+
+  /** Last Android versionCode reported by the mobile app (X-Android-Version-Code header). */
+  @Prop({ default: 0 })
+  lastAndroidVersionCode?: number;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

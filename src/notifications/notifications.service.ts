@@ -321,6 +321,35 @@ export class NotificationsService {
   }
 
   /**
+   * Notify only Android users on an outdated app version (or unknown version).
+   * Also used when admin publishes an update notice.
+   */
+  async sendAndroidUpdateNotice(
+    title: string,
+    body: string,
+    minVersionCode: number,
+  ): Promise<number> {
+    if (minVersionCode <= 0) return 0;
+    const recipientIds =
+      await this.usersService.findIdsNeedingAndroidUpdate(minVersionCode);
+    if (!recipientIds.length) return 0;
+
+    await Promise.all(
+      recipientIds.map((userId) =>
+        this.create({
+          userId,
+          type: 'ANNOUNCEMENT',
+          title,
+          body,
+          referenceType: 'android_update_required',
+          referenceId: String(minVersionCode),
+        }),
+      ),
+    );
+    return recipientIds.length;
+  }
+
+  /**
    * Mark FRIEND_REQUEST notifications resolved when recipient and requester are
    * already mutual friends (e.g. accepted on profile, not via the bell).
    */

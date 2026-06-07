@@ -615,6 +615,8 @@ export class MessagesService {
           conversationId: convo._id.toHexString(),
           senderName: gql.senderName ?? '',
           senderAvatar: gql.senderAvatar ?? '',
+          // Target for the notification's "Like" (👍 react) action.
+          messageId: gql.id ?? '',
         }),
       ),
     );

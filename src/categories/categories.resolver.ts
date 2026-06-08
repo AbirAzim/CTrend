@@ -49,8 +49,9 @@ export class CategoriesResolver {
   async updateCategory(
     @Args('id', { type: () => ID }) id: string,
     @Args('name') name: string,
+    @Args('color', { nullable: true }) color?: string,
   ) {
-    const doc = await this.categoriesService.updateCategory(id, name);
+    const doc = await this.categoriesService.updateCategory(id, name, color);
     return this.categoriesService.toGql(doc);
   }
 

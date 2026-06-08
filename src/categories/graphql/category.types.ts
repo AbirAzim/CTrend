@@ -10,4 +10,9 @@ export class CategoryGql {
 
   @Field()
   slug: string;
+
+  // Admin-assigned accent color (hex). Null when unset — frontend falls back
+  // to a deterministic per-category color.
+  @Field({ nullable: true })
+  color?: string;
 }

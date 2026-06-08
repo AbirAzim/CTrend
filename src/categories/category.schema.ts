@@ -10,6 +10,11 @@ export class Category {
 
   @Prop({ required: true, unique: true, lowercase: true, trim: true })
   slug: string;
+
+  // Admin-assignable accent color (hex, e.g. "#6366f1"). Optional — when unset
+  // the frontend derives a deterministic per-category color.
+  @Prop({ trim: true })
+  color?: string;
 }
 
 export const CategorySchema = SchemaFactory.createForClass(Category);

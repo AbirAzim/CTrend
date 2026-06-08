@@ -25,13 +25,14 @@ export class AdminPlatformPostsFilterInput {
   votingFilter?: string;
 
   /**
-   * Which platform-wide posts to manage:
+   * Which posts to manage:
    * `admin` (default) → admin SYSTEM posts; `user` → normal-user posts that were
-   * broadcast platform-wide (`isUserGlobalBroadcast`).
+   * broadcast platform-wide (`isUserGlobalBroadcast`); `user-all` → normal
+   * (friend-only / non-broadcast) user posts that never reach the public feed.
    */
   @Field({ nullable: true })
   @IsOptional()
-  @IsIn(['admin', 'user'])
+  @IsIn(['admin', 'user', 'user-all'])
   scope?: string;
 
   @Field({ nullable: true })

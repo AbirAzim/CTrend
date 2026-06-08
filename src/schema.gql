@@ -33,6 +33,22 @@ input AdminPlatformPostsQueryInput {
   votingFilter: String
 }
 
+input AdminReportedPostsFilterInput {
+  minReportCount: Int = 1
+  search: String
+  sortBy: String
+  sortOrder: String
+}
+
+input AdminReportedPostsQueryInput {
+  minReportCount: Int = 1
+  search: String
+  skip: Int = 0
+  sortBy: String
+  sortOrder: String
+  take: Int = 50
+}
+
 type AuthPayloadGql {
   accessToken: String!
   refreshToken: String
@@ -93,11 +109,14 @@ type CommentGql {
   author: UserGql!
   content: String!
   createdAt: DateTime!
+  editedAt: DateTime
   id: ID!
   likeCount: Float!
   parentId: ID
   postId: ID!
   reactions: [CommentReactionCountGql!]!
+  replyToName: String
+  replyToUserId: ID
   viewerHasLiked: Boolean!
   viewerReaction: String
 }
@@ -110,6 +129,34 @@ input CommentPostInput {
 type CommentReactionCountGql {
   count: Int!
   emoji: String!
+}
+
+type ContentReportGql {
+  contextUrl: String
+  createdAt: DateTime!
+  details: String
+  id: ID!
+  reasonId: ContentReportReasonId!
+  reporterDisplayName: String
+  reporterId: ID!
+  reporterUsername: String
+  targetId: ID!
+  targetType: ContentReportTargetType!
+}
+
+enum ContentReportReasonId {
+  COPYRIGHT
+  HARASSMENT
+  NUDITY
+  OTHER
+  SPAM
+  VIOLENCE
+}
+
+enum ContentReportTargetType {
+  COMMENT
+  POST
+  USER
 }
 
 type ConversationGql {
@@ -147,7 +194,8 @@ input CreatePostInput {
   caption: String
   categoryId: String!
   contentText: String
-  imageUrls: [String!]!
+  format: PostFormat
+  imageUrls: [String!]
   options: [PostOptionInput!]!
   orgReach: OrgPostReach
   scheduledAt: DateTime
@@ -249,6 +297,7 @@ type InviteResultGql {
 type MessageGql {
   conversationId: ID!
   createdAt: DateTime!
+  deleted: Boolean!
   id: ID!
   imageUrl: String
   reactions: [MessageReactionCountGql!]!
@@ -336,7 +385,10 @@ type Mutation {
   createSystemPost(input: CreatePostInput!): PostGql!
   createWorldCupCampaignPost(fixtureId: ID!): PostGql!
   deleteCategory(id: ID!): Boolean!
+  deleteComment(commentId: ID!): [ID!]!
+  deleteMessage(messageId: ID!): MessageGql!
   deletePost(postId: ID!): Boolean!
+  editComment(commentId: ID!, content: String!): CommentGql!
   extendPostVoting(newVotingEndsAt: DateTime!, postId: ID!): PostGql!
   followUser(userId: ID!): Boolean!
   getImageUploadUrl(contentType: String!, filename: String!): PresignedUploadUrl!
@@ -352,6 +404,7 @@ type Mutation {
   markNotificationRead(id: ID!): Boolean!
   processMatchResult(campaignId: ID, fixtureId: ID!): CampaignWinnerGql!
   promoteToAdmin(email: String!): UserGql!
+  publishAndroidUpdateNotice(body: String!, minVersionCode: Int!, title: String!): Int!
   reactMessage(emoji: String, messageId: ID!): MessageGql!
   register(input: RegisterInput!): AuthPayloadGql!
   registerPushToken(platform: String, token: String!): Boolean!
@@ -359,6 +412,7 @@ type Mutation {
   removeAdmin(email: String!): UserGql!
   removeUser(email: String!): Boolean!
   removeVote(postId: ID!): VoteResultGql!
+  reportContent(input: ReportContentInput!): Boolean!
   requestPasswordReset(email: String!): Boolean!
   resendInvitation(id: ID!): Boolean!
   resendVerificationEmail(email: String!): Boolean!
@@ -369,9 +423,9 @@ type Mutation {
   sendModeratorMessage(imageUrl: String, replyToId: ID, text: String! = "", userId: ID!): ModeratorMessageAdminGql!
   sendModeratorMessages(imageUrl: String, replyToId: ID, text: String! = "", userIds: [ID!]!): [ModeratorMessageAdminGql!]!
   setAllowUserGlobalPosts(enabled: Boolean!): PlatformSettingsGql!
-  setMinAndroidVersionCode(versionCode: Int!): PlatformSettingsGql!
   setCommentLike(commentId: ID!, liked: Boolean!): CommentGql!
   setCommentReaction(commentId: ID!, emoji: String): CommentGql!
+  setMinAndroidVersionCode(versionCode: Int!): PlatformSettingsGql!
   setPostHype(active: Boolean!, postId: ID!): Boolean!
   setPostKeep(keep: Boolean!, postId: ID!): Boolean!
   setPostLike(active: Boolean!, postId: ID!): Boolean!
@@ -451,6 +505,8 @@ type ParticipantGql {
 
 type PlatformSettingsGql {
   allowUserGlobalPosts: Boolean!
+  androidUpdateBody: String!
+  androidUpdateTitle: String!
   minAndroidVersionCode: Int!
 }
 
@@ -465,6 +521,11 @@ type PostCampaignSummaryGql {
 
 type PostDeletedGql {
   postId: ID!
+}
+
+enum PostFormat {
+  COMPARE
+  POLL
 }
 
 type PostGql {
@@ -485,6 +546,7 @@ type PostGql {
   downvoteCount: Int!
   editedBy: [UserGql!]
   endingSoonLeadMinutes: Int!
+  format: PostFormat!
   hypeCount: Int!
   id: ID!
   imageUrl: String
@@ -501,6 +563,7 @@ type PostGql {
   options: [PostOptionGql!]!
   orgReach: OrgPostReach
   recentComments: [CommentGql!]!
+  reportCount: Int!
   saveCount: Int!
   scheduledAt: DateTime
   status: PostStatus!
@@ -570,12 +633,16 @@ type PresignedUploadUrl {
 
 type Query {
   activeCampaigns: [CampaignGql!]!
+  adminContentReports(postId: ID!, skip: Int = 0, take: Int = 50): [ContentReportGql!]!
+  adminContentReportsCount(postId: ID!): Int!
   adminModeratorMessages(search: String, skip: Int! = 0, take: Int! = 50): [ModeratorMessageAdminGql!]!
   adminModeratorMessagesCount(search: String): Int!
   adminModeratorThreadMessages(userId: ID!): [MessageGql!]!
   adminModeratorThreads(search: String, skip: Int! = 0, take: Int! = 50): [ModeratorThreadAdminGql!]!
   adminPlatformPosts(query: AdminPlatformPostsQueryInput, skip: Int = 0, take: Int = 50): [PostGql!]!
   adminPlatformPostsCount(filter: AdminPlatformPostsFilterInput): Int!
+  adminReportedPosts(query: AdminReportedPostsQueryInput, skip: Int = 0, take: Int = 50): [PostGql!]!
+  adminReportedPostsCount(filter: AdminReportedPostsFilterInput): Int!
   campaign(slug: String!): CampaignGql
   campaignWinner(fixtureId: ID!): CampaignWinnerGql
   campaignWinners: [CampaignWinnerGql!]!
@@ -628,6 +695,14 @@ input RegisterInput {
   username: String!
 }
 
+input ReportContentInput {
+  contextUrl: String
+  details: String
+  reasonId: ContentReportReasonId!
+  targetId: ID!
+  targetType: ContentReportTargetType!
+}
+
 type SearchResultGql {
   posts: [PostGql!]!
   users: [SearchUserGql!]!
@@ -640,12 +715,14 @@ type SearchUserGql {
 
 type Subscription {
   adminModeratorUserMessage: AdminModeratorUserMessageGql!
+  messageDeleted: MessageGql!
   messageReactionChanged: MessageReactionChangedGql!
   messageRead: MessageReadGql!
   messageReceived: MessageGql!
   newNotification: NotificationGql!
   newPosts: NewPostGql!
   postDeleted: PostDeletedGql!
+  postUpdated(postId: ID!): PostGql!
   postVoteUpdated(postId: ID!): PostGql!
   presenceChanged: PresenceChangedGql!
   typingIndicator(conversationId: ID!): TypingIndicatorGql!
@@ -680,12 +757,15 @@ input UpdateCampaignInput {
 }
 
 input UpdatePostInput {
+  broadcastGlobally: Boolean
   campaignId: String
   caption: String
   categoryId: String
   endingSoonLeadMinutes: Int
   imageUrls: [String!]
   options: [PostOptionInput!]
+  scheduledAt: String
+  votingEndsAt: String
 }
 
 input UpdateProfileInput {

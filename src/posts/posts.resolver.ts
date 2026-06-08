@@ -132,6 +132,11 @@ export class PostsResolver {
     ) {
       throw new NotFoundException('Post not found');
     }
+    // Friend posts are friends-only even via direct link — non-friends get a
+    // 404 (not 403) so we don't leak that the post exists.
+    if (!(await this.postsService.canViewPost(post, user?.id, user?.role))) {
+      throw new NotFoundException('Post not found');
+    }
     return this.postsService.toGql(post, user?.id);
   }
 
@@ -256,7 +261,13 @@ export class PostsResolver {
     @Args('userId', { type: () => ID }) userId: string,
     @CurrentUser() user?: ReqUser,
   ) {
-    const rows = await this.postsService.findByAuthor(userId);
+    // Only return the author's posts this viewer is allowed to see — friend
+    // posts stay hidden from non-friends on profile pages too.
+    const rows = await this.postsService.findViewableByAuthor(
+      userId,
+      user?.id,
+      user?.role,
+    );
     return Promise.all(rows.map((p) => this.postsService.toGql(p, user?.id)));
   }
 

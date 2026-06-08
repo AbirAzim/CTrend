@@ -94,9 +94,12 @@ export class FeedService {
         ? { campaignId: new Types.ObjectId(campaignId) }
         : {};
 
-    // Admins see every post on the platform — but never the SCHEDULED ones in
-    // the main feed (those have their own /profile/scheduled view).
-    if (viewerRole === 'admin') return { ...notScheduled, ...campaignFilter };
+    // NOTE: Admins are intentionally NOT given a feed-wide override. They see
+    // the feed exactly like a normal user (own + friends' + SYSTEM + global
+    // broadcasts + org). Friend-only posts of users they aren't friends with
+    // are managed from the Admin dashboard ("User Normal posts" tab), not
+    // surfaced in the main feed.
+    void viewerRole;
 
     // Unauthenticated: admin SYSTEM posts + user global broadcasts only.
     if (!viewerId) {

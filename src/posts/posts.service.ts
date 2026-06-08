@@ -592,11 +592,14 @@ export class PostsService implements OnModuleInit {
     scope?: string;
   }): Record<string, unknown> {
     // `user` scope → normal-user posts broadcast platform-wide.
+    // `user-all` scope → normal (friend-only / non-broadcast) user posts.
     // `admin` (default) → admin SYSTEM platform posts.
     const filter: Record<string, unknown> =
       query.scope === 'user'
         ? { type: PostType.USER, isUserGlobalBroadcast: true }
-        : { type: PostType.SYSTEM };
+        : query.scope === 'user-all'
+          ? { type: PostType.USER, isUserGlobalBroadcast: { $ne: true } }
+          : { type: PostType.SYSTEM };
     if (query.status) filter.status = query.status;
     if (query.categoryId && Types.ObjectId.isValid(query.categoryId)) {
       filter.categoryId = new Types.ObjectId(query.categoryId);

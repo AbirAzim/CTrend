@@ -44,6 +44,11 @@ export class OrganizationsService {
       .exec();
   }
 
+  async findById(orgId: string): Promise<OrganizationDocument | null> {
+    if (!Types.ObjectId.isValid(orgId)) return null;
+    return this.orgModel.findById(orgId).exec();
+  }
+
   async findManyByOwnerUserIds(
     ownerUserIds: string[],
   ): Promise<OrganizationDocument[]> {

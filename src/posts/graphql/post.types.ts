@@ -1,6 +1,7 @@
 import { Field, ID, Int, ObjectType } from '@nestjs/graphql';
 import {
   OrgPostReach,
+  PostFormat,
   PostStatus,
   PostType,
   Visibility,
@@ -48,6 +49,10 @@ export class PostGql {
 
   @Field(() => PostType)
   type: PostType;
+
+  /** Voting layout: `compare` (image grid) or `poll` (stacked rows). */
+  @Field(() => PostFormat)
+  format: PostFormat;
 
   @Field({ nullable: true })
   contentText?: string;

@@ -14,7 +14,12 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { OrgPostReach, PostType, Visibility } from '../../common/enums';
+import {
+  OrgPostReach,
+  PostFormat,
+  PostType,
+  Visibility,
+} from '../../common/enums';
 
 @InputType()
 export class PostOptionInput {
@@ -51,6 +56,12 @@ export class CreatePostInput {
   @IsEnum(PostType)
   type?: PostType;
 
+  /** Voting layout. Defaults to `compare` when omitted (back-compat). */
+  @Field(() => PostFormat, { nullable: true })
+  @IsOptional()
+  @IsEnum(PostFormat)
+  format?: PostFormat;
+
   @Field({ nullable: true })
   @IsOptional()
   @IsString()
@@ -64,11 +75,16 @@ export class CreatePostInput {
   @MaxLength(10000)
   caption?: string;
 
-  @Field(() => [String])
+  /**
+   * Compare images (compare format) OR body/context images (poll format).
+   * Optional here — the service enforces the per-format minimum (compare needs
+   * at least 2; poll allows 0+).
+   */
+  @Field(() => [String], { nullable: true })
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(2)
   @IsString({ each: true })
-  imageUrls: string[];
+  imageUrls?: string[];
 
   @Field(() => [PostOptionInput])
   @IsArray()

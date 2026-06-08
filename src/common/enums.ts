@@ -12,6 +12,17 @@ export enum PostType {
   SYSTEM = 'system',
 }
 
+/**
+ * Visual layout of a post's voting UI.
+ * - `compare`: side-by-side image grid (default, all legacy posts).
+ * - `poll`: stacked option rows with an optional small left thumbnail + result
+ *   bar. A "Yes/No" post is just a poll with two text options and no images.
+ */
+export enum PostFormat {
+  COMPARE = 'compare',
+  POLL = 'poll',
+}
+
 export enum Visibility {
   PUBLIC = 'public',
   PRIVATE = 'private',
@@ -77,6 +88,7 @@ export enum InvitationStatus {
 registerEnumType(UserRole, { name: 'UserRole' });
 registerEnumType(InvitationStatus, { name: 'InvitationStatus' });
 registerEnumType(PostType, { name: 'PostType' });
+registerEnumType(PostFormat, { name: 'PostFormat' });
 registerEnumType(Visibility, { name: 'Visibility' });
 registerEnumType(OrgPostReach, { name: 'OrgPostReach' });
 registerEnumType(FeedScope, { name: 'FeedScope' });

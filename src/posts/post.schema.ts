@@ -2,6 +2,7 @@ import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 import {
   OrgPostReach,
+  PostFormat,
   PostStatus,
   PostType,
   Visibility,
@@ -25,6 +26,10 @@ export type PostDocument = HydratedDocument<Post> & {
 export class Post {
   @Prop({ type: String, enum: PostType, required: true })
   type: PostType;
+
+  /** Voting layout. Legacy posts default to `compare`. */
+  @Prop({ type: String, enum: PostFormat, default: PostFormat.COMPARE })
+  format: PostFormat;
 
   @Prop({ trim: true })
   contentText?: string;

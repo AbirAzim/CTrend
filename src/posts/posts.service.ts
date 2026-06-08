@@ -18,6 +18,7 @@ import { CreatePostInput, PostOptionInput } from './dto/create-post.input';
 import { UpdatePostInput } from './dto/update-post.input';
 import {
   OrgPostReach,
+  PostFormat,
   PostStatus,
   PostType,
   UserRole,
@@ -83,7 +84,6 @@ export class PostsService implements OnModuleInit {
     }
   }
 
-
   async onModuleInit() {
     // Backfill: re-enable hype on existing system/admin posts that were
     // created with likesDisabled=true. New posts always start with hype enabled.
@@ -129,9 +129,7 @@ export class PostsService implements OnModuleInit {
     return campaign._id;
   }
 
-  private toCampaignSummary(
-    doc: CampaignDocument,
-  ): PostCampaignSummaryGql {
+  private toCampaignSummary(doc: CampaignDocument): PostCampaignSummaryGql {
     return {
       id: doc._id.toHexString(),
       name: doc.name,
@@ -146,6 +144,31 @@ export class PostsService implements OnModuleInit {
     if (value === undefined || value === null) return undefined;
     if (!Number.isFinite(value)) return undefined;
     return Math.min(100, Math.max(0, Math.round(value)));
+  }
+
+  /**
+   * Per-format input validation. Compare posts need at least two compare
+   * images (one per option); poll posts only need two option labels — option
+   * images are optional and `imageUrls` holds optional body/context images.
+   */
+  private validateFormatInput(
+    format: PostFormat,
+    input: CreatePostInput,
+  ): void {
+    const options = input.options ?? [];
+    if (options.length < 2) {
+      throw new BadRequestException('A post needs at least two options.');
+    }
+    if (format === PostFormat.COMPARE) {
+      const images = (input.imageUrls ?? []).filter(
+        (u) => typeof u === 'string' && u.trim().length > 0,
+      );
+      if (images.length < 2) {
+        throw new BadRequestException(
+          'A compare post needs at least two images.',
+        );
+      }
+    }
   }
 
   private mapOptionInput(o: PostOptionInput): PostOption {
@@ -243,6 +266,107 @@ export class PostsService implements OnModuleInit {
     return post.type === PostType.USER;
   }
 
+  /**
+   * Whether `viewer` may see `post` outside the feed (direct link / profile).
+   * Mirrors the feed visibility rules in `FeedService.buildFilter`:
+   * - admins see everything;
+   * - SYSTEM posts, USER global broadcasts and ORG GLOBAL posts: everyone;
+   * - the author always sees their own post;
+   * - non-global USER ("friend") posts: only the author's friends
+   *   (`isFollowing(viewer, author)` — friendship is mutual, so this matches
+   *   the feed's following-based filter);
+   * - ORG CONNECTED posts: viewers who follow the org owner.
+   * SCHEDULED gating is handled separately by callers.
+   */
+  async canViewPost(
+    post: PostDocument,
+    viewerId?: string,
+    viewerRole?: string,
+  ): Promise<boolean> {
+    if (viewerRole === UserRole.ADMIN) return true;
+    if (post.type === PostType.SYSTEM) return true;
+    if (post.type === PostType.USER && post.isUserGlobalBroadcast === true) {
+      return true;
+    }
+    if (post.type === PostType.ORG && post.orgReach === OrgPostReach.GLOBAL) {
+      return true;
+    }
+    if (!viewerId) return false;
+
+    const authorId = post.createdBy.toHexString();
+    if (authorId === viewerId) return true;
+
+    if (post.type === PostType.USER) {
+      // Friend post — visible only to the author's friends.
+      return this.followsService.isFollowing(viewerId, authorId);
+    }
+
+    if (
+      post.type === PostType.ORG &&
+      post.orgReach === OrgPostReach.CONNECTED
+    ) {
+      const org = post.organizationId
+        ? await this.organizationsService.findById(
+            post.organizationId.toHexString(),
+          )
+        : null;
+      const ownerId = org?.ownerUserId?.toHexString();
+      if (!ownerId) return false;
+      if (ownerId === viewerId) return true;
+      return this.followsService.isFollowing(viewerId, ownerId);
+    }
+
+    return false;
+  }
+
+  /**
+   * A user's posts that `viewer` is allowed to see (for profile pages). Applies
+   * the same visibility rules as {@link canViewPost} but as a single Mongo query
+   * so a profile load stays one round-trip. Excludes SCHEDULED posts.
+   */
+  async findViewableByAuthor(
+    authorId: string,
+    viewerId?: string,
+    viewerRole?: string,
+    limit = 50,
+  ): Promise<PostDocument[]> {
+    if (!Types.ObjectId.isValid(authorId)) return [];
+    const authorOid = new Types.ObjectId(authorId);
+    const notScheduled = { status: { $ne: PostStatus.SCHEDULED } };
+
+    // Admin or the author themselves: all of this author's non-scheduled posts.
+    if (viewerRole === UserRole.ADMIN || viewerId === authorId) {
+      return this.postModel
+        .find({ createdBy: authorOid, ...notScheduled })
+        .sort({ createdAt: -1 })
+        .limit(limit)
+        .exec();
+    }
+
+    // Always-public posts by this author.
+    const visibleOr: Record<string, unknown>[] = [
+      { type: PostType.SYSTEM },
+      { type: PostType.USER, isUserGlobalBroadcast: true },
+      { type: PostType.ORG, orgReach: OrgPostReach.GLOBAL },
+    ];
+
+    // Friends also see this author's friend posts (and their connected org
+    // posts — the author is the org owner here, so following them grants reach).
+    const isFriend = viewerId
+      ? await this.followsService.isFollowing(viewerId, authorId)
+      : false;
+    if (isFriend) {
+      visibleOr.push({ type: PostType.USER });
+      visibleOr.push({ type: PostType.ORG, orgReach: OrgPostReach.CONNECTED });
+    }
+
+    return this.postModel
+      .find({ createdBy: authorOid, $or: visibleOr, ...notScheduled })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .exec();
+  }
+
   private isPrizeClaimEligiblePost(post: PostDocument): boolean {
     return post.type === PostType.USER || post.type === PostType.SYSTEM;
   }
@@ -253,7 +377,8 @@ export class PostsService implements OnModuleInit {
 
     const postId = post._id.toHexString();
     const authorId = post.createdBy.toHexString();
-    const participantIds = await this.votesService.listParticipantUserIds(postId);
+    const participantIds =
+      await this.votesService.listParticipantUserIds(postId);
     const winnerId = post.voteWinnerUserId?.toHexString() ?? null;
     const canClaimPrize = this.isPrizeClaimEligiblePost(post);
     const recipients = new Set<string>([authorId, ...participantIds]);
@@ -322,9 +447,9 @@ export class PostsService implements OnModuleInit {
     post.votePrizeClaimedByUserId = new Types.ObjectId(userId);
     await post.save();
 
-    const adminIds = (await this.usersService.findIdsByRole(UserRole.ADMIN)).map(
-      (id) => id.toHexString(),
-    );
+    const adminIds = (
+      await this.usersService.findIdsByRole(UserRole.ADMIN)
+    ).map((id) => id.toHexString());
     const winner = await this.usersService.findById(userId);
     const winnerName =
       winner?.displayName?.trim() || winner?.username || 'A winner';
@@ -868,6 +993,8 @@ export class PostsService implements OnModuleInit {
     input: CreatePostInput,
   ): Promise<PostDocument> {
     const type = input.type ?? PostType.USER;
+    const format = input.format ?? PostFormat.COMPARE;
+    this.validateFormatInput(format, input);
     const category = await this.categoriesService.findById(input.categoryId);
     if (!category) throw new BadRequestException('Invalid category');
 
@@ -916,8 +1043,9 @@ export class PostsService implements OnModuleInit {
     const campaignOid = await this.resolveCampaignId(input.campaignId);
     const doc = await this.postModel.create({
       type: PostType.USER,
+      format,
       contentText,
-      imageUrls: input.imageUrls,
+      imageUrls: input.imageUrls ?? [],
       options: input.options.map((o) => this.mapOptionInput(o)),
       categoryId: category._id,
       visibility,
@@ -979,8 +1107,9 @@ export class PostsService implements OnModuleInit {
     const campaignOid = await this.resolveCampaignId(input.campaignId);
     const doc = await this.postModel.create({
       type: PostType.ORG,
+      format: input.format ?? PostFormat.COMPARE,
       contentText,
-      imageUrls: input.imageUrls,
+      imageUrls: input.imageUrls ?? [],
       options: input.options.map((o) => this.mapOptionInput(o)),
       categoryId: category._id,
       visibility,
@@ -1014,6 +1143,8 @@ export class PostsService implements OnModuleInit {
     const category = await this.categoriesService.findById(input.categoryId);
     if (!category) throw new BadRequestException('Invalid category');
 
+    const format = input.format ?? PostFormat.COMPARE;
+    this.validateFormatInput(format, input);
     const contentText = input.contentText ?? input.caption;
     const votingEndsAt = this.parseFutureDate(
       input.votingEndsAt,
@@ -1024,8 +1155,9 @@ export class PostsService implements OnModuleInit {
     const campaignOid = await this.resolveCampaignId(input.campaignId);
     const doc = await this.postModel.create({
       type: PostType.SYSTEM,
+      format,
       contentText,
-      imageUrls: input.imageUrls,
+      imageUrls: input.imageUrls ?? [],
       options: input.options.map((o) => this.mapOptionInput(o)),
       categoryId: category._id,
       visibility: Visibility.PUBLIC,
@@ -1286,6 +1418,7 @@ export class PostsService implements OnModuleInit {
     return {
       id: post._id.toHexString(),
       type: post.type,
+      format: post.format ?? PostFormat.COMPARE,
       contentText: post.contentText,
       caption: post.contentText,
       imageUrls: post.imageUrls ?? [],
@@ -1308,8 +1441,7 @@ export class PostsService implements OnModuleInit {
         post.type === PostType.SYSTEM
           ? PLATFORM_BRAND_NAME
           : (author.displayName ?? null),
-      authorEmail:
-        post.type === PostType.SYSTEM ? null : author.email,
+      authorEmail: post.type === PostType.SYSTEM ? null : author.email,
       authorProfileImageUrl:
         post.type === PostType.SYSTEM ? null : (author.profileImageUrl ?? null),
       orgReach: post.orgReach,

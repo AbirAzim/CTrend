@@ -94,6 +94,7 @@ type CampaignWinnerGql {
 }
 
 type CategoryGql {
+  color: String
   id: ID!
   name: String!
   slug: String!
@@ -438,7 +439,7 @@ type Mutation {
   unfriend(userId: ID!): Boolean!
   unregisterPushToken(token: String!): Boolean!
   updateCampaign(id: ID!, input: UpdateCampaignInput!): CampaignGql!
-  updateCategory(id: ID!, name: String!): CategoryGql!
+  updateCategory(color: String, id: ID!, name: String!): CategoryGql!
   updatePost(input: UpdatePostInput!, postId: ID!): PostGql!
   updateProfile(input: UpdateProfileInput!): UserGql!
   verifyBkashPayment(payload: String!): BkashVerificationGql!

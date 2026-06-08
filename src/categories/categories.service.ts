@@ -46,7 +46,11 @@ export class CategoriesService implements OnModuleInit {
     return this.categoryModel.create({ name: trimmed, slug });
   }
 
-  async updateCategory(id: string, name: string): Promise<CategoryDocument> {
+  async updateCategory(
+    id: string,
+    name: string,
+    color?: string,
+  ): Promise<CategoryDocument> {
     const trimmed = name.trim();
     if (!trimmed) throw new BadRequestException('Name is required');
     const slug = this.slugify(trimmed);
@@ -59,6 +63,18 @@ export class CategoriesService implements OnModuleInit {
     if (dup) throw new ConflictException('Another category has this name');
     cat.name = trimmed;
     cat.slug = slug;
+    // `color` undefined = leave unchanged; empty string = clear (auto color);
+    // otherwise must be a #RGB / #RRGGBB hex value.
+    if (color !== undefined) {
+      const c = color.trim();
+      if (c === '') {
+        cat.color = undefined;
+      } else if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(c)) {
+        cat.color = c.toLowerCase();
+      } else {
+        throw new BadRequestException('Color must be a hex value like #6366f1');
+      }
+    }
     return cat.save();
   }
 
@@ -98,6 +114,7 @@ export class CategoriesService implements OnModuleInit {
       id: doc._id.toHexString(),
       name: doc.name,
       slug: doc.slug,
+      color: doc.color ?? undefined,
     };
   }
 

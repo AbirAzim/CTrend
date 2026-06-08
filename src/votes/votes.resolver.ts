@@ -50,6 +50,18 @@ export class VotesResolver {
     return this.votesService.removeVote(user.id, postId);
   }
 
+  /**
+   * How many (non-anonymous) votes a user has cast — shown on their profile.
+   * Anonymous votes are excluded so a user's private votes stay private.
+   */
+  @Query(() => Int)
+  @UseGuards(GqlAuthGuard)
+  async userVoteCount(
+    @Args('userId', { type: () => ID }) userId: string,
+  ) {
+    return this.votesService.countVotesByUser(userId);
+  }
+
   @Query(() => [PostVoterGql])
   async votersByPost(
     @Args('postId', { type: () => ID }) postId: string,

@@ -232,6 +232,22 @@ export class VotesService {
     return votes.map((v) => v.postId as Types.ObjectId);
   }
 
+  /**
+   * Count votes cast by a user, excluding anonymous ones by default. Used on a
+   * user's profile to show "voted N times" without exposing private votes.
+   */
+  async countVotesByUser(
+    userId: string,
+    includeAnonymous = false,
+  ): Promise<number> {
+    if (!Types.ObjectId.isValid(userId)) return 0;
+    const query: Record<string, unknown> = {
+      userId: new Types.ObjectId(userId),
+    };
+    if (!includeAnonymous) query.anonymous = { $ne: true };
+    return this.voteModel.countDocuments(query).exec();
+  }
+
   /** Distinct user ids who participated on a post (identified + anonymous). */
   async listParticipantUserIds(postId: string): Promise<string[]> {
     if (!Types.ObjectId.isValid(postId)) return [];

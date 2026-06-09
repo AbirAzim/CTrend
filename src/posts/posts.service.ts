@@ -761,14 +761,29 @@ export class PostsService implements OnModuleInit {
     // caption / label / category / focal-point edits never reset votes — and so
     // older clients that send label-only options stay backward compatible.
     let resetVotes = false;
-    if (input.imageUrls && input.imageUrls.length >= 2) {
-      resetVotes = this.existingImageUrlsChanged(
-        post.imageUrls,
-        input.imageUrls,
-      );
-      post.imageUrls = input.imageUrls;
+    if (input.imageUrls) {
+      // Compare images must stay ≥2 (the post's actual options); poll body/
+      // context photos can be any count, including 0 when all are removed.
+      const isCompareFmt =
+        (post.format ?? PostFormat.COMPARE) === PostFormat.COMPARE;
+      if (!isCompareFmt || input.imageUrls.length >= 2) {
+        resetVotes = this.existingImageUrlsChanged(
+          post.imageUrls,
+          input.imageUrls,
+        );
+        post.imageUrls = input.imageUrls;
+      }
     }
     if (input.options && input.options.length >= 2) {
+      // Poll option thumbnails live on options[i].imageUrl (not imageUrls), so
+      // swapping one must also reset votes. (For compare this agrees with the
+      // imageUrls check above.)
+      if (
+        !resetVotes &&
+        this.existingOptionImagesChanged(post.options ?? [], input.options)
+      ) {
+        resetVotes = true;
+      }
       post.options = input.options.map((o) => this.mapOptionInput(o));
     }
 
@@ -855,6 +870,26 @@ export class PostsService implements OnModuleInit {
     if (newUrls.length < oldUrls.length) return true;
     for (let i = 0; i < oldUrls.length; i++) {
       if ((oldUrls[i] ?? '') !== (newUrls[i] ?? '')) return true;
+    }
+    return false;
+  }
+
+  /**
+   * True when an edit swapped the image of an *existing* option (vs only its
+   * label). Used for poll thumbnails, whose URLs live on `options[i].imageUrl`
+   * rather than `imageUrls`. Only options whose new payload actually carries an
+   * `imageUrl` are compared — a label-only option (imageUrl undefined) is left
+   * alone, which keeps older/label-only clients backward compatible.
+   */
+  private existingOptionImagesChanged(
+    oldOptions: { imageUrl?: string }[],
+    newOptions: { imageUrl?: string | null }[],
+  ): boolean {
+    const n = Math.min(oldOptions.length, newOptions.length);
+    for (let i = 0; i < n; i++) {
+      const newImg = newOptions[i]?.imageUrl;
+      if (newImg === undefined || newImg === null) continue;
+      if (newImg !== (oldOptions[i]?.imageUrl ?? '')) return true;
     }
     return false;
   }

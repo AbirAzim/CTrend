@@ -22,10 +22,11 @@ export class UpdatePostInput {
   @MaxLength(10000)
   caption?: string;
 
+  // No ArrayMinSize here: compare needs ≥2 (enforced on create), but poll
+  // context/body photos can be 0, 1 or many — and edits may remove them.
   @Field(() => [String], { nullable: true })
   @IsOptional()
   @IsArray()
-  @ArrayMinSize(2)
   @IsString({ each: true })
   imageUrls?: string[];
 

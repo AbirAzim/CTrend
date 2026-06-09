@@ -172,6 +172,7 @@ export class MessagesResolver {
     @Args('text', { defaultValue: '' }) text: string,
     @Args('imageUrl', { nullable: true }) imageUrl?: string,
     @Args('replyToId', { type: () => ID, nullable: true }) replyToId?: string,
+    @Args('forwarded', { nullable: true, defaultValue: false }) forwarded?: boolean,
   ) {
     return this.messagesService.sendMessage(
       user.id,
@@ -179,6 +180,7 @@ export class MessagesResolver {
       text,
       imageUrl,
       replyToId,
+      forwarded,
     );
   }
 

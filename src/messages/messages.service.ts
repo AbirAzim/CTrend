@@ -511,6 +511,7 @@ export class MessagesService {
     text: string,
     imageUrl?: string,
     replyToId?: string | null,
+    forwarded?: boolean,
   ): Promise<MessageGql> {
     const trimmedText = text?.trim() ?? '';
     if (!trimmedText && !imageUrl) {
@@ -534,6 +535,7 @@ export class MessagesService {
       imageUrl: imageUrl ?? null,
       readBy: [{ userId: viewerOid, readAt: new Date() }],
       replyTo,
+      forwarded: forwarded ?? false,
     });
 
     // Increment unread counts for all other participants
@@ -1055,6 +1057,7 @@ export class MessagesService {
         text: msg.text ?? '',
         imageUrl: msg.imageUrl ?? undefined,
         deleted: msg.deleted ?? false,
+        forwarded: msg.forwarded ?? false,
         readBy: msg.readBy.map((r) => ({
           userId: r.userId.toHexString(),
           readAt: r.readAt,
@@ -1089,6 +1092,7 @@ export class MessagesService {
       text: msg.text ?? '',
       imageUrl: msg.imageUrl ?? undefined,
       deleted: msg.deleted ?? false,
+      forwarded: msg.forwarded ?? false,
       readBy: msg.readBy.map((r) => ({
         userId: r.userId.toHexString(),
         readAt: r.readAt,

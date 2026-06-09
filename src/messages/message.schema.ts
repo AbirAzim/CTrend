@@ -51,6 +51,10 @@ export class Message {
   @Prop({ default: false })
   deleted: boolean;
 
+  /** True when this message was forwarded — clients show a "Forwarded" label. */
+  @Prop({ default: false })
+  forwarded: boolean;
+
   @Prop({
     type: [{ userId: Types.ObjectId, readAt: Date }],
     default: [],

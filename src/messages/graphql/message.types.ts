@@ -94,6 +94,10 @@ export class MessageGql {
   @Field({ defaultValue: false })
   deleted: boolean;
 
+  /** True when the message was forwarded — clients show a "Forwarded" label. */
+  @Field({ defaultValue: false })
+  forwarded: boolean;
+
   @Field(() => [ReadReceiptGql])
   readBy: ReadReceiptGql[];
 

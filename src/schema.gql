@@ -299,6 +299,7 @@ type MessageGql {
   conversationId: ID!
   createdAt: DateTime!
   deleted: Boolean!
+  forwarded: Boolean!
   id: ID!
   imageUrl: String
   reactions: [MessageReactionCountGql!]!
@@ -420,7 +421,7 @@ type Mutation {
   resetPassword(newPassword: String!, token: String!): Boolean!
   respondFriendRequest(accept: Boolean!, requesterId: ID!): Boolean!
   sendAdminBroadcast(body: String!, title: String!): Int!
-  sendMessage(conversationId: ID!, imageUrl: String, replyToId: ID, text: String! = ""): MessageGql!
+  sendMessage(conversationId: ID!, forwarded: Boolean = false, imageUrl: String, replyToId: ID, text: String! = ""): MessageGql!
   sendModeratorMessage(imageUrl: String, replyToId: ID, text: String! = "", userId: ID!): ModeratorMessageAdminGql!
   sendModeratorMessages(imageUrl: String, replyToId: ID, text: String! = "", userIds: [ID!]!): [ModeratorMessageAdminGql!]!
   setAllowUserGlobalPosts(enabled: Boolean!): PlatformSettingsGql!
@@ -679,6 +680,8 @@ type Query {
   platformSettings: PlatformSettingsGql!
   previewInvites(emails: [String!]!): [InvitePreviewGql!]!
   unreadNotificationCount: Int!
+  userFriends(userId: ID!): [UserGql!]!
+  userVoteCount(userId: ID!): Int!
   votersByPost(optionIndex: Int, postId: ID!, search: String, skip: Int, take: Int): [PostVoterGql!]!
   worldCupFixture(id: ID!): FixtureGql
   worldCupFixtures(filter: FixtureFilterInput): [FixtureGql!]!

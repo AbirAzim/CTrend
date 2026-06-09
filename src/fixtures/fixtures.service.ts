@@ -106,6 +106,40 @@ export class FixturesService {
     return upserted;
   }
 
+  /**
+   * True when a match is in play, or a scheduled match is within ~15 min of
+   * kickoff (or just kicked off but not yet flipped to live). Used to gate the
+   * cron so we only hit football-data.org during real match windows.
+   */
+  private async hasActiveWindow(): Promise<boolean> {
+    const now = Date.now();
+    const soon = new Date(now + 15 * 60 * 1000);
+    const recent = new Date(now - 3 * 60 * 60 * 1000);
+    const count = await this.fixtureModel
+      .countDocuments({
+        $or: [
+          { status: { $in: ['IN_PLAY', 'PAUSED'] } },
+          {
+            status: { $in: ['SCHEDULED', 'TIMED'] },
+            kickoff: { $gte: recent, $lte: soon },
+          },
+        ],
+      })
+      .exec();
+    return count > 0;
+  }
+
+  /**
+   * Cron entry point: refresh scores only during live/imminent windows so the
+   * free football-data.org quota isn't wasted when nothing is on. Returns the
+   * number of fixtures upserted, or null when it skipped (no key / no window).
+   */
+  async syncLiveIfActive(): Promise<number | null> {
+    if (!this.apiKey) return null;
+    if (!(await this.hasActiveWindow())) return null;
+    return this.syncFixtures();
+  }
+
   async fetchAndUpdateSingleMatch(externalId: number): Promise<ApiMatch> {
     const data = await this.apiFetch<{ match: ApiMatch }>(
       `/matches/${externalId}`,

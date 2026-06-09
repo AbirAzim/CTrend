@@ -4,6 +4,7 @@ import { Fixture, FixtureSchema } from './fixture.schema';
 import { Post, PostSchema } from '../posts/post.schema';
 import { Category, CategorySchema } from '../categories/category.schema';
 import { FixturesService } from './fixtures.service';
+import { FixturesSyncService } from './fixtures-sync.service';
 import { FixturesResolver } from './fixtures.resolver';
 import { PostsModule } from '../posts/posts.module';
 
@@ -16,7 +17,7 @@ import { PostsModule } from '../posts/posts.module';
     ]),
     PostsModule,
   ],
-  providers: [FixturesService, FixturesResolver],
+  providers: [FixturesService, FixturesSyncService, FixturesResolver],
   exports: [FixturesService],
 })
 export class FixturesModule {}

@@ -73,4 +73,14 @@ export class UpdatePostInput {
   @IsOptional()
   @IsBoolean()
   broadcastGlobally?: boolean;
+
+  /**
+   * When true, wipe existing votes (used when an option's image is replaced with
+   * a different photo, or options are added/removed). Cropping/repositioning the
+   * same image leaves this false so votes are kept.
+   */
+  @Field({ nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  resetVotes?: boolean;
 }

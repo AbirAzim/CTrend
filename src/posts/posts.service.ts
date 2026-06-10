@@ -760,30 +760,20 @@ export class PostsService implements OnModuleInit {
     // Detection is based on imageUrls (the actual compare images) so that
     // caption / label / category / focal-point edits never reset votes — and so
     // older clients that send label-only options stay backward compatible.
-    let resetVotes = false;
+    // The client decides when votes must be reset: re-cropping/repositioning an
+    // existing image keeps votes (resetVotes omitted/false); replacing it with a
+    // different photo, or adding/removing options, sends resetVotes: true.
+    const resetVotes = input.resetVotes === true;
     if (input.imageUrls) {
       // Compare images must stay ≥2 (the post's actual options); poll body/
       // context photos can be any count, including 0 when all are removed.
       const isCompareFmt =
         (post.format ?? PostFormat.COMPARE) === PostFormat.COMPARE;
       if (!isCompareFmt || input.imageUrls.length >= 2) {
-        resetVotes = this.existingImageUrlsChanged(
-          post.imageUrls,
-          input.imageUrls,
-        );
         post.imageUrls = input.imageUrls;
       }
     }
     if (input.options && input.options.length >= 2) {
-      // Poll option thumbnails live on options[i].imageUrl (not imageUrls), so
-      // swapping one must also reset votes. (For compare this agrees with the
-      // imageUrls check above.)
-      if (
-        !resetVotes &&
-        this.existingOptionImagesChanged(post.options ?? [], input.options)
-      ) {
-        resetVotes = true;
-      }
       post.options = input.options.map((o) => this.mapOptionInput(o));
     }
 

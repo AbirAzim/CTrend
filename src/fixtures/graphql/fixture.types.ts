@@ -53,6 +53,9 @@ export class FixtureGql {
   @Field()
   status: string;
 
+  @Field(() => Int, { nullable: true })
+  minute?: number | null;
+
   @Field()
   stage: string;
 

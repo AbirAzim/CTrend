@@ -240,6 +240,7 @@ type FixtureGql {
   id: ID!
   kickoff: DateTime!
   matchday: Int
+  minute: Int
   score: FixtureScoreGql!
   stage: String!
   status: String!
@@ -768,6 +769,7 @@ input UpdatePostInput {
   endingSoonLeadMinutes: Int
   imageUrls: [String!]
   options: [PostOptionInput!]
+  resetVotes: Boolean
   scheduledAt: String
   votingEndsAt: String
 }

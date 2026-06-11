@@ -46,6 +46,10 @@ export class Fixture {
   @Prop({ type: String, required: true })
   status: string;
 
+  /** Live match minute (elapsed) while IN_PLAY/PAUSED; null otherwise. */
+  @Prop({ type: Number, default: null })
+  minute?: number | null;
+
   @Prop({ type: String, required: true })
   stage: string;
 

@@ -208,6 +208,10 @@ export class PostsService implements OnModuleInit {
     post: PostDocument,
     countsPerOption: number[],
   ): Promise<PostDocument> {
+    // Match-type posts (fixture-linked): winner is determined by the real match
+    // result via WinnerAnnouncementService, not by a random draw at kickoff.
+    if (post.matchType) return post;
+
     const now = Date.now();
     const votingClosed =
       !!post.votingEndsAt && post.votingEndsAt.getTime() <= now;
@@ -1530,6 +1534,16 @@ export class PostsService implements OnModuleInit {
       isUserGlobalBroadcast: Boolean(post.isUserGlobalBroadcast),
       reportCount: post.reportCount ?? 0,
       campaignWinner,
+      matchType: post.matchType ?? false,
+      matchScore:
+        post.matchType && post.fixtureScore != null
+          ? {
+              home: post.fixtureScore.home ?? null,
+              away: post.fixtureScore.away ?? null,
+              status: post.fixtureStatus ?? null,
+              minute: post.fixtureMinute ?? null,
+            }
+          : null,
     };
   }
 }

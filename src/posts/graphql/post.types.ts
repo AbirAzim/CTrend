@@ -13,6 +13,24 @@ import { PostCampaignSummaryGql } from './post-campaign-summary.types';
 import { PostVoteWinnerGql } from './post-vote-winner.types';
 import { CampaignWinnerGql } from '../../world-cup-campaign/graphql/campaign-winner.types';
 
+/** Live/final score for match-type campaign posts. */
+@ObjectType()
+export class MatchScoreGql {
+  @Field(() => Int, { nullable: true })
+  home: number | null;
+
+  @Field(() => Int, { nullable: true })
+  away: number | null;
+
+  /** TIMED | IN_PLAY | PAUSED | FINISHED */
+  @Field(() => String, { nullable: true })
+  status: string | null;
+
+  /** Elapsed match minute (IN_PLAY / PAUSED only; null otherwise). */
+  @Field(() => Int, { nullable: true })
+  minute: number | null;
+}
+
 @ObjectType()
 export class PostOptionGql {
   @Field()
@@ -209,4 +227,16 @@ export class PostGql {
   /** Set after the match ends and the winner countdown completes (campaign posts only). */
   @Field(() => CampaignWinnerGql, { nullable: true })
   campaignWinner?: CampaignWinnerGql | null;
+
+  /**
+   * True for fixture-linked match posts (auto-scheduled World Cup posts).
+   * The winner is declared from correct predictors after the real match ends,
+   * not at votingEndsAt. voteWinner is always null for matchType posts.
+   */
+  @Field()
+  matchType: boolean;
+
+  /** Live/final score — populated for matchType posts only; null for regular posts. */
+  @Field(() => MatchScoreGql, { nullable: true })
+  matchScore?: MatchScoreGql | null;
 }

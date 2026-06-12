@@ -135,6 +135,35 @@ export class Post {
   /** Denormalized count of user content reports (moderation queue). */
   @Prop({ default: 0, min: 0 })
   reportCount: number;
+
+  /**
+   * True for auto-scheduled fixture posts (World Cup match posts).
+   * When true: voteWinner is never drawn at kickoff — the real match result
+   * determines the winner via WinnerAnnouncementService after the match ends.
+   */
+  @Prop({ default: false })
+  matchType: boolean;
+
+  /**
+   * Denormalized live/final score from the linked fixture. Updated by
+   * syncLiveScores every minute while the match is active.
+   */
+  @Prop({
+    type: {
+      home: { type: Number, default: null },
+      away: { type: Number, default: null },
+    },
+    default: null,
+  })
+  fixtureScore?: { home: number | null; away: number | null } | null;
+
+  /** Normalized match status: TIMED | IN_PLAY | PAUSED | FINISHED */
+  @Prop({ type: String, default: null })
+  fixtureStatus?: string | null;
+
+  /** Elapsed match minute while IN_PLAY or PAUSED; null otherwise. */
+  @Prop({ type: Number, default: null })
+  fixtureMinute?: number | null;
 }
 
 export const PostSchema = SchemaFactory.createForClass(Post);

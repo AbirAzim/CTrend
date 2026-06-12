@@ -280,16 +280,18 @@ export class FixturesService {
       const kickoffChanged =
         existing.kickoff.getTime() !== newKickoff.getTime();
 
+      const newMinute =
+        newStatus === 'IN_PLAY' || newStatus === 'PAUSED'
+          ? (item.fixture.status.elapsed ?? null)
+          : null;
+
       await this.fixtureModel.updateOne(
         { externalId: item.fixture.id },
         {
           $set: {
             status: newStatus,
             kickoff: newKickoff,
-            minute:
-              newStatus === 'IN_PLAY' || newStatus === 'PAUSED'
-                ? (item.fixture.status.elapsed ?? null)
-                : null,
+            minute: newMinute,
             score: {
               home,
               away,
@@ -298,6 +300,44 @@ export class FixturesService {
           },
         },
       );
+
+      // ── Live score changed: update denormalized fields on the campaign post ─
+      if (existing.campaignPostId) {
+        const prevHome = existing.score?.home ?? null;
+        const prevAway = existing.score?.away ?? null;
+        const prevStatus = existing.status;
+        const prevMinute = existing.minute ?? null;
+
+        const scoreChanged =
+          prevHome !== home ||
+          prevAway !== away ||
+          prevStatus !== newStatus ||
+          prevMinute !== newMinute;
+
+        if (scoreChanged) {
+          await this.postModel.updateOne(
+            { _id: existing.campaignPostId },
+            {
+              $set: {
+                fixtureScore: { home, away },
+                fixtureStatus: newStatus,
+                fixtureMinute: newMinute,
+              },
+            },
+          );
+          // Only push real-time update while the match is actively progressing
+          // (not for every TIMED→TIMED no-op tick before kickoff).
+          if (
+            newStatus === 'IN_PLAY' ||
+            newStatus === 'PAUSED' ||
+            (prevStatus !== 'FINISHED' && newStatus === 'FINISHED')
+          ) {
+            await pubsub.publish(POST_UPDATED, {
+              postUpdated: { postId: existing.campaignPostId.toHexString() },
+            });
+          }
+        }
+      }
 
       // ── Kickoff postponed: update the associated campaign post dates ──────
       if (
@@ -473,6 +513,7 @@ export class FixturesService {
       endingSoonLeadMinutes: 5,
       status,
       scheduledAt,
+      matchType: true,
     });
 
     fixture.campaignPostId = post._id as Types.ObjectId;

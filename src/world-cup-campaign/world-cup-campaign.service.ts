@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
@@ -11,17 +12,24 @@ import {
 } from './campaign-winner.schema';
 import { Fixture, FixtureDocument } from '../fixtures/fixture.schema';
 import { Vote, VoteDocument } from '../votes/vote.schema';
+import { Post, PostDocument } from '../posts/post.schema';
 import { UsersService } from '../users/users.service';
+import { NotificationsService } from '../notifications/notifications.service';
+import { NotificationType } from '../notifications/notification.schema';
 import { CampaignWinnerGql } from './graphql/campaign-winner.types';
 
 @Injectable()
 export class WorldCupCampaignService {
+  private readonly logger = new Logger(WorldCupCampaignService.name);
+
   constructor(
     @InjectModel(CampaignWinner.name)
     private campaignWinnerModel: Model<CampaignWinnerDocument>,
     @InjectModel(Fixture.name) private fixtureModel: Model<FixtureDocument>,
     @InjectModel(Vote.name) private voteModel: Model<VoteDocument>,
+    @InjectModel(Post.name) private postModel: Model<PostDocument>,
     private usersService: UsersService,
+    private notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -125,6 +133,12 @@ export class WorldCupCampaignService {
         paid: false,
         note: noWinnersNote,
       });
+      void this.notifyMatchResult(
+        postId.toHexString(),
+        fixture.homeTeam.name,
+        fixture.awayTeam.name,
+        null,
+      );
       return this.toGql(record);
     }
 
@@ -139,7 +153,86 @@ export class WorldCupCampaignService {
       winningOption: winningOptionIndex,
       paid: false,
     });
+    void this.notifyMatchResult(
+      postId.toHexString(),
+      fixture.homeTeam.name,
+      fixture.awayTeam.name,
+      drawn.userId.toHexString(),
+    );
     return this.toGql(record);
+  }
+
+  /**
+   * Fan-out notifications after a match result is processed.
+   * Winner gets VOTE_WINNER; all other non-anonymous voters get VOTE_ENDED.
+   * Idempotent — guarded by voteEndedNotifiedAt on the post.
+   */
+  private async notifyMatchResult(
+    postId: string,
+    homeName: string,
+    awayName: string,
+    winnerId: string | null,
+  ): Promise<void> {
+    try {
+      const postObjId = new Types.ObjectId(postId);
+
+      // Guard: skip if already notified (e.g. cron fired twice before write landed)
+      const post = await this.postModel
+        .findOne({ _id: postObjId, voteEndedNotifiedAt: { $exists: false } })
+        .lean()
+        .exec();
+      if (!post) return;
+
+      // All non-anonymous voters for this post
+      const allVotes = await this.voteModel
+        .find({ postId: postObjId, anonymous: { $ne: true } })
+        .distinct('userId')
+        .exec();
+
+      const allVoterIds: string[] = allVotes.map((id) => id.toHexString());
+      const matchLabel = `${homeName} vs ${awayName}`;
+
+      const nonWinnerIds = allVoterIds.filter((id) => id !== winnerId);
+
+      await Promise.all([
+        // Notify all voters that the match result is in
+        ...nonWinnerIds.map((userId) =>
+          this.notificationsService.create({
+            userId,
+            type: 'VOTE_ENDED' as NotificationType,
+            title: 'Match result is in!',
+            body: `${matchLabel} has ended. Check out who won the campaign.`,
+            referenceId: postId,
+            referenceType: 'Post',
+            postId,
+          }),
+        ),
+        // Notify the campaign winner
+        ...(winnerId
+          ? [
+              this.notificationsService.create({
+                userId: winnerId,
+                type: 'VOTE_WINNER' as NotificationType,
+                title: '🏆 You predicted correctly!',
+                body: `You correctly predicted the result of ${matchLabel} and won the campaign!`,
+                referenceId: postId,
+                referenceType: 'Post',
+                postId,
+              }),
+            ]
+          : []),
+      ]);
+
+      // Mark notified so this never runs twice for the same post
+      await this.postModel.updateOne(
+        { _id: postObjId, voteEndedNotifiedAt: { $exists: false } },
+        { $set: { voteEndedNotifiedAt: new Date() } },
+      );
+    } catch (err) {
+      this.logger.warn(
+        `Match result notification failed for post ${postId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   async findByPostId(postId: string): Promise<CampaignWinnerGql | null> {

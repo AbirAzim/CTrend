@@ -3,10 +3,12 @@ import { MongooseModule } from '@nestjs/mongoose';
 import { CampaignWinner, CampaignWinnerSchema } from './campaign-winner.schema';
 import { Fixture, FixtureSchema } from '../fixtures/fixture.schema';
 import { Vote, VoteSchema } from '../votes/vote.schema';
+import { Post, PostSchema } from '../posts/post.schema';
 import { WorldCupCampaignService } from './world-cup-campaign.service';
 import { WinnerAnnouncementService } from './winner-announcement.service';
 import { WorldCupCampaignResolver } from './world-cup-campaign.resolver';
 import { UsersModule } from '../users/users.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -14,8 +16,10 @@ import { UsersModule } from '../users/users.module';
       { name: CampaignWinner.name, schema: CampaignWinnerSchema },
       { name: Fixture.name, schema: FixtureSchema },
       { name: Vote.name, schema: VoteSchema },
+      { name: Post.name, schema: PostSchema },
     ]),
     UsersModule,
+    NotificationsModule,
   ],
   providers: [
     WorldCupCampaignService,

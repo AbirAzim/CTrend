@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Post, PostDocument } from '../posts/post.schema';
+import { Vote, VoteDocument } from '../votes/vote.schema';
 import {
   FeedScope,
   FeedSort,
@@ -20,6 +21,7 @@ export class FeedService {
 
   constructor(
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
+    @InjectModel(Vote.name) private voteModel: Model<VoteDocument>,
     private postsService: PostsService,
     private followsService: FollowsService,
     private organizationsService: OrganizationsService,
@@ -37,15 +39,77 @@ export class FeedService {
     await this.syncDueScheduledPosts();
     const filter = await this.buildFilter(scope, viewerId, viewerRole, campaignId);
     const sortSpec = this.buildSort(sort);
-    const q = this.postModel.find(filter).sort(sortSpec).skip(skip).limit(take);
     const [rows, totalCount] = await Promise.all([
-      q.exec(),
+      this.fetchRows(filter, sortSpec, skip, take, viewerId),
       this.postModel.countDocuments(filter),
     ]);
     const nodes = await Promise.all(
       rows.map((p) => this.postsService.toGql(p, viewerId)),
     );
     return { nodes, totalCount };
+  }
+
+  /**
+   * On the first page (skip=0), open match-type campaign posts the viewer
+   * hasn't voted on yet are pinned to the top, ordered by nearest kickoff
+   * (votingEndsAt ASC). The remaining slots are filled with the normal feed
+   * excluding those pinned posts. Page 2+ returns normal paginated results.
+   */
+  private async fetchRows(
+    filter: Record<string, unknown>,
+    sortSpec: Record<string, 1 | -1>,
+    skip: number,
+    take: number,
+    viewerId?: string,
+  ): Promise<PostDocument[]> {
+    if (skip !== 0) {
+      return this.postModel.find(filter).sort(sortSpec).skip(skip).limit(take).exec();
+    }
+
+    const now = new Date();
+    const pinnableFilter = {
+      ...filter,
+      matchType: true,
+      votingEndsAt: { $gt: now },
+    };
+
+    const candidates = await this.postModel
+      .find(pinnableFilter)
+      .sort({ votingEndsAt: 1 })
+      .exec();
+
+    let pinned = candidates;
+    if (viewerId && candidates.length > 0) {
+      const candidateIds = candidates.map((p) => p._id);
+      const votedIds = await this.voteModel
+        .find({
+          userId: new Types.ObjectId(viewerId),
+          postId: { $in: candidateIds },
+        })
+        .distinct('postId')
+        .exec();
+      const votedSet = new Set((votedIds as Types.ObjectId[]).map((id) => id.toString()));
+      pinned = candidates.filter((p) => !votedSet.has((p._id as Types.ObjectId).toString()));
+    }
+
+    const pinnedIds = pinned.map((p) => p._id);
+    const regularLimit = Math.max(take - pinned.length, 0);
+
+    const regularFilter =
+      pinnedIds.length > 0
+        ? { ...filter, _id: { $nin: pinnedIds } }
+        : filter;
+
+    const regular =
+      regularLimit > 0
+        ? await this.postModel
+            .find(regularFilter)
+            .sort(sortSpec)
+            .limit(regularLimit)
+            .exec()
+        : [];
+
+    return [...pinned, ...regular];
   }
 
   /**

@@ -74,6 +74,18 @@ export class FixtureGql {
   /** ID of the campaign post created for this fixture, if any */
   @Field(() => ID, { nullable: true })
   campaignPostId?: string;
+
+  @Field()
+  autoScheduled: boolean;
+
+  @Field()
+  hasDrawOption: boolean;
+
+  @Field(() => Date, { nullable: true })
+  matchEndedAt?: Date | null;
+
+  @Field(() => Date, { nullable: true })
+  winnerScheduledAt?: Date | null;
 }
 
 @InputType()

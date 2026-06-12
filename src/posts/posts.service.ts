@@ -57,6 +57,7 @@ import { NotificationType } from '../notifications/notification.schema';
 import { MessagesService } from '../messages/messages.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ContentReportsService } from '../content-reports/content-reports.service';
+import { WorldCupCampaignService } from '../world-cup-campaign/world-cup-campaign.service';
 
 const PREMIUM_GLOBAL_MONTHLY = 20;
 const DEFAULT_ENDING_SOON_LEAD_MINUTES = 5;
@@ -115,16 +116,25 @@ export class PostsService implements OnModuleInit {
     private messagesService: MessagesService,
     private platformSettingsService: PlatformSettingsService,
     private contentReportsService: ContentReportsService,
+    private worldCupCampaignService: WorldCupCampaignService,
   ) {}
 
   private async resolveCampaignId(
     campaignId?: string,
+    callerId?: string,
+    callerRole?: string,
   ): Promise<Types.ObjectId | undefined> {
     const raw = campaignId?.trim();
     if (!raw) return undefined;
     const campaign = await this.campaignsService.findById(raw);
     if (!campaign) {
       throw new BadRequestException('Invalid campaign');
+    }
+    // Private campaigns can only be tagged by admins
+    if (!campaign.isPublic && callerRole !== 'admin') {
+      throw new ForbiddenException(
+        'Only admins can tag posts to private campaigns',
+      );
     }
     return campaign._id;
   }
@@ -1068,7 +1078,11 @@ export class PostsService implements OnModuleInit {
     );
     const scheduledAt = this.parseFutureDate(input.scheduledAt, 'scheduledAt');
     const status = scheduledAt ? PostStatus.SCHEDULED : PostStatus.PUBLISHED;
-    const campaignOid = await this.resolveCampaignId(input.campaignId);
+    const campaignOid = await this.resolveCampaignId(
+      input.campaignId,
+      authorId,
+      author.role,
+    );
     const doc = await this.postModel.create({
       type: PostType.USER,
       format,
@@ -1405,6 +1419,12 @@ export class PostsService implements OnModuleInit {
       }
     }
 
+    const campaignWinner = postForGql.campaignId
+      ? await this.worldCupCampaignService.findByPostId(
+          postForGql._id.toHexString(),
+        )
+      : null;
+
     let voteWinner: PostVoteWinnerGql | null = null;
     if (postForGql.voteWinnerUserId && postForGql.voteWinnerPickedAt) {
       const winnerUser = await this.usersService.findById(
@@ -1507,6 +1527,7 @@ export class PostsService implements OnModuleInit {
       canClaimPrize,
       isUserGlobalBroadcast: Boolean(post.isUserGlobalBroadcast),
       reportCount: post.reportCount ?? 0,
+      campaignWinner,
     };
   }
 }

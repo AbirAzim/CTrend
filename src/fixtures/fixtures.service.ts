@@ -11,8 +11,11 @@ import { Fixture, FixtureDocument } from './fixture.schema';
 import { Post, PostDocument } from '../posts/post.schema';
 import { Category, CategoryDocument } from '../categories/category.schema';
 import { FixtureFilterInput, FixtureGql } from './graphql/fixture.types';
-import { PostStatus, PostType, Visibility } from '../common/enums';
+import { PostFormat, PostStatus, PostType, Visibility } from '../common/enums';
 import { PostsService } from '../posts/posts.service';
+import { CampaignsService } from '../campaigns/campaigns.service';
+import { generateMatchCaption } from './caption-templates';
+import { POST_UPDATED, pubsub } from '../pubsub';
 
 // ── API-Football (api-sports.io) ───────────────────────────────────────────
 // Live World Cup scores / minute / goals. Replaces football-data.org, whose
@@ -116,6 +119,7 @@ export class FixturesService {
     @InjectModel(Category.name) private categoryModel: Model<CategoryDocument>,
     private configService: ConfigService,
     private postsService: PostsService,
+    private campaignsService: CampaignsService,
   ) {
     this.apiKey = this.configService.get<string>('API_FOOTBALL_KEY') ?? '';
     this.league =
@@ -248,30 +252,100 @@ export class FixturesService {
   }
 
   /**
-   * Cron updater — refreshes only the dynamic fields (status / minute / score)
-   * for all WC fixtures in one call, so live matches tick and finished ones flip
-   * to FINISHED. Leaves teams/stage/group untouched (set by the full sync).
+   * Cron updater — refreshes dynamic fields (status / minute / score / kickoff)
+   * for all WC fixtures, handles FINISHED transitions (set matchEndedAt /
+   * winnerScheduledAt) and postponement kickoff changes.
    */
   async syncLiveScores(): Promise<number> {
     const items = await this.fetchFixtures();
     let updated = 0;
+
     for (const item of items) {
-      const status = normalizeStatus(item.fixture.status.short);
+      const newStatus = normalizeStatus(item.fixture.status.short);
       const home = item.goals.home;
       const away = item.goals.away;
+      const newKickoff = new Date(item.fixture.date);
+
+      // Fetch the current stored fixture to detect transitions
+      const existing = await this.fixtureModel
+        .findOne({ externalId: item.fixture.id })
+        .exec();
+
+      if (!existing) {
+        updated++;
+        continue;
+      }
+
+      const wasFinished = existing.status === 'FINISHED';
+      const kickoffChanged =
+        existing.kickoff.getTime() !== newKickoff.getTime();
+
       await this.fixtureModel.updateOne(
         { externalId: item.fixture.id },
         {
           $set: {
-            status,
+            status: newStatus,
+            kickoff: newKickoff,
             minute:
-              status === 'IN_PLAY' || status === 'PAUSED'
+              newStatus === 'IN_PLAY' || newStatus === 'PAUSED'
                 ? (item.fixture.status.elapsed ?? null)
                 : null,
-            score: { home, away, winner: deriveWinner(home, away, status) },
+            score: {
+              home,
+              away,
+              winner: deriveWinner(home, away, newStatus),
+            },
           },
         },
       );
+
+      // ── Kickoff postponed: update the associated campaign post dates ──────
+      if (
+        kickoffChanged &&
+        !wasFinished &&
+        newStatus !== 'FINISHED' &&
+        existing.campaignPostId
+      ) {
+        const newScheduledAt = new Date(
+          newKickoff.getTime() - 24 * 60 * 60 * 1000,
+        );
+        await this.postModel.updateOne(
+          { _id: existing.campaignPostId, status: PostStatus.SCHEDULED },
+          { $set: { scheduledAt: newScheduledAt, votingEndsAt: newKickoff } },
+        );
+        // Reload fixture so we can re-use the fresh doc below
+        this.logger.log(
+          `Kickoff changed for ${existing.homeTeam.name} vs ${existing.awayTeam.name} — updated post dates`,
+        );
+        await pubsub.publish(POST_UPDATED, {
+          postUpdated: { postId: existing.campaignPostId.toHexString() },
+        });
+      }
+
+      // ── FINISHED transition: record matchEndedAt + schedule winner reveal ─
+      if (!wasFinished && newStatus === 'FINISHED' && existing.campaignPostId) {
+        const matchEndedAt = new Date();
+        const post = await this.postModel
+          .findById(existing.campaignPostId)
+          .exec();
+        const leadMin = post?.endingSoonLeadMinutes ?? 5;
+        const winnerScheduledAt = new Date(
+          matchEndedAt.getTime() + leadMin * 60 * 1000,
+        );
+        await this.fixtureModel.updateOne(
+          { _id: existing._id },
+          { $set: { matchEndedAt, winnerScheduledAt } },
+        );
+        this.logger.log(
+          `Match finished: ${existing.homeTeam.name} vs ${existing.awayTeam.name}. Winner reveal at ${winnerScheduledAt.toISOString()}`,
+        );
+        if (post) {
+          await pubsub.publish(POST_UPDATED, {
+            postUpdated: { postId: post._id.toHexString() },
+          });
+        }
+      }
+
       updated++;
     }
     return updated;
@@ -326,6 +400,7 @@ export class FixturesService {
   async createCampaignPost(
     fixtureId: string,
     adminId: string,
+    opts: { autoScheduled?: boolean } = {},
   ): Promise<PostDocument> {
     const fixture = await this.findById(fixtureId);
     if (!fixture) throw new NotFoundException('Fixture not found');
@@ -355,15 +430,39 @@ export class FixturesService {
     const scheduledAt = isScheduled ? twentyFourHoursBefore : undefined;
     const status = isScheduled ? PostStatus.SCHEDULED : PostStatus.PUBLISHED;
 
-    const home = fixture.homeTeam.name;
-    const away = fixture.awayTeam.name;
+    const home = fixture.homeTeam;
+    const away = fixture.awayTeam;
+    const isGroupStage = fixture.stage === 'GROUP_STAGE';
+    const drawImageUrl =
+      this.configService.get<string>('DRAW_OPTION_IMAGE_URL') ?? '';
+
+    const options: { label: string; imageUrl?: string }[] = [
+      { label: home.name, imageUrl: home.crest || undefined },
+      { label: away.name, imageUrl: away.crest || undefined },
+    ];
+    if (isGroupStage) {
+      options.push({ label: 'Draw 🤝', imageUrl: drawImageUrl || undefined });
+    }
+
+    const caption = generateMatchCaption({
+      home: home.name,
+      away: away.name,
+      stage: fixture.stage,
+      group: fixture.group,
+      kickoff,
+    });
+
+    // Look up the world-cup campaign so the post is tagged to it
+    const campaign = await this.campaignsService.findBySlug('world-cup-2026');
 
     const post = await this.postModel.create({
       type: PostType.SYSTEM,
-      contentText: `🏆 World Cup Fever: Who will win? ${home} vs ${away}`,
+      format: PostFormat.POLL,
+      contentText: caption,
       imageUrls: [],
-      options: [{ label: home }, { label: away }],
+      options,
       categoryId: sportsCategory._id,
+      campaignId: campaign ? campaign._id : undefined,
       visibility: Visibility.PUBLIC,
       createdBy: new Types.ObjectId(adminId),
       feedPriority: 100,
@@ -371,11 +470,14 @@ export class FixturesService {
       commentsDisabled: false,
       likesDisabled: false,
       votingEndsAt: kickoff,
+      endingSoonLeadMinutes: 5,
       status,
       scheduledAt,
     });
 
     fixture.campaignPostId = post._id as Types.ObjectId;
+    fixture.autoScheduled = !!opts.autoScheduled;
+    fixture.hasDrawOption = isGroupStage;
     await fixture.save();
 
     if (status === PostStatus.PUBLISHED) {
@@ -414,6 +516,10 @@ export class FixturesService {
         ? { name: fixture.venue.name, city: fixture.venue.city }
         : undefined,
       campaignPostId: fixture.campaignPostId?.toHexString(),
+      autoScheduled: fixture.autoScheduled ?? false,
+      hasDrawOption: fixture.hasDrawOption ?? false,
+      matchEndedAt: fixture.matchEndedAt ?? null,
+      winnerScheduledAt: fixture.winnerScheduledAt ?? null,
     };
   }
 }

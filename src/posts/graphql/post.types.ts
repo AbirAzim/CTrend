@@ -11,6 +11,7 @@ import { UserGql } from '../../users/graphql/user.types';
 import { CommentGql } from '../../comments/graphql/comment.types';
 import { PostCampaignSummaryGql } from './post-campaign-summary.types';
 import { PostVoteWinnerGql } from './post-vote-winner.types';
+import { CampaignWinnerGql } from '../../world-cup-campaign/graphql/campaign-winner.types';
 
 @ObjectType()
 export class PostOptionGql {
@@ -204,4 +205,8 @@ export class PostGql {
   /** Number of user-submitted content reports (admin moderation). */
   @Field(() => Int)
   reportCount: number;
+
+  /** Set after the match ends and the winner countdown completes (campaign posts only). */
+  @Field(() => CampaignWinnerGql, { nullable: true })
+  campaignWinner?: CampaignWinnerGql | null;
 }

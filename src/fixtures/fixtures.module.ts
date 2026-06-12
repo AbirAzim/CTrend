@@ -5,8 +5,11 @@ import { Post, PostSchema } from '../posts/post.schema';
 import { Category, CategorySchema } from '../categories/category.schema';
 import { FixturesService } from './fixtures.service';
 import { FixturesSyncService } from './fixtures-sync.service';
+import { FixturesAutoScheduleService } from './fixtures-auto-schedule.service';
 import { FixturesResolver } from './fixtures.resolver';
 import { PostsModule } from '../posts/posts.module';
+import { CampaignsModule } from '../campaigns/campaigns.module';
+import { UsersModule } from '../users/users.module';
 
 @Module({
   imports: [
@@ -16,8 +19,15 @@ import { PostsModule } from '../posts/posts.module';
       { name: Category.name, schema: CategorySchema },
     ]),
     PostsModule,
+    CampaignsModule,
+    UsersModule,
   ],
-  providers: [FixturesService, FixturesSyncService, FixturesResolver],
+  providers: [
+    FixturesService,
+    FixturesSyncService,
+    FixturesAutoScheduleService,
+    FixturesResolver,
+  ],
   exports: [FixturesService],
 })
 export class FixturesModule {}

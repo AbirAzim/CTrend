@@ -29,6 +29,13 @@ export class CampaignsResolver {
     return docs.map((d) => this.campaignsService.toGql(d));
   }
 
+  /** Public — active campaigns any user can tag their posts to */
+  @Query(() => [CampaignGql])
+  async publicCampaigns(): Promise<CampaignGql[]> {
+    const docs = await this.campaignsService.findAllPublic();
+    return docs.map((d) => this.campaignsService.toGql(d));
+  }
+
   @Query(() => [CampaignGql])
   @UseGuards(GqlAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)

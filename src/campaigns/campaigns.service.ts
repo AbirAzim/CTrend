@@ -34,6 +34,13 @@ export class CampaignsService {
       .exec();
   }
 
+  async findAllPublic(): Promise<CampaignDocument[]> {
+    return this.campaignModel
+      .find({ isActive: true, isPublic: true })
+      .sort({ createdAt: -1 })
+      .exec();
+  }
+
   async findAll(): Promise<CampaignDocument[]> {
     return this.campaignModel
       .find()
@@ -58,6 +65,7 @@ export class CampaignsService {
       );
     }
     const makeDefault = !!input.isDefault;
+    const isPublic = !!input.isPublic;
     const created = await this.campaignModel.create({
       name: input.name,
       slug: input.slug.toLowerCase(),
@@ -72,6 +80,9 @@ export class CampaignsService {
       rules: input.rules,
       rulesBn: input.rulesBn,
       fixturesEnabled: input.fixturesEnabled ?? false,
+      isPublic,
+      hasWinner: !!input.hasWinner,
+      hasRewards: isPublic ? false : !!input.hasRewards,
       startDate: input.startDate,
       endDate: input.endDate,
     });
@@ -93,6 +104,10 @@ export class CampaignsService {
     }
     if (input.isDefault === true) {
       doc.isActive = true;
+    }
+    // public campaigns can never have monetary rewards
+    if (doc.isPublic) {
+      doc.hasRewards = false;
     }
     await doc.save();
     if (doc.isDefault) {
@@ -128,6 +143,9 @@ export class CampaignsService {
       rules: doc.rules,
       rulesBn: doc.rulesBn,
       fixturesEnabled: doc.fixturesEnabled ?? false,
+      isPublic: doc.isPublic ?? false,
+      hasWinner: doc.hasWinner ?? false,
+      hasRewards: doc.hasRewards ?? false,
       startDate: doc.startDate,
       endDate: doc.endDate,
       createdAt: doc.createdAt,

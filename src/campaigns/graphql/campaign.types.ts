@@ -45,6 +45,15 @@ export class CampaignGql {
   @Field()
   fixturesEnabled: boolean;
 
+  @Field()
+  isPublic: boolean;
+
+  @Field()
+  hasWinner: boolean;
+
+  @Field()
+  hasRewards: boolean;
+
   @Field(() => Date, { nullable: true })
   startDate?: Date;
 
@@ -112,6 +121,21 @@ export class CreateCampaignInput {
   @IsOptional()
   isDefault?: boolean;
 
+  @Field(() => Boolean, { nullable: true })
+  @IsBoolean()
+  @IsOptional()
+  isPublic?: boolean;
+
+  @Field(() => Boolean, { nullable: true })
+  @IsBoolean()
+  @IsOptional()
+  hasWinner?: boolean;
+
+  @Field(() => Boolean, { nullable: true })
+  @IsBoolean()
+  @IsOptional()
+  hasRewards?: boolean;
+
   @Field(() => Date, { nullable: true })
   @IsOptional()
   startDate?: Date;
@@ -177,6 +201,21 @@ export class UpdateCampaignInput {
   @IsBoolean()
   @IsOptional()
   fixturesEnabled?: boolean;
+
+  @Field(() => Boolean, { nullable: true })
+  @IsBoolean()
+  @IsOptional()
+  isPublic?: boolean;
+
+  @Field(() => Boolean, { nullable: true })
+  @IsBoolean()
+  @IsOptional()
+  hasWinner?: boolean;
+
+  @Field(() => Boolean, { nullable: true })
+  @IsBoolean()
+  @IsOptional()
+  hasRewards?: boolean;
 
   @Field(() => Date, { nullable: true })
   @IsOptional()

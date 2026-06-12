@@ -5,7 +5,6 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import { ConfigService } from '@nestjs/config';
 import {
   CampaignWinner,
   CampaignWinnerDocument,
@@ -15,23 +14,28 @@ import { Vote, VoteDocument } from '../votes/vote.schema';
 import { UsersService } from '../users/users.service';
 import { CampaignWinnerGql } from './graphql/campaign-winner.types';
 
-const WC_API_BASE = 'https://api.football-data.org/v4';
-
 @Injectable()
 export class WorldCupCampaignService {
-  private readonly apiKey: string;
-
   constructor(
     @InjectModel(CampaignWinner.name)
     private campaignWinnerModel: Model<CampaignWinnerDocument>,
     @InjectModel(Fixture.name) private fixtureModel: Model<FixtureDocument>,
     @InjectModel(Vote.name) private voteModel: Model<VoteDocument>,
     private usersService: UsersService,
-    private configService: ConfigService,
-  ) {
-    this.apiKey = this.configService.get<string>('FOOTBALL_DATA_API_KEY') ?? '';
-  }
+  ) {}
 
+  /**
+   * Determines and records the campaign winner for a finished match.
+   * Uses the score already stored on the fixture (set by syncLiveScores)
+   * rather than making a separate external API call.
+   *
+   * Winner logic:
+   *   HOME_TEAM wins  → draw from option-0 voters
+   *   AWAY_TEAM wins  → draw from option-1 voters
+   *   DRAW, hasDrawOption=true  → draw from option-2 voters
+   *   DRAW, hasDrawOption=false → draw from all voters (legacy 2-option posts)
+   *   null / unknown  → record "no winner" without a userId
+   */
   async processMatchResult(
     fixtureId: string,
     campaignId?: string,
@@ -47,115 +51,71 @@ export class WorldCupCampaignService {
         'No campaign post exists for this fixture — call createCampaignPost first',
       );
     }
+    if (fixture.status !== 'FINISHED') {
+      throw new BadRequestException(
+        `Match is not finished yet (status: ${fixture.status})`,
+      );
+    }
 
-    // Check idempotency
+    // Idempotency guard
     const existing = await this.campaignWinnerModel
       .findOne({ fixtureId: fixture._id })
       .exec();
-    if (existing) {
-      return this.toGql(existing);
-    }
+    if (existing) return this.toGql(existing);
 
     const campaignObjId =
       campaignId && Types.ObjectId.isValid(campaignId)
         ? new Types.ObjectId(campaignId)
         : undefined;
 
-    // Fetch latest result from football-data.org
-    const res = await fetch(`${WC_API_BASE}/matches/${fixture.externalId}`, {
-      headers: { 'X-Auth-Token': this.apiKey },
-    });
-    if (!res.ok) {
-      throw new BadRequestException(
-        `football-data.org error: ${res.status} ${res.statusText}`,
-      );
-    }
-    const data = (await res.json()) as {
-      match: {
-        status: string;
-        score: {
-          winner: string | null;
-          fullTime: { home: number | null; away: number | null };
-        };
-      };
-    };
-    const match = data.match;
-
-    if (match.status !== 'FINISHED') {
-      throw new BadRequestException(
-        `Match is not finished yet (status: ${match.status})`,
-      );
-    }
-
-    // Update fixture score in DB
-    fixture.status = match.status;
-    fixture.score = {
-      home: match.score.fullTime.home,
-      away: match.score.fullTime.away,
-      winner: match.score.winner,
-    };
-    await fixture.save();
-
     const postId = fixture.campaignPostId;
-    const apiWinner = match.score.winner; // HOME_TEAM | AWAY_TEAM | DRAW | null
+    const scoreWinner = fixture.score?.winner ?? null; // HOME_TEAM | AWAY_TEAM | DRAW | null
 
-    // Draw: all voters are eligible; unknown winner: bail out
-    if (!apiWinner || apiWinner === 'DRAW') {
-      if (apiWinner !== 'DRAW') {
-        const record = await this.campaignWinnerModel.create({
-          campaignId: campaignObjId,
-          fixtureId: fixture._id,
-          postId,
-          prize: 100,
-          paid: false,
-          note: 'No winner determined',
-        });
-        return this.toGql(record);
-      }
-
-      const allVotes = await this.voteModel
-        .find({ postId, anonymous: { $ne: true } })
-        .lean()
-        .exec();
-
-      if (!allVotes.length) {
-        const record = await this.campaignWinnerModel.create({
-          campaignId: campaignObjId,
-          fixtureId: fixture._id,
-          postId,
-          prize: 100,
-          paid: false,
-          note: 'Match ended in a draw — no votes were cast',
-        });
-        return this.toGql(record);
-      }
-
-      const drawn = allVotes[Math.floor(Math.random() * allVotes.length)];
+    // Unknown result — record without a winner userId
+    if (!scoreWinner) {
       const record = await this.campaignWinnerModel.create({
         campaignId: campaignObjId,
         fixtureId: fixture._id,
         postId,
-        userId: drawn.userId,
         prize: 100,
         paid: false,
-        note: 'Match ended in a draw — winner drawn from all voters',
+        note: 'No winner determined',
       });
       return this.toGql(record);
     }
 
-    // HOME_TEAM = option index 0, AWAY_TEAM = option index 1
-    const winningOptionIndex = apiWinner === 'HOME_TEAM' ? 0 : 1;
+    let winningOptionIndex: number | undefined;
+    let voteFilter: Record<string, unknown>;
+    let noWinnersNote: string;
 
-    const correctVotes = await this.voteModel
-      .find({
+    if (scoreWinner === 'DRAW') {
+      if (fixture.hasDrawOption) {
+        // Option 2 is the "Draw 🤝" option
+        winningOptionIndex = 2;
+        voteFilter = { postId, selectedOptionIndex: 2, anonymous: { $ne: true } };
+        noWinnersNote = 'Match was a draw — no one voted for Draw 🤝';
+      } else {
+        // Legacy 2-option post: draw from all voters
+        winningOptionIndex = undefined;
+        voteFilter = { postId, anonymous: { $ne: true } };
+        noWinnersNote = 'Match ended in a draw — no votes were cast';
+      }
+    } else {
+      winningOptionIndex = scoreWinner === 'HOME_TEAM' ? 0 : 1;
+      voteFilter = {
         postId,
         selectedOptionIndex: winningOptionIndex,
         anonymous: { $ne: true },
-      })
+      };
+      noWinnersNote = 'No users voted for the winning side';
+    }
+
+    const eligibleVotes = await this.voteModel
+      .find(voteFilter)
       .lean()
       .exec();
 
-    if (!correctVotes.length) {
+    if (!eligibleVotes.length) {
       const record = await this.campaignWinnerModel.create({
         campaignId: campaignObjId,
         fixtureId: fixture._id,
@@ -163,12 +123,13 @@ export class WorldCupCampaignService {
         prize: 100,
         winningOption: winningOptionIndex,
         paid: false,
-        note: 'No users voted for the winning side',
+        note: noWinnersNote,
       });
       return this.toGql(record);
     }
 
-    const drawn = correctVotes[Math.floor(Math.random() * correctVotes.length)];
+    const drawn =
+      eligibleVotes[Math.floor(Math.random() * eligibleVotes.length)];
     const record = await this.campaignWinnerModel.create({
       campaignId: campaignObjId,
       fixtureId: fixture._id,
@@ -179,6 +140,14 @@ export class WorldCupCampaignService {
       paid: false,
     });
     return this.toGql(record);
+  }
+
+  async findByPostId(postId: string): Promise<CampaignWinnerGql | null> {
+    if (!Types.ObjectId.isValid(postId)) return null;
+    const doc = await this.campaignWinnerModel
+      .findOne({ postId: new Types.ObjectId(postId) })
+      .exec();
+    return doc ? this.toGql(doc) : null;
   }
 
   async findByFixture(fixtureId: string): Promise<CampaignWinnerGql | null> {

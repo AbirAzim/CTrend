@@ -65,6 +65,18 @@ export class Campaign {
   @Prop({ default: false })
   fixturesEnabled: boolean;
 
+  /** true = any authenticated user can tag their post to this campaign */
+  @Prop({ default: false })
+  isPublic: boolean;
+
+  /** true = the system picks and announces a winner after voting ends on deadline posts */
+  @Prop({ default: false })
+  hasWinner: boolean;
+
+  /** true = the winner receives a monetary prize; forced false when isPublic=true */
+  @Prop({ default: false })
+  hasRewards: boolean;
+
   @Prop({ type: Date })
   startDate?: Date;
 

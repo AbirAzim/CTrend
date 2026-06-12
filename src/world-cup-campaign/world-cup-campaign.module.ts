@@ -4,6 +4,7 @@ import { CampaignWinner, CampaignWinnerSchema } from './campaign-winner.schema';
 import { Fixture, FixtureSchema } from '../fixtures/fixture.schema';
 import { Vote, VoteSchema } from '../votes/vote.schema';
 import { WorldCupCampaignService } from './world-cup-campaign.service';
+import { WinnerAnnouncementService } from './winner-announcement.service';
 import { WorldCupCampaignResolver } from './world-cup-campaign.resolver';
 import { UsersModule } from '../users/users.module';
 
@@ -16,7 +17,11 @@ import { UsersModule } from '../users/users.module';
     ]),
     UsersModule,
   ],
-  providers: [WorldCupCampaignService, WorldCupCampaignResolver],
+  providers: [
+    WorldCupCampaignService,
+    WinnerAnnouncementService,
+    WorldCupCampaignResolver,
+  ],
   exports: [WorldCupCampaignService],
 })
 export class WorldCupCampaignModule {}

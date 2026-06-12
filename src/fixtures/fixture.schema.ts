@@ -75,7 +75,24 @@ export class Fixture {
   /** Set once a campaign post has been created for this fixture */
   @Prop({ type: Types.ObjectId, ref: 'Post' })
   campaignPostId?: Types.ObjectId;
+
+  /** True when the post was auto-created by the scheduler cron */
+  @Prop({ default: false })
+  autoScheduled: boolean;
+
+  /** True when the post has a 3rd "Draw" option (group stage only) */
+  @Prop({ default: false })
+  hasDrawOption: boolean;
+
+  /** Set when fixtures-sync first detects status = FINISHED */
+  @Prop({ type: Date, default: null })
+  matchEndedAt: Date | null;
+
+  /** matchEndedAt + post.endingSoonLeadMinutes — when the winner is revealed */
+  @Prop({ type: Date, default: null })
+  winnerScheduledAt: Date | null;
 }
 
 export const FixtureSchema = SchemaFactory.createForClass(Fixture);
 FixtureSchema.index({ stage: 1, group: 1, kickoff: 1 });
+FixtureSchema.index({ winnerScheduledAt: 1, matchEndedAt: 1 });

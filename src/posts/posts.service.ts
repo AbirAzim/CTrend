@@ -147,6 +147,8 @@ export class PostsService implements OnModuleInit {
       bannerText: doc.bannerText,
       bannerImageUrl: doc.bannerImageUrl,
       prizePerWinner: doc.prizePerWinner,
+      hasWinner: doc.hasWinner ?? false,
+      hasRewards: doc.hasRewards ?? false,
     };
   }
 

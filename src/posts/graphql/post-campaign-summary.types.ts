@@ -20,4 +20,10 @@ export class PostCampaignSummaryGql {
 
   @Field(() => Int)
   prizePerWinner: number;
+
+  @Field()
+  hasWinner: boolean;
+
+  @Field()
+  hasRewards: boolean;
 }

@@ -182,6 +182,7 @@ export class NotificationsService {
     authorId: string;
     authorName: string;
     caption?: string;
+    isAnnouncement?: boolean;
   }): Promise<number> {
     const allUserIds = await this.usersService.findAllIds();
     const recipients = allUserIds.filter((id) => id !== params.authorId);
@@ -190,7 +191,9 @@ export class NotificationsService {
     const trimmedCaption = params.caption?.trim() ?? '';
     const body = trimmedCaption
       ? trimmedCaption.slice(0, 120)
-      : 'A new platform-wide compare is live — tap to vote.';
+      : params.isAnnouncement
+        ? 'New announcement from Ke Jitbe — tap to read.'
+        : 'A new platform-wide compare is live — tap to vote.';
     const brandName = params.authorName?.trim() || PLATFORM_BRAND_NAME;
     const title = `📢 ${brandName}`;
 

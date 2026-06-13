@@ -21,6 +21,7 @@ export enum PostType {
 export enum PostFormat {
   COMPARE = 'compare',
   POLL = 'poll',
+  ANNOUNCEMENT = 'announcement',
 }
 
 export enum Visibility {

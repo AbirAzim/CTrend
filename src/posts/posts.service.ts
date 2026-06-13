@@ -167,6 +167,7 @@ export class PostsService implements OnModuleInit {
     format: PostFormat,
     input: CreatePostInput,
   ): void {
+    if (format === PostFormat.ANNOUNCEMENT) return; // no options/images required
     const options = input.options ?? [];
     if (options.length < 2) {
       throw new BadRequestException('A post needs at least two options.');
@@ -1204,12 +1205,13 @@ export class PostsService implements OnModuleInit {
     const scheduledAt = this.parseFutureDate(input.scheduledAt, 'scheduledAt');
     const status = scheduledAt ? PostStatus.SCHEDULED : PostStatus.PUBLISHED;
     const campaignOid = await this.resolveCampaignId(input.campaignId);
+    const isAnnouncement = format === PostFormat.ANNOUNCEMENT;
     const doc = await this.postModel.create({
       type: PostType.SYSTEM,
       format,
       contentText,
       imageUrls: input.imageUrls ?? [],
-      options: input.options.map((o) => this.mapOptionInput(o)),
+      options: isAnnouncement ? [] : (input.options ?? []).map((o) => this.mapOptionInput(o)),
       categoryId: category._id,
       visibility: Visibility.PUBLIC,
       createdBy: new Types.ObjectId(adminId),
@@ -1217,8 +1219,7 @@ export class PostsService implements OnModuleInit {
       voteCount: 0,
       commentsDisabled: false,
       likesDisabled: false,
-      votingEndsAt,
-      endingSoonLeadMinutes: DEFAULT_ENDING_SOON_LEAD_MINUTES,
+      ...(isAnnouncement ? {} : { votingEndsAt, endingSoonLeadMinutes: DEFAULT_ENDING_SOON_LEAD_MINUTES }),
       status,
       scheduledAt,
       campaignId: campaignOid,
@@ -1254,6 +1255,7 @@ export class PostsService implements OnModuleInit {
           authorId,
           authorName: PLATFORM_BRAND_NAME,
           caption,
+          isAnnouncement: post.format === PostFormat.ANNOUNCEMENT,
         });
         return;
       }
@@ -1398,7 +1400,8 @@ export class PostsService implements OnModuleInit {
     ]);
     const now = Date.now();
     const isVotingOpen =
-      !post.votingEndsAt || post.votingEndsAt.getTime() > now;
+      post.format !== PostFormat.ANNOUNCEMENT &&
+      (!post.votingEndsAt || post.votingEndsAt.getTime() > now);
     const isPrizeClaimed = Boolean(post.votePrizeClaimedAt);
     const viewerIsWinner =
       Boolean(viewerId) &&

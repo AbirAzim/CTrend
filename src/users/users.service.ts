@@ -368,6 +368,15 @@ export class UsersService {
     return (doc?.pushTokens ?? []).map((t) => t.token).filter(Boolean);
   }
 
+  /** All FCM tokens across every user — used for platform-wide broadcast. */
+  async getAllPushTokens(): Promise<string[]> {
+    const docs = await this.userModel
+      .find({ 'pushTokens.0': { $exists: true } }, { pushTokens: 1 })
+      .lean<{ pushTokens?: PushToken[] }[]>()
+      .exec();
+    return docs.flatMap((d) => (d.pushTokens ?? []).map((t) => t.token)).filter(Boolean);
+  }
+
   /** Purge tokens that FCM reported as invalid/unregistered, across all users. */
   async removePushTokensEverywhere(tokens: string[]): Promise<void> {
     if (!tokens.length) return;

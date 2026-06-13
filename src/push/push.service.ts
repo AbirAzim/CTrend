@@ -116,4 +116,46 @@ export class PushService {
       );
     }
   }
+
+  /**
+   * Platform-wide broadcast: sends a data-only FCM push to every registered
+   * device. Batches in groups of 500 (FCM multicast limit). Dead tokens are
+   * pruned after each batch. Runs fully async — never blocks the caller.
+   */
+  async broadcastDataToAll(data: Record<string, string>): Promise<void> {
+    if (!this.messaging) return;
+
+    const allTokens = await this.usersService.getAllPushTokens();
+    if (!allTokens.length) return;
+
+    const BATCH = 500;
+    const dead: string[] = [];
+
+    for (let i = 0; i < allTokens.length; i += BATCH) {
+      const batch = allTokens.slice(i, i + BATCH);
+      try {
+        const res = await this.messaging.sendEachForMulticast({
+          tokens: batch,
+          data,
+          android: { priority: 'high' },
+          apns: {
+            headers: { 'apns-priority': '10', 'apns-push-type': 'background' },
+            payload: { aps: { 'content-available': 1 } },
+          },
+        });
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        res.responses.forEach((r: any, idx: number) => {
+          if (!r.success && DEAD_TOKEN_CODES.has(r.error?.code)) {
+            dead.push(batch[idx]);
+          }
+        });
+      } catch (err) {
+        this.logger.error(`Broadcast batch failed: ${(err as Error).message}`);
+      }
+    }
+
+    if (dead.length) {
+      await this.usersService.removePushTokensEverywhere(dead);
+    }
+  }
 }

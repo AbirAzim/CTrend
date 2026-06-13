@@ -86,12 +86,12 @@ export class CreatePostInput {
   @IsString({ each: true })
   imageUrls?: string[];
 
-  @Field(() => [PostOptionInput])
+  @Field(() => [PostOptionInput], { nullable: true })
+  @IsOptional()
   @IsArray()
-  @ArrayMinSize(2)
   @ValidateNested({ each: true })
   @Type(() => PostOptionInput)
-  options: PostOptionInput[];
+  options?: PostOptionInput[];
 
   @Field()
   @IsString()

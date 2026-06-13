@@ -144,6 +144,7 @@ export class WorldCupCampaignService {
 
     const drawn =
       eligibleVotes[Math.floor(Math.random() * eligibleVotes.length)];
+    const pickedAt = new Date();
     const record = await this.campaignWinnerModel.create({
       campaignId: campaignObjId,
       fixtureId: fixture._id,
@@ -153,6 +154,17 @@ export class WorldCupCampaignService {
       winningOption: winningOptionIndex,
       paid: false,
     });
+    // Stamp the post so claimPostVotePrize can verify winner eligibility
+    await this.postModel.updateOne(
+      { _id: postId },
+      {
+        $set: {
+          voteWinnerUserId: drawn.userId,
+          voteWinnerOptionIndex: winningOptionIndex ?? drawn.selectedOptionIndex,
+          voteWinnerPickedAt: pickedAt,
+        },
+      },
+    );
     void this.notifyMatchResult(
       postId.toHexString(),
       fixture.homeTeam.name,

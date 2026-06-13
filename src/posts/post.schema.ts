@@ -164,6 +164,10 @@ export class Post {
   /** Elapsed match minute while IN_PLAY or PAUSED; null otherwise. */
   @Prop({ type: Number, default: null })
   fixtureMinute?: number | null;
+
+  /** When the campaign winner will be revealed after the match ends. Denormalized from Fixture.winnerScheduledAt. */
+  @Prop({ type: Date, default: null })
+  fixtureWinnerAt?: Date | null;
 }
 
 export const PostSchema = SchemaFactory.createForClass(Post);

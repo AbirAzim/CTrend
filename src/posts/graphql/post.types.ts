@@ -239,4 +239,8 @@ export class PostGql {
   /** Live/final score — populated for matchType posts only; null for regular posts. */
   @Field(() => MatchScoreGql, { nullable: true })
   matchScore?: MatchScoreGql | null;
+
+  /** When the campaign winner will be revealed after match ends. Null until match finishes. */
+  @Field(() => Date, { nullable: true })
+  fixtureWinnerAt?: Date | null;
 }

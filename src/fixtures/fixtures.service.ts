@@ -376,6 +376,10 @@ export class FixturesService {
           { _id: existing._id },
           { $set: { matchEndedAt, winnerScheduledAt } },
         );
+        await this.postModel.updateOne(
+          { _id: existing.campaignPostId },
+          { $set: { fixtureWinnerAt: winnerScheduledAt } },
+        );
         this.logger.log(
           `Match finished: ${existing.homeTeam.name} vs ${existing.awayTeam.name}. Winner reveal at ${winnerScheduledAt.toISOString()}`,
         );

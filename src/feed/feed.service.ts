@@ -67,20 +67,32 @@ export class FeedService {
     }
 
     const now = new Date();
-    const pinnableFilter = {
+
+    // Tier 1: LIVE match posts (IN_PLAY or PAUSED) — everyone sees them first
+    const liveFilter = {
+      ...filter,
+      matchType: true,
+      fixtureStatus: { $in: ['IN_PLAY', 'PAUSED'] },
+    };
+    const livePosts = await this.postModel
+      .find(liveFilter)
+      .sort({ votingEndsAt: 1 })
+      .exec();
+
+    // Tier 2: upcoming unvoted match posts (before kickoff)
+    const upcomingFilter = {
       ...filter,
       matchType: true,
       votingEndsAt: { $gt: now },
     };
-
-    const candidates = await this.postModel
-      .find(pinnableFilter)
+    const upcomingCandidates = await this.postModel
+      .find(upcomingFilter)
       .sort({ votingEndsAt: 1 })
       .exec();
 
-    let pinned = candidates;
-    if (viewerId && candidates.length > 0) {
-      const candidateIds = candidates.map((p) => p._id);
+    let upcomingPinned = upcomingCandidates;
+    if (viewerId && upcomingCandidates.length > 0) {
+      const candidateIds = upcomingCandidates.map((p) => p._id);
       const votedIds = await this.voteModel
         .find({
           userId: new Types.ObjectId(viewerId),
@@ -89,9 +101,12 @@ export class FeedService {
         .distinct('postId')
         .exec();
       const votedSet = new Set((votedIds as Types.ObjectId[]).map((id) => id.toString()));
-      pinned = candidates.filter((p) => !votedSet.has((p._id as Types.ObjectId).toString()));
+      upcomingPinned = upcomingCandidates.filter(
+        (p) => !votedSet.has((p._id as Types.ObjectId).toString()),
+      );
     }
 
+    const pinned = [...livePosts, ...upcomingPinned];
     const pinnedIds = pinned.map((p) => p._id);
     const regularLimit = Math.max(take - pinned.length, 0);
 

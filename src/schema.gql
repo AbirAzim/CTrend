@@ -69,9 +69,12 @@ type CampaignGql {
   description: String
   endDate: DateTime
   fixturesEnabled: Boolean!
+  hasRewards: Boolean!
+  hasWinner: Boolean!
   id: ID!
   isActive: Boolean!
   isDefault: Boolean!
+  isPublic: Boolean!
   name: String!
   prizePerWinner: Int!
   rules: String
@@ -180,7 +183,10 @@ input CreateCampaignInput {
   description: String
   endDate: DateTime
   fixturesEnabled: Boolean
+  hasRewards: Boolean
+  hasWinner: Boolean
   isDefault: Boolean
+  isPublic: Boolean
   name: String!
   prizePerWinner: Int
   rules: String
@@ -197,7 +203,7 @@ input CreatePostInput {
   contentText: String
   format: PostFormat
   imageUrls: [String!]
-  options: [PostOptionInput!]!
+  options: [PostOptionInput!]
   orgReach: OrgPostReach
   scheduledAt: DateTime
   type: PostType
@@ -232,19 +238,23 @@ input FixtureFilterInput {
 }
 
 type FixtureGql {
+  autoScheduled: Boolean!
   awayTeam: FixtureTeamGql!
   campaignPostId: ID
   externalId: Int!
   group: String
+  hasDrawOption: Boolean!
   homeTeam: FixtureTeamGql!
   id: ID!
   kickoff: DateTime!
+  matchEndedAt: DateTime
   matchday: Int
   minute: Int
   score: FixtureScoreGql!
   stage: String!
   status: String!
   venue: FixtureVenueGql
+  winnerScheduledAt: DateTime
 }
 
 type FixtureScoreGql {
@@ -294,6 +304,13 @@ type InviteResultGql {
   email: String!
   message: String
   status: String!
+}
+
+type MatchScoreGql {
+  away: Int
+  home: Int
+  minute: Int
+  status: String
 }
 
 type MessageGql {
@@ -516,6 +533,8 @@ type PlatformSettingsGql {
 type PostCampaignSummaryGql {
   bannerImageUrl: String
   bannerText: String
+  hasRewards: Boolean!
+  hasWinner: Boolean!
   id: ID!
   name: String!
   prizePerWinner: Int!
@@ -527,6 +546,7 @@ type PostDeletedGql {
 }
 
 enum PostFormat {
+  ANNOUNCEMENT
   COMPARE
   POLL
 }
@@ -539,6 +559,7 @@ type PostGql {
   authorProfileImageUrl: String
   authorUsername: String!
   campaign: PostCampaignSummaryGql
+  campaignWinner: CampaignWinnerGql
   canClaimPrize: Boolean!
   caption: String
   category: CategoryGql!
@@ -549,6 +570,7 @@ type PostGql {
   downvoteCount: Int!
   editedBy: [UserGql!]
   endingSoonLeadMinutes: Int!
+  fixtureWinnerAt: DateTime
   format: PostFormat!
   hypeCount: Int!
   id: ID!
@@ -560,6 +582,8 @@ type PostGql {
   lastEditedBy: UserGql
   likeCount: Int!
   likesDisabled: Boolean!
+  matchScore: MatchScoreGql
+  matchType: Boolean!
   mySelectedOptionIndex: Int
   myVoteAnonymous: Boolean
   optionStats: [VoteOptionStatGql!]!
@@ -680,6 +704,7 @@ type Query {
   organizationDashboard(organizationId: String!): OrganizationDashboardGql!
   platformSettings: PlatformSettingsGql!
   previewInvites(emails: [String!]!): [InvitePreviewGql!]!
+  publicCampaigns: [CampaignGql!]!
   unreadNotificationCount: Int!
   userFriends(userId: ID!): [UserGql!]!
   userVoteCount(userId: ID!): Int!
@@ -752,8 +777,11 @@ input UpdateCampaignInput {
   ctaUrl: String
   endDate: DateTime
   fixturesEnabled: Boolean
+  hasRewards: Boolean
+  hasWinner: Boolean
   isActive: Boolean
   isDefault: Boolean
+  isPublic: Boolean
   name: String
   prizePerWinner: Int
   rules: String

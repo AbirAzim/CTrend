@@ -700,9 +700,6 @@ export class PostsService implements OnModuleInit {
     for (const row of due) {
       const postId = row._id.toString();
       const goLiveAt = row.scheduledAt ?? now;
-      // Match posts: sort by kickoff time (votingEndsAt) so they appear fresh
-      // in the feed after voting, not buried 24h deep from their scheduledAt.
-      const feedTime = row.matchType && row.votingEndsAt ? row.votingEndsAt : goLiveAt;
       try {
         // Atomic flip prevents race issues across multiple app instances.
         const updated = await this.postModel
@@ -711,7 +708,7 @@ export class PostsService implements OnModuleInit {
             {
               $set: {
                 status: PostStatus.PUBLISHED,
-                createdAt: feedTime,
+                createdAt: goLiveAt,
               },
             },
             { new: true },

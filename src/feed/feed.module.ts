@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Post, PostSchema } from '../posts/post.schema';
-import { Vote, VoteSchema } from '../votes/vote.schema';
 import { FeedService } from './feed.service';
 import { FeedResolver } from './feed.resolver';
 import { NewPostsResolver } from './new-posts.resolver';
@@ -13,7 +12,6 @@ import { OrganizationsModule } from '../organizations/organizations.module';
   imports: [
     MongooseModule.forFeature([
       { name: Post.name, schema: PostSchema },
-      { name: Vote.name, schema: VoteSchema },
     ]),
     PostsModule,
     FollowsModule,

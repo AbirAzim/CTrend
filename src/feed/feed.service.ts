@@ -2,7 +2,6 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Post, PostDocument } from '../posts/post.schema';
-import { Vote, VoteDocument } from '../votes/vote.schema';
 import {
   FeedScope,
   FeedSort,
@@ -21,7 +20,6 @@ export class FeedService {
 
   constructor(
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
-    @InjectModel(Vote.name) private voteModel: Model<VoteDocument>,
     private postsService: PostsService,
     private followsService: FollowsService,
     private organizationsService: OrganizationsService,
@@ -40,7 +38,7 @@ export class FeedService {
     const filter = await this.buildFilter(scope, viewerId, viewerRole, campaignId);
     const sortSpec = this.buildSort(sort);
     const [rows, totalCount] = await Promise.all([
-      this.fetchRows(filter, sortSpec, skip, take, viewerId),
+      this.fetchRows(filter, sort, sortSpec, skip, take),
       this.postModel.countDocuments(filter),
     ]);
     const nodes = await Promise.all(
@@ -50,81 +48,90 @@ export class FeedService {
   }
 
   /**
-   * On the first page (skip=0), open match-type campaign posts the viewer
-   * hasn't voted on yet are pinned to the top, ordered by nearest kickoff
-   * (votingEndsAt ASC). The remaining slots are filled with the normal feed
-   * excluding those pinned posts. Page 2+ returns normal paginated results.
+   * Fetch feed rows with a computed sort score so pagination stays consistent
+   * across all pages.
+   *
+   * For LATEST sort, posts are tiered by a virtual _score field:
+   *   Tier 0 – LIVE matches (IN_PLAY/PAUSED):  ~30.75T  (nearest kickoff first)
+   *   Tier 1 – UPCOMING matches (votingEndsAt > now):  ~2.25T  (nearest kickoff first)
+   *   Tier 2 – Regular posts:  actual createdAt ms  (~1.75T for 2026 dates)
+   *   Tier 3 – FINISHED matches:  createdAt - 30 days  (pushed below regular)
+   *
+   * Ranges don't overlap for typical post dates, so skip-based pagination is
+   * safe on every page — no hybrid pinning that would shift offsets.
+   *
+   * TRENDING / ADMIN_PRIORITY use simple find+sort (no tiering needed).
    */
   private async fetchRows(
     filter: Record<string, unknown>,
+    sort: FeedSort,
     sortSpec: Record<string, 1 | -1>,
     skip: number,
     take: number,
-    viewerId?: string,
   ): Promise<PostDocument[]> {
-    if (skip !== 0) {
+    if (sort !== FeedSort.LATEST) {
       return this.postModel.find(filter).sort(sortSpec).skip(skip).limit(take).exec();
     }
 
     const now = new Date();
+    // Year 3000 in ms — live matches float here (unreachable by any real createdAt)
+    const LIVE_BASE_MS = 32503680000000;
+    // Year 2096 in ms — upcoming matches float here (above any real createdAt)
+    const UPCOMING_BASE_MS = 4000000000000;
 
-    // Tier 1: LIVE match posts (IN_PLAY or PAUSED) — everyone sees them first
-    const liveFilter = {
-      ...filter,
-      matchType: true,
-      fixtureStatus: { $in: ['IN_PLAY', 'PAUSED'] },
-    };
-    const livePosts = await this.postModel
-      .find(liveFilter)
-      .sort({ votingEndsAt: 1 })
+    const docs = await this.postModel
+      .aggregate([
+        { $match: filter },
+        {
+          $addFields: {
+            _score: {
+              $switch: {
+                branches: [
+                  {
+                    // Tier 0: live matches — nearest kickoff first
+                    case: {
+                      $and: [
+                        { $eq: ['$matchType', true] },
+                        { $in: ['$fixtureStatus', ['IN_PLAY', 'PAUSED']] },
+                      ],
+                    },
+                    then: {
+                      $subtract: [
+                        LIVE_BASE_MS,
+                        { $toLong: { $ifNull: ['$votingEndsAt', now] } },
+                      ],
+                    },
+                  },
+                  {
+                    // Tier 1: upcoming votable matches — nearest kickoff first
+                    case: {
+                      $and: [
+                        { $eq: ['$matchType', true] },
+                        { $gt: ['$votingEndsAt', now] },
+                      ],
+                    },
+                    then: {
+                      $subtract: [
+                        UPCOMING_BASE_MS,
+                        { $toLong: '$votingEndsAt' },
+                      ],
+                    },
+                  },
+                ],
+                // Tier 2: everything else (finished matches, regular posts) — natural recency
+                default: { $toLong: '$createdAt' },
+              },
+            },
+          },
+        },
+        { $sort: { _score: -1 } },
+        { $skip: skip },
+        { $limit: take },
+        { $project: { _score: 0 } },
+      ])
       .exec();
 
-    // Tier 2: upcoming unvoted match posts (before kickoff)
-    const upcomingFilter = {
-      ...filter,
-      matchType: true,
-      votingEndsAt: { $gt: now },
-    };
-    const upcomingCandidates = await this.postModel
-      .find(upcomingFilter)
-      .sort({ votingEndsAt: 1 })
-      .exec();
-
-    let upcomingPinned = upcomingCandidates;
-    if (viewerId && upcomingCandidates.length > 0) {
-      const candidateIds = upcomingCandidates.map((p) => p._id);
-      const votedIds = await this.voteModel
-        .find({
-          userId: new Types.ObjectId(viewerId),
-          postId: { $in: candidateIds },
-        })
-        .distinct('postId')
-        .exec();
-      const votedSet = new Set((votedIds as Types.ObjectId[]).map((id) => id.toString()));
-      upcomingPinned = upcomingCandidates.filter(
-        (p) => !votedSet.has((p._id as Types.ObjectId).toString()),
-      );
-    }
-
-    const pinned = [...livePosts, ...upcomingPinned];
-    const pinnedIds = pinned.map((p) => p._id);
-    const regularLimit = Math.max(take - pinned.length, 0);
-
-    const regularFilter =
-      pinnedIds.length > 0
-        ? { ...filter, _id: { $nin: pinnedIds } }
-        : filter;
-
-    const regular =
-      regularLimit > 0
-        ? await this.postModel
-            .find(regularFilter)
-            .sort(sortSpec)
-            .limit(regularLimit)
-            .exec()
-        : [];
-
-    return [...pinned, ...regular];
+    return docs as unknown as PostDocument[];
   }
 
   /**

@@ -54,8 +54,8 @@ export class FeedService {
    * For LATEST sort, posts are tiered by a virtual _score field:
    *   Tier 0 – LIVE matches (IN_PLAY/PAUSED):  ~30.75T  (nearest kickoff first)
    *   Tier 1 – UPCOMING matches (votingEndsAt > now):  ~2.25T  (nearest kickoff first)
-   *   Tier 2 – Regular posts:  actual createdAt ms  (~1.75T for 2026 dates)
-   *   Tier 3 – FINISHED matches:  createdAt - 30 days  (pushed below regular)
+   *   Tier 2 – FINISHED matches:  votingEndsAt ms  (~1.75T, most recent match first)
+   *   Tier 3 – Regular posts:  createdAt ms  (~1.75T for 2026 dates)
    *
    * Ranges don't overlap for typical post dates, so skip-based pagination is
    * safe on every page — no hybrid pinning that would shift offsets.
@@ -117,8 +117,19 @@ export class FeedService {
                       ],
                     },
                   },
+                  {
+                    // Tier 2: finished matches — order by match time (votingEndsAt) descending
+                    // so the most recently played match appears first regardless of post createdAt
+                    case: {
+                      $and: [
+                        { $eq: ['$matchType', true] },
+                        { $eq: ['$fixtureStatus', 'FINISHED'] },
+                      ],
+                    },
+                    then: { $toLong: { $ifNull: ['$votingEndsAt', '$createdAt'] } },
+                  },
                 ],
-                // Tier 2: everything else (finished matches, regular posts) — natural recency
+                // Tier 3: regular posts — natural recency by createdAt
                 default: { $toLong: '$createdAt' },
               },
             },

@@ -52,10 +52,11 @@ export class FeedService {
    * across all pages.
    *
    * For LATEST sort, posts are tiered by a virtual _score field:
-   *   Tier 0 – LIVE matches (IN_PLAY/PAUSED):  ~30.75T  (nearest kickoff first)
+   *   Tier 0 – LIVE matches (IN_PLAY/PAUSED):         ~30.75T  (nearest kickoff first)
    *   Tier 1 – UPCOMING matches (votingEndsAt > now):  ~2.25T  (nearest kickoff first)
-   *   Tier 2 – FINISHED matches:  votingEndsAt ms  (~1.75T, most recent match first)
-   *   Tier 3 – Regular posts:  createdAt ms  (~1.75T for 2026 dates)
+   *   Tier 2 – FINISHED, in reveal window (fixtureWinnerAt > now-5min): ~6.25T (pinned above upcoming)
+   *   Tier 3 – All other FINISHED matches:             ~1.75T  (most recent match first)
+   *   Tier 4 – Regular posts:                          ~1.75T  (createdAt descending)
    *
    * Ranges don't overlap for typical post dates, so skip-based pagination is
    * safe on every page — no hybrid pinning that would shift offsets.
@@ -74,8 +75,11 @@ export class FeedService {
     }
 
     const now = new Date();
+    const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
     // Year 3000 in ms — live matches float here (unreachable by any real createdAt)
     const LIVE_BASE_MS = 32503680000000;
+    // Year 2253 in ms — revealing matches float here (below live, above upcoming)
+    const REVEAL_BASE_MS = 8000000000000;
     // Year 2096 in ms — upcoming matches float here (above any real createdAt)
     const UPCOMING_BASE_MS = 4000000000000;
 
@@ -118,8 +122,24 @@ export class FeedService {
                     },
                   },
                   {
-                    // Tier 2: finished matches — order by match time (votingEndsAt) descending
-                    // so the most recently played match appears first regardless of post createdAt
+                    // Tier 2: finished matches within reveal window (fixtureWinnerAt > now-5min)
+                    // — stays pinned above upcoming matches until 5 min after winner is announced
+                    case: {
+                      $and: [
+                        { $eq: ['$matchType', true] },
+                        { $eq: ['$fixtureStatus', 'FINISHED'] },
+                        { $gt: ['$fixtureWinnerAt', fiveMinutesAgo] },
+                      ],
+                    },
+                    then: {
+                      $subtract: [
+                        REVEAL_BASE_MS,
+                        { $toLong: { $ifNull: ['$fixtureWinnerAt', now] } },
+                      ],
+                    },
+                  },
+                  {
+                    // Tier 3: all other finished matches — order by match time descending
                     case: {
                       $and: [
                         { $eq: ['$matchType', true] },

@@ -52,7 +52,8 @@ export class FeedService {
    * across all pages.
    *
    * For LATEST sort, posts are tiered by a virtual _score field:
-   *   Tier 0 – LIVE matches (IN_PLAY/PAUSED):         ~30.75T  (nearest kickoff first)
+   *   Tier 0 – LIVE matches (IN_PLAY/PAUSED, or just past kickoff and not yet
+   *            synced/finished — see the 10-min grace window below):  ~30.75T  (nearest kickoff first)
    *   Tier 1 – UPCOMING matches (votingEndsAt > now):  ~2.25T  (nearest kickoff first)
    *   Tier 2 – FINISHED, in reveal window (fixtureWinnerAt > now-5min): ~6.25T (pinned above upcoming)
    *   Tier 3 – All other FINISHED matches:             ~1.75T  (most recent match first)
@@ -76,6 +77,13 @@ export class FeedService {
 
     const now = new Date();
     const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000);
+    // Kickoff-to-sync grace window: fixtureStatus only flips TIMED -> IN_PLAY on
+    // the once-a-minute sync cron, so a match can sit a few minutes past its
+    // votingEndsAt cutoff while still reporting TIMED. Without this, the post
+    // falls out of both the live and upcoming tiers during that gap and sinks
+    // to the regular-post tier. Treat "just past kickoff, not yet synced live,
+    // not finished" the same as confirmed-live so it never drops out.
+    const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
     // Year 3000 in ms — live matches float here (unreachable by any real createdAt)
     const LIVE_BASE_MS = 32503680000000;
     // Year 2253 in ms — revealing matches float here (below live, above upcoming)
@@ -92,11 +100,29 @@ export class FeedService {
               $switch: {
                 branches: [
                   {
-                    // Tier 0: live matches — nearest kickoff first
+                    // Tier 0: live matches — nearest kickoff first. Also covers the
+                    // post-kickoff grace window (votingEndsAt just passed, sync cron
+                    // hasn't flipped fixtureStatus to IN_PLAY yet) so the post never
+                    // dips out of the feed between kickoff and the next sync tick.
                     case: {
                       $and: [
                         { $eq: ['$matchType', true] },
-                        { $in: ['$fixtureStatus', ['IN_PLAY', 'PAUSED']] },
+                        {
+                          $or: [
+                            { $in: ['$fixtureStatus', ['IN_PLAY', 'PAUSED']] },
+                            {
+                              $and: [
+                                { $lte: ['$votingEndsAt', now] },
+                                { $gt: ['$votingEndsAt', tenMinutesAgo] },
+                                {
+                                  $not: [
+                                    { $eq: ['$fixtureStatus', 'FINISHED'] },
+                                  ],
+                                },
+                              ],
+                            },
+                          ],
+                        },
                       ],
                     },
                     then: {

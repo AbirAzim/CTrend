@@ -158,6 +158,10 @@ export class FixturesService {
   private readonly league: string;
   private readonly season: string;
   private readonly useRapidApi: boolean;
+  /** Tracks last detail-sync timestamp per fixture externalId to throttle expensive sub-calls. */
+  private readonly lastDetailSync = new Map<number, number>();
+  /** How often to re-fetch events/stats/lineups per fixture while live (ms). */
+  private static readonly DETAIL_SYNC_INTERVAL = 3 * 60 * 1000; // 3 min
 
   constructor(
     @InjectModel(Fixture.name) private fixtureModel: Model<FixtureDocument>,
@@ -219,10 +223,10 @@ export class FixturesService {
     );
   }
 
-  /** Fetch fixtures for the active league+season — same endpoint that reliably updates minute/score. */
+  /** Fetch only currently-live fixtures — 1 API call, small payload, real-time on pro plan. */
   private fetchLiveFixtures(): Promise<AfFixtureItem[]> {
     return this.apiFetch<AfFixtureItem[]>(
-      `/fixtures?league=${this.league}&season=${this.season}`,
+      `/fixtures?live=${this.league}`,
     );
   }
 
@@ -632,15 +636,23 @@ export class FixturesService {
       }
 
       // ── Sync match details (events/stats, lineups on first pass) ──────────
+      // Throttled: run at most once per DETAIL_SYNC_INTERVAL per fixture while
+      // live, or immediately on FINISHED transition (to capture final events).
       const needsDetailSync =
         newStatus === 'IN_PLAY' ||
         newStatus === 'PAUSED' ||
         (!wasFinished && newStatus === 'FINISHED');
       if (needsDetailSync && this.apiKey) {
-        const needsLineups = (existing.lineups?.length ?? 0) === 0;
-        // Re-fetch fixture to get updated homeTeamExternalId/awayTeamExternalId set above
-        const fresh = await this.fixtureModel.findOne({ externalId: item.fixture.id }).exec();
-        if (fresh) void this.syncMatchDetails(fresh, needsLineups);
+        const exId = item.fixture.id;
+        const lastSync = this.lastDetailSync.get(exId) ?? 0;
+        const isFinishedNow = !wasFinished && newStatus === 'FINISHED';
+        const due = isFinishedNow || (Date.now() - lastSync >= FixturesService.DETAIL_SYNC_INTERVAL);
+        if (due) {
+          this.lastDetailSync.set(exId, Date.now());
+          const needsLineups = (existing.lineups?.length ?? 0) === 0;
+          const fresh = await this.fixtureModel.findOne({ externalId: exId }).exec();
+          if (fresh) void this.syncMatchDetails(fresh, needsLineups);
+        }
       }
 
       // ── FINISHED transition: record matchEndedAt + schedule winner reveal ─

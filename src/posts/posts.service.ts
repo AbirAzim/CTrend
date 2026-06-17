@@ -144,6 +144,7 @@ export class PostsService implements OnModuleInit {
       id: doc._id.toHexString(),
       name: doc.name,
       slug: doc.slug,
+      isDefault: doc.isDefault ?? false,
       bannerText: doc.bannerText,
       bannerImageUrl: doc.bannerImageUrl,
       prizePerWinner: doc.prizePerWinner,

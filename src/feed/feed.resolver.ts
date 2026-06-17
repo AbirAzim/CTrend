@@ -2,7 +2,7 @@ import { Args, ID, Int, Query, Resolver } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { FeedService } from './feed.service';
 import { FeedConnectionGql } from './graphql/feed.types';
-import { FeedScope, FeedSort } from '../common/enums';
+import { FeedPostFilter, FeedScope, FeedSort } from '../common/enums';
 import { OptionalJwtGqlGuard } from '../common/guards/optional-jwt-gql.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { PostGql } from '../posts/graphql/post.types';
@@ -50,6 +50,8 @@ export class FeedResolver {
     @Args('take', { type: () => Int, nullable: true, defaultValue: 20 })
     take: number,
     @Args('campaignId', { type: () => ID, nullable: true }) campaignId?: string,
+    @Args('postFilter', { type: () => FeedPostFilter, nullable: true })
+    postFilter?: FeedPostFilter,
     @CurrentUser() user?: ReqUser,
   ) {
     const result = await this.feedService.getFeed(
@@ -60,6 +62,7 @@ export class FeedResolver {
       user?.id,
       user?.role,
       campaignId,
+      postFilter,
     );
     return result.nodes;
   }

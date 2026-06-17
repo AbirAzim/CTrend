@@ -92,8 +92,17 @@ registerEnumType(PostType, { name: 'PostType' });
 registerEnumType(PostFormat, { name: 'PostFormat' });
 registerEnumType(Visibility, { name: 'Visibility' });
 registerEnumType(OrgPostReach, { name: 'OrgPostReach' });
+export enum FeedPostFilter {
+  ALL = 'all',
+  CAMPAIGN = 'campaign',
+  PLATFORM = 'platform',
+  COMMUNITY = 'community',
+  FRIEND = 'friend',
+}
+
 registerEnumType(FeedScope, { name: 'FeedScope' });
 registerEnumType(FeedSort, { name: 'FeedSort' });
+registerEnumType(FeedPostFilter, { name: 'FeedPostFilter' });
 registerEnumType(SubscriptionPlan, { name: 'SubscriptionPlan' });
 registerEnumType(SubscriptionStatus, { name: 'SubscriptionStatus' });
 registerEnumType(PaymentProvider, { name: 'PaymentProvider' });

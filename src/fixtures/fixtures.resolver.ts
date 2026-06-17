@@ -62,6 +62,17 @@ export class FixturesResolver {
     return `Done — synced: ${result.synced}, already had data: ${result.skipped}, errors: ${result.errors}`;
   }
 
+  @Mutation(() => String)
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async sendFixtureLineupNotification(
+    @Args('fixtureId', { type: () => ID }) fixtureId: string,
+  ): Promise<string> {
+    const result = await this.fixturesService.sendLineupNotification(fixtureId);
+    if (result.error) return `Error: ${result.error}`;
+    return `Lineup notification sent to ${result.sent} users`;
+  }
+
   @Mutation(() => PostGql)
   @UseGuards(GqlAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)

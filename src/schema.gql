@@ -221,6 +221,14 @@ type FeedConnectionGql {
   totalCount: Int!
 }
 
+enum FeedPostFilter {
+  ALL
+  CAMPAIGN
+  COMMUNITY
+  FRIEND
+  PLATFORM
+}
+
 enum FeedScope {
   GLOBAL
   PERSONALIZED
@@ -495,6 +503,7 @@ type Mutation {
   resetPassword(newPassword: String!, token: String!): Boolean!
   respondFriendRequest(accept: Boolean!, requesterId: ID!): Boolean!
   sendAdminBroadcast(body: String!, title: String!): Int!
+  sendFixtureLineupNotification(fixtureId: ID!): String!
   sendMessage(conversationId: ID!, forwarded: Boolean = false, imageUrl: String, replyToId: ID, text: String! = ""): MessageGql!
   sendModeratorMessage(imageUrl: String, replyToId: ID, text: String! = "", userId: ID!): ModeratorMessageAdminGql!
   sendModeratorMessages(imageUrl: String, replyToId: ID, text: String! = "", userIds: [ID!]!): [ModeratorMessageAdminGql!]!
@@ -602,6 +611,7 @@ type PostCampaignSummaryGql {
   hasRewards: Boolean!
   hasWinner: Boolean!
   id: ID!
+  isDefault: Boolean
   name: String!
   prizePerWinner: Int!
   slug: String!
@@ -745,7 +755,7 @@ type Query {
   categories: [CategoryGql!]!
   categoryPostCount(categoryId: ID!): Int!
   commentsByPost(postId: ID!): [CommentGql!]!
-  feedPosts(campaignId: ID, scope: FeedScope, skip: Int = 0, sort: FeedSort, take: Int = 20): [PostGql!]!
+  feedPosts(campaignId: ID, postFilter: FeedPostFilter, scope: FeedScope, skip: Int = 0, sort: FeedSort, take: Int = 20): [PostGql!]!
   friendRequests: FriendRequestsGql!
   friendSuggestions(limit: Int, search: String): [UserGql!]!
   friendshipStatus(userId: ID!): String!

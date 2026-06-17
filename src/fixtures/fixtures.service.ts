@@ -219,6 +219,13 @@ export class FixturesService {
     );
   }
 
+  /** Fetch only live fixtures — faster response, fewer results, refreshes every ~30s on API side. */
+  private fetchLiveFixtures(): Promise<AfFixtureItem[]> {
+    return this.apiFetch<AfFixtureItem[]>(
+      `/fixtures?live=${this.league}`,
+    );
+  }
+
   private fetchMatchEvents(externalId: number): Promise<AfEvent[]> {
     return this.apiFetch<AfEvent[]>(`/fixtures/events?fixture=${externalId}`);
   }
@@ -516,7 +523,7 @@ export class FixturesService {
    * winnerScheduledAt) and postponement kickoff changes.
    */
   async syncLiveScores(): Promise<number> {
-    const items = await this.fetchFixtures();
+    const items = await this.fetchLiveFixtures();
     let updated = 0;
 
     for (const item of items) {
@@ -676,7 +683,9 @@ export class FixturesService {
    */
   private async hasActiveWindow(): Promise<boolean> {
     const now = Date.now();
-    const soon = new Date(now + 15 * 60 * 1000);
+    // 90 min ahead so the cron catches lineups as soon as the football API
+    // publishes them (typically ~60 min before kickoff).
+    const soon = new Date(now + 90 * 60 * 1000);
     const recent = new Date(now - 3 * 60 * 60 * 1000);
     const count = await this.fixtureModel
       .countDocuments({
@@ -750,6 +759,36 @@ export class FixturesService {
 
     this.logger.log(`Bulk sync complete: ${synced} synced, ${skipped} skipped (already had data), ${errors} errors`);
     return { synced, skipped, errors };
+  }
+
+  /**
+   * Force-send the lineup-available notification for a fixture regardless of
+   * whether lineups "just arrived" this tick. Use from admin mutation when the
+   * automatic notification was missed (e.g. cron window was too narrow).
+   */
+  async sendLineupNotification(fixtureId: string): Promise<{ sent: number; error?: string }> {
+    const fixture = await this.findById(fixtureId);
+    if (!fixture) return { sent: 0, error: 'Fixture not found' };
+
+    const hasLineups = Array.isArray(fixture.lineups) && fixture.lineups.length > 0;
+    if (!hasLineups) {
+      // No lineups in DB yet — attempt a live sync first, then re-check
+      await this.syncMatchDetails(fixture, true).catch(() => {});
+      const refreshed = await this.findById(fixtureId);
+      const stillNone = !Array.isArray(refreshed?.lineups) || !refreshed!.lineups.length;
+      if (stillNone) return { sent: 0, error: 'Lineups not yet available from the API' };
+    }
+
+    const fixtureIdStr = (fixture._id as Types.ObjectId).toHexString();
+    const matchLabel = `${fixture.homeTeam.shortName ?? fixture.homeTeam.name} vs ${fixture.awayTeam.shortName ?? fixture.awayTeam.name}`;
+    const postId = fixture.campaignPostId?.toHexString() ?? null;
+
+    const sent = await this.notificationsService.notifyLineupAvailable({
+      fixtureId: fixtureIdStr,
+      matchLabel,
+      postId,
+    });
+    return { sent };
   }
 
   async findAll(filter?: FixtureFilterInput): Promise<FixtureDocument[]> {

@@ -3,6 +3,7 @@ import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { Post, PostDocument } from '../posts/post.schema';
 import {
+  FeedPostFilter,
   FeedScope,
   FeedSort,
   OrgPostReach,
@@ -33,9 +34,10 @@ export class FeedService {
     viewerId?: string,
     viewerRole?: string,
     campaignId?: string,
+    postFilter?: FeedPostFilter,
   ) {
     await this.syncDueScheduledPosts();
-    const filter = await this.buildFilter(scope, viewerId, viewerRole, campaignId);
+    const filter = await this.buildFilter(scope, viewerId, viewerRole, campaignId, postFilter);
     const sortSpec = this.buildSort(sort);
     const [rows, totalCount] = await Promise.all([
       this.fetchRows(filter, sort, sortSpec, skip, take),
@@ -230,6 +232,7 @@ export class FeedService {
     viewerId?: string,
     viewerRole?: string,
     campaignId?: string,
+    postFilter?: FeedPostFilter,
   ): Promise<Record<string, unknown>> {
     const notScheduled = { status: { $ne: PostStatus.SCHEDULED } };
     const campaignFilter =
@@ -237,29 +240,78 @@ export class FeedService {
         ? { campaignId: new Types.ObjectId(campaignId) }
         : {};
 
-    // NOTE: Admins are intentionally NOT given a feed-wide override. They see
-    // the feed exactly like a normal user (own + friends' + SYSTEM + global
-    // broadcasts + org). Friend-only posts of users they aren't friends with
-    // are managed from the Admin dashboard ("User Normal posts" tab), not
-    // surfaced in the main feed.
     void viewerRole;
+
+    // When a specific post-type filter is active, short-circuit with a simple
+    // DB query rather than the full fan-out $or — faster and paginates correctly.
+    if (postFilter && postFilter !== FeedPostFilter.ALL) {
+      switch (postFilter) {
+        case FeedPostFilter.CAMPAIGN:
+          // Admin SYSTEM posts that have a campaign attached
+          return {
+            type: PostType.SYSTEM,
+            campaignId: { $exists: true, $ne: null },
+            ...notScheduled,
+            ...campaignFilter,
+          };
+        case FeedPostFilter.PLATFORM:
+          // Admin SYSTEM posts with no campaign (pure platform posts)
+          return {
+            type: PostType.SYSTEM,
+            $or: [
+              { campaignId: { $exists: false } },
+              { campaignId: null },
+            ],
+            ...notScheduled,
+          };
+        case FeedPostFilter.COMMUNITY:
+          // User global broadcast posts
+          return {
+            type: PostType.USER,
+            isUserGlobalBroadcast: true,
+            ...notScheduled,
+          };
+        case FeedPostFilter.FRIEND: {
+          // Friend/following posts — need to know who the viewer follows
+          if (!viewerId) return { _id: null }; // unauthenticated: empty result
+          const viewerOid = new Types.ObjectId(viewerId);
+          const followingIds = await this.followsService.getFollowingIds(viewerId);
+          const followingOids = followingIds.map((id) => new Types.ObjectId(id));
+          const friendParts: Record<string, unknown>[] = [
+            {
+              type: PostType.USER,
+              isUserGlobalBroadcast: { $ne: true },
+              createdBy: viewerOid,
+              ...notScheduled,
+            },
+          ];
+          if (followingOids.length > 0) {
+            friendParts.push({
+              type: PostType.USER,
+              isUserGlobalBroadcast: { $ne: true },
+              createdBy: { $in: followingOids },
+              ...notScheduled,
+            });
+          }
+          return { $or: friendParts };
+        }
+      }
+    }
+
+    // Default: full feed — all visible post types.
 
     // Unauthenticated: admin SYSTEM posts + user global broadcasts only.
     if (!viewerId) {
       return {
         $or: [
           { type: PostType.SYSTEM, ...notScheduled },
-          {
-            type: PostType.USER,
-            isUserGlobalBroadcast: true,
-            ...notScheduled,
-          },
+          { type: PostType.USER, isUserGlobalBroadcast: true, ...notScheduled },
         ],
         ...campaignFilter,
       };
     }
 
-    // Authenticated user: own posts (any status) + friends' posts + SYSTEM + org posts.
+    // Authenticated user: own + friends' + SYSTEM + global broadcasts + org posts.
     const viewerOid = new Types.ObjectId(viewerId);
     const followingIds = await this.followsService.getFollowingIds(viewerId);
     const followingOids = followingIds.map((id) => new Types.ObjectId(id));
@@ -267,12 +319,7 @@ export class FeedService {
 
     const parts: Record<string, unknown>[] = [
       { type: PostType.SYSTEM, ...notScheduled },
-      {
-        type: PostType.USER,
-        isUserGlobalBroadcast: true,
-        ...notScheduled,
-      },
-      // Own posts in feed exclude SCHEDULED — they live in /profile/scheduled
+      { type: PostType.USER, isUserGlobalBroadcast: true, ...notScheduled },
       { type: PostType.USER, createdBy: viewerOid, ...notScheduled },
     ];
 
@@ -293,11 +340,7 @@ export class FeedService {
       });
     }
 
-    parts.push({
-      type: PostType.ORG,
-      orgReach: OrgPostReach.GLOBAL,
-      ...notScheduled,
-    });
+    parts.push({ type: PostType.ORG, orgReach: OrgPostReach.GLOBAL, ...notScheduled });
 
     return { $or: parts, ...campaignFilter };
   }

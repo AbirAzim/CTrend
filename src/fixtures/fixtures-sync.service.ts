@@ -26,7 +26,7 @@ export class FixturesSyncService {
     }
   }
 
-  @Cron('* * * * *')
+  @Cron('*/30 * * * * *')
   async syncLiveScores() {
     if (this.disabled || this.running) return;
     this.running = true;

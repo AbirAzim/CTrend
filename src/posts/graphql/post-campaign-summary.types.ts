@@ -21,6 +21,9 @@ export class PostCampaignSummaryGql {
   @Field(() => Int)
   prizePerWinner: number;
 
+  @Field({ nullable: true })
+  isDefault?: boolean;
+
   @Field()
   hasWinner: boolean;
 

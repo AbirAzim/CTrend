@@ -219,10 +219,10 @@ export class FixturesService {
     );
   }
 
-  /** Fetch only live fixtures — faster response, fewer results, refreshes every ~30s on API side. */
+  /** Fetch fixtures for the active league+season — same endpoint that reliably updates minute/score. */
   private fetchLiveFixtures(): Promise<AfFixtureItem[]> {
     return this.apiFetch<AfFixtureItem[]>(
-      `/fixtures?live=${this.league}`,
+      `/fixtures?league=${this.league}&season=${this.season}`,
     );
   }
 

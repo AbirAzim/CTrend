@@ -14,13 +14,17 @@ import { FixtureFilterInput, FixtureGql } from './graphql/fixture.types';
 import { PostFormat, PostStatus, PostType, Visibility } from '../common/enums';
 import { PostsService } from '../posts/posts.service';
 import { CampaignsService } from '../campaigns/campaigns.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { generateMatchCaption } from './caption-templates';
 import { POST_UPDATED, pubsub } from '../pubsub';
 
-// ── API-Football (api-sports.io) ───────────────────────────────────────────
-// Live World Cup scores / minute / goals. Replaces football-data.org, whose
-// free tier never served live in-play data (all matches stuck on TIMED).
-const AF_BASE = 'https://v3.football.api-sports.io';
+// ── API-Football ──────────────────────────────────────────────────────────
+// Supports both direct api-sports.io and RapidAPI hosting.
+// Set API_FOOTBALL_PROVIDER=rapidapi in .env to use RapidAPI (recommended —
+// free tier includes events/lineups/statistics; direct api-sports.io requires
+// a higher plan for those endpoints).
+const AF_BASE_DIRECT = 'https://v3.football.api-sports.io';
+const AF_BASE_RAPID = 'https://api-football-v1.p.rapidapi.com/v3';
 
 interface AfTeam {
   id: number;
@@ -41,6 +45,46 @@ interface AfFixtureItem {
 interface AfStandingRow {
   team: { id: number; name: string };
   group?: string;
+}
+interface AfEvent {
+  time: { elapsed: number; extra: number | null };
+  team: { id: number; name: string };
+  player: { id: number | null; name: string | null };
+  assist: { id: number | null; name: string | null } | null;
+  type: string;
+  detail: string;
+  comments: string | null;
+}
+interface AfLineupPlayer {
+  id: number;
+  name: string;
+  number: number;
+  pos: string;
+  grid: string | null;
+  photo?: string | null;
+}
+interface AfLineupTeam {
+  team: { id: number; name: string };
+  formation: string;
+  startXI: Array<{ player: AfLineupPlayer }>;
+  substitutes: Array<{ player: AfLineupPlayer }>;
+  coach: { id: number; name: string; photo?: string | null };
+}
+interface AfStatItem {
+  type: string;
+  value: string | number | null;
+}
+interface AfStatTeam {
+  team: { id: number; name: string };
+  statistics: AfStatItem[];
+}
+interface AfPlayerStatEntry {
+  player: { id: number; name: string; photo: string };
+  statistics: Array<{ games: { rating: string | null; minutes: number | null } }>;
+}
+interface AfPlayerStatTeam {
+  team: { id: number; name: string };
+  players: AfPlayerStatEntry[];
 }
 
 /**
@@ -110,8 +154,10 @@ function deriveWinner(
 export class FixturesService {
   private readonly logger = new Logger(FixturesService.name);
   private readonly apiKey: string;
+  private readonly rapidApiKey: string;
   private readonly league: string;
   private readonly season: string;
+  private readonly useRapidApi: boolean;
 
   constructor(
     @InjectModel(Fixture.name) private fixtureModel: Model<FixtureDocument>,
@@ -120,21 +166,35 @@ export class FixturesService {
     private configService: ConfigService,
     private postsService: PostsService,
     private campaignsService: CampaignsService,
+    private notificationsService: NotificationsService,
   ) {
     this.apiKey = this.configService.get<string>('API_FOOTBALL_KEY') ?? '';
+    this.rapidApiKey = this.configService.get<string>('RAPID_API_FOOTBALL_KEY') ?? '';
+    this.useRapidApi = !!this.rapidApiKey || this.configService.get<string>('API_FOOTBALL_PROVIDER') === 'rapidapi';
     this.league =
       this.configService.get<string>('API_FOOTBALL_WC_LEAGUE') ?? '1';
     this.season =
       this.configService.get<string>('API_FOOTBALL_WC_SEASON') ?? '2026';
+    this.logger.log(
+      `API-Football provider: ${this.useRapidApi ? 'RapidAPI' : 'api-sports.io (direct)'}`,
+    );
   }
 
   private async apiFetch<T>(path: string): Promise<T> {
-    const res = await fetch(`${AF_BASE}${path}`, {
-      headers: { 'x-apisports-key': this.apiKey },
-    });
+    const key = this.useRapidApi ? this.rapidApiKey : this.apiKey;
+    const base = this.useRapidApi ? AF_BASE_RAPID : AF_BASE_DIRECT;
+    const url = `${base}${path}`;
+    const headers: Record<string, string> = this.useRapidApi
+      ? {
+          'X-RapidAPI-Key': key,
+          'X-RapidAPI-Host': 'api-football-v1.p.rapidapi.com',
+        }
+      : { 'x-apisports-key': key };
+    this.logger.debug(`API-Football → ${url} (key: ${key ? key.slice(0, 6) + '…' : 'MISSING'})`);
+    const res = await fetch(url, { headers });
     if (!res.ok) {
       throw new BadRequestException(
-        `API-Football error: ${res.status} ${res.statusText}`,
+        `API-Football error: ${res.status} ${res.statusText} — URL: ${url}`,
       );
     }
     const json = (await res.json()) as { response?: T; errors?: unknown };
@@ -157,6 +217,203 @@ export class FixturesService {
     return this.apiFetch<AfFixtureItem[]>(
       `/fixtures?league=${this.league}&season=${this.season}`,
     );
+  }
+
+  private fetchMatchEvents(externalId: number): Promise<AfEvent[]> {
+    return this.apiFetch<AfEvent[]>(`/fixtures/events?fixture=${externalId}`);
+  }
+
+  private fetchMatchLineups(externalId: number): Promise<AfLineupTeam[]> {
+    return this.apiFetch<AfLineupTeam[]>(
+      `/fixtures/lineups?fixture=${externalId}`,
+    );
+  }
+
+  private fetchMatchStats(externalId: number): Promise<AfStatTeam[]> {
+    return this.apiFetch<AfStatTeam[]>(
+      `/fixtures/statistics?fixture=${externalId}`,
+    );
+  }
+
+  private fetchPlayerRatings(externalId: number): Promise<AfPlayerStatTeam[]> {
+    return this.apiFetch<AfPlayerStatTeam[]>(
+      `/fixtures/players?fixture=${externalId}`,
+    );
+  }
+
+  async syncMatchDetails(
+    fixture: FixtureDocument,
+    includeLineups = true,
+  ): Promise<{ events: number; stats: number; lineups: number; error?: string }> {
+    const externalId = fixture.externalId;
+    this.logger.log(`Syncing match details for fixture ${externalId} (${fixture.homeTeam.name} vs ${fixture.awayTeam.name})`);
+    try {
+      const [eventsResult, statsResult, lineupsResult, ratingsResult] = await Promise.allSettled([
+        this.fetchMatchEvents(externalId),
+        this.fetchMatchStats(externalId),
+        includeLineups ? this.fetchMatchLineups(externalId) : Promise.resolve(null),
+        this.fetchPlayerRatings(externalId),
+      ]);
+
+      if (eventsResult.status === 'rejected') this.logger.error(`Events fetch failed: ${String(eventsResult.reason)}`);
+      if (statsResult.status === 'rejected') this.logger.error(`Stats fetch failed: ${String(statsResult.reason)}`);
+      if (lineupsResult.status === 'rejected') this.logger.error(`Lineups fetch failed: ${String(lineupsResult.reason)}`);
+      if (ratingsResult.status === 'rejected') this.logger.error(`Ratings fetch failed: ${String(ratingsResult.reason)}`);
+
+      const eventsRaw = eventsResult.status === 'fulfilled' ? eventsResult.value : [];
+      const statsRaw = statsResult.status === 'fulfilled' ? statsResult.value : null;
+      const lineupsRaw = lineupsResult.status === 'fulfilled' ? lineupsResult.value : null;
+      const ratingsRaw = ratingsResult.status === 'fulfilled' ? ratingsResult.value : null;
+
+      const anyError =
+        (eventsResult.status === 'rejected' ? String(eventsResult.reason) : null) ??
+        (statsResult.status === 'rejected' ? String(statsResult.reason) : null) ??
+        (lineupsResult.status === 'rejected' ? String(lineupsResult.reason) : null) ??
+        (ratingsResult.status === 'rejected' ? String(ratingsResult.reason) : null);
+
+      const homeId = fixture.homeTeamExternalId;
+      const awayId = fixture.awayTeamExternalId;
+
+      const events = (eventsRaw ?? []).map((e) => ({
+        time: e.time.elapsed,
+        timeExtra: e.time.extra ?? null,
+        team:
+          homeId != null && e.team.id === homeId
+            ? 'home'
+            : awayId != null && e.team.id === awayId
+              ? 'away'
+              : e.team.name === fixture.homeTeam.name
+                ? 'home'
+                : 'away',
+        type: e.type,
+        detail: e.detail,
+        player: { id: e.player?.id ?? null, name: e.player?.name ?? null },
+        assist: e.assist?.name
+          ? { id: e.assist.id ?? null, name: e.assist.name }
+          : null,
+      }));
+
+      // Build paired stats: home value / away value per stat type
+      const homeStats = statsRaw?.[0]?.statistics ?? [];
+      const awayStats = statsRaw?.[1]?.statistics ?? [];
+      const awayMap = new Map(awayStats.map((s) => [s.type, s.value]));
+      const stats = homeStats.map((s) => ({
+        type: s.type,
+        home: s.value != null ? String(s.value) : null,
+        away: awayMap.has(s.type)
+          ? awayMap.get(s.type) != null
+            ? String(awayMap.get(s.type))
+            : null
+          : null,
+      }));
+
+      const playerRatings = (ratingsRaw ?? []).flatMap((teamData) => {
+        const teamSide =
+          teamData.team.id === homeId || teamData.team.name === fixture.homeTeam.name
+            ? 'home'
+            : 'away';
+        return (teamData.players ?? [])
+          .filter((p) => p.statistics?.[0]?.games?.rating != null)
+          .map((p) => ({
+            playerId: p.player.id,
+            name: p.player.name,
+            team: teamSide,
+            rating: p.statistics[0].games.rating,
+            photo: p.player.photo
+              ?? `https://media.api-sports.io/football/players/${p.player.id}.png`,
+          }));
+      });
+
+      const update: Record<string, unknown> = {
+        events,
+        stats,
+        playerRatings,
+        detailsSyncedAt: new Date(),
+      };
+
+      const hadLineups = Array.isArray(fixture.lineups) && fixture.lineups.length > 0;
+      let newLineupsCount = 0;
+
+      if (lineupsRaw != null && lineupsRaw.length > 0) {
+        const lineups = lineupsRaw.map((l) => ({
+          team: l.team.id === homeId || l.team.name === fixture.homeTeam.name ? 'home' : 'away',
+          formation: l.formation,
+          startXI: l.startXI.map((p) => ({
+            id: p.player.id ?? null,
+            name: p.player.name,
+            number: p.player.number,
+            pos: p.player.pos ?? null,
+            grid: p.player.grid ?? null,
+            photo: p.player.photo
+              ?? (p.player.id ? `https://media.api-sports.io/football/players/${p.player.id}.png` : null),
+          })),
+          substitutes: l.substitutes.map((p) => ({
+            id: p.player.id ?? null,
+            name: p.player.name,
+            number: p.player.number,
+            pos: p.player.pos ?? null,
+            grid: p.player.grid ?? null,
+            photo: p.player.photo
+              ?? (p.player.id ? `https://media.api-sports.io/football/players/${p.player.id}.png` : null),
+          })),
+          coach: {
+            id: l.coach.id ?? null,
+            name: l.coach.name,
+            photo: l.coach.photo ?? null,
+          },
+        }));
+        update.lineups = lineups;
+        newLineupsCount = lineups.length;
+      }
+
+      await this.fixtureModel.updateOne(
+        { _id: fixture._id },
+        { $set: update },
+      );
+
+      // When lineups are newly available, update the linked post and notify all users
+      const lineupsJustArrived = !hadLineups && newLineupsCount > 0;
+      if (lineupsJustArrived && fixture.campaignPostId) {
+        const fixtureIdStr = (fixture._id as Types.ObjectId).toHexString();
+        const postIdStr = fixture.campaignPostId.toHexString();
+        const matchLabel = `${fixture.homeTeam.shortName ?? fixture.homeTeam.name} vs ${fixture.awayTeam.shortName ?? fixture.awayTeam.name}`;
+
+        await this.postModel.updateOne(
+          { _id: fixture.campaignPostId },
+          { $set: { lineupAvailable: true, fixtureId: fixtureIdStr } },
+        );
+
+        void this.notificationsService.notifyLineupAvailable({
+          fixtureId: fixtureIdStr,
+          matchLabel,
+          postId: postIdStr,
+        }).catch((err) => this.logger.error('Lineup notify failed', err));
+      }
+
+      // Stamp fixtureId on the post (idempotent)
+      if (fixture.campaignPostId) {
+        const fixtureIdStr = (fixture._id as Types.ObjectId).toHexString();
+        await this.postModel.updateOne(
+          { _id: fixture.campaignPostId },
+          { $set: { fixtureId: fixtureIdStr } },
+        );
+      }
+
+      const result = {
+        events: events.length,
+        stats: stats.length,
+        lineups: newLineupsCount,
+        error: anyError ?? undefined,
+      };
+      this.logger.log(
+        `Match details synced for ${externalId}: events=${result.events} stats=${result.stats} lineups=${result.lineups}${anyError ? ` (partial error: ${anyError})` : ''}`,
+      );
+      return result;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      this.logger.error(`Match details sync FAILED for fixture ${externalId}: ${message}`);
+      return { events: 0, stats: 0, lineups: 0, error: message };
+    }
   }
 
   /** teamId → "GROUP_A" from standings (the group letter isn't on fixtures). */
@@ -189,6 +446,8 @@ export class FixturesService {
     // API-Football has no shortName/tla — keep the full name (frontend truncates).
     return {
       externalId: item.fixture.id,
+      homeTeamExternalId: item.teams.home.id,
+      awayTeamExternalId: item.teams.away.id,
       homeTeam: {
         name: item.teams.home.name ?? 'TBD',
         shortName: item.teams.home.name ?? 'TBD',
@@ -292,6 +551,9 @@ export class FixturesService {
             status: newStatus,
             kickoff: newKickoff,
             minute: newMinute,
+            // Ensure team external IDs are always set (needed for event home/away assignment)
+            homeTeamExternalId: item.teams.home.id,
+            awayTeamExternalId: item.teams.away.id,
             score: {
               home,
               away,
@@ -362,6 +624,18 @@ export class FixturesService {
         });
       }
 
+      // ── Sync match details (events/stats, lineups on first pass) ──────────
+      const needsDetailSync =
+        newStatus === 'IN_PLAY' ||
+        newStatus === 'PAUSED' ||
+        (!wasFinished && newStatus === 'FINISHED');
+      if (needsDetailSync && this.apiKey) {
+        const needsLineups = (existing.lineups?.length ?? 0) === 0;
+        // Re-fetch fixture to get updated homeTeamExternalId/awayTeamExternalId set above
+        const fresh = await this.fixtureModel.findOne({ externalId: item.fixture.id }).exec();
+        if (fresh) void this.syncMatchDetails(fresh, needsLineups);
+      }
+
       // ── FINISHED transition: record matchEndedAt + schedule winner reveal ─
       if (!wasFinished && newStatus === 'FINISHED' && existing.campaignPostId) {
         const matchEndedAt = new Date();
@@ -427,6 +701,55 @@ export class FixturesService {
     if (!this.apiKey) return null;
     if (!(await this.hasActiveWindow())) return null;
     return this.syncLiveScores();
+  }
+
+  async syncAllFinishedFixtures(): Promise<{ synced: number; skipped: number; errors: number }> {
+    const fixtures = await this.fixtureModel
+      .find({ status: 'FINISHED' })
+      .exec();
+
+    // Stamp fixtureId + lineupAvailable on every finished fixture's campaign post (idempotent)
+    for (const fixture of fixtures) {
+      if (!fixture.campaignPostId) continue;
+      const fixtureIdStr = (fixture._id as Types.ObjectId).toHexString();
+      const hasLineups = Array.isArray(fixture.lineups) && fixture.lineups.length > 0;
+      await this.postModel.updateOne(
+        { _id: fixture.campaignPostId },
+        { $set: { fixtureId: fixtureIdStr, lineupAvailable: hasLineups } },
+      );
+    }
+
+    let synced = 0;
+    let skipped = 0;
+    let errors = 0;
+
+    for (const fixture of fixtures) {
+      // Skip only if all three data sets are already populated
+      if (
+        Array.isArray(fixture.events) && fixture.events.length > 0 &&
+        Array.isArray(fixture.stats) && fixture.stats.length > 0 &&
+        Array.isArray(fixture.playerRatings) && fixture.playerRatings.length > 0
+      ) {
+        skipped++;
+        continue;
+      }
+      try {
+        const result = await this.syncMatchDetails(fixture, true);
+        if (result.events > 0 || result.stats > 0 || result.lineups > 0) {
+          synced++;
+        } else {
+          errors++;
+        }
+        // Small delay between calls to respect rate limits
+        await new Promise((r) => setTimeout(r, 600));
+      } catch (e) {
+        this.logger.error(`Failed to sync fixture ${fixture.externalId}: ${String(e)}`);
+        errors++;
+      }
+    }
+
+    this.logger.log(`Bulk sync complete: ${synced} synced, ${skipped} skipped (already had data), ${errors} errors`);
+    return { synced, skipped, errors };
   }
 
   async findAll(filter?: FixtureFilterInput): Promise<FixtureDocument[]> {
@@ -565,6 +888,11 @@ export class FixturesService {
       hasDrawOption: fixture.hasDrawOption ?? false,
       matchEndedAt: fixture.matchEndedAt ?? null,
       winnerScheduledAt: fixture.winnerScheduledAt ?? null,
+      events: fixture.events ?? [],
+      lineups: fixture.lineups ?? [],
+      stats: fixture.stats ?? [],
+      playerRatings: fixture.playerRatings ?? [],
+      detailsSyncedAt: fixture.detailsSyncedAt ?? null,
     };
   }
 }

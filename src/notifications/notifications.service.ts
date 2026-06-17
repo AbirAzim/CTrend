@@ -324,6 +324,61 @@ export class NotificationsService {
   }
 
   /**
+   * Fan-out to all users when lineups are available for a World Cup match.
+   * @param fixtureId  MongoDB _id of the Fixture document
+   * @param matchLabel Human-readable label e.g. "Portugal vs Spain"
+   * @param postId     Campaign post id for the fallback deep-link
+   */
+  async notifyLineupAvailable(params: {
+    fixtureId: string;
+    matchLabel: string;
+    postId?: string | null;
+  }): Promise<number> {
+    const allUserIds = await this.usersService.findAllIds();
+    if (!allUserIds.length) return 0;
+
+    const title = `⚽ Lineups Confirmed`;
+    const body = `${params.matchLabel} — formations & lineups are live! Tap to see them.`;
+
+    for (let i = 0; i < allUserIds.length; i += PLATFORM_NOTIFY_BATCH) {
+      const chunk = allUserIds.slice(i, i + PLATFORM_NOTIFY_BATCH);
+      const docs = chunk.map((userId) => ({
+        userId: new Types.ObjectId(userId),
+        type: 'LINEUP_AVAILABLE' as NotificationType,
+        title,
+        body,
+        referenceId: params.fixtureId,
+        referenceType: 'Fixture',
+        postId: params.postId ?? undefined,
+        actorCount: 1,
+        read: false,
+        archived: false,
+      }));
+
+      let inserted: NotificationDocument[];
+      try {
+        inserted = (await this.notificationModel.insertMany(docs, {
+          ordered: false,
+        })) as NotificationDocument[];
+      } catch (err) {
+        this.logger.error(`Lineup notify batch failed (offset ${i})`, err);
+        continue;
+      }
+
+      await Promise.allSettled(
+        inserted.map(async (doc) => {
+          const recipientId = doc.userId.toHexString();
+          const gql = this.toGql(doc);
+          await pubsub.publish(NEW_NOTIFICATION, { newNotification: gql, recipientId });
+          await this.sendBellPush(recipientId, gql);
+        }),
+      );
+    }
+
+    return allUserIds.length;
+  }
+
+  /**
    * Notify only Android users on an outdated app version (or unknown version).
    * Also used when admin publishes an update notice.
    */

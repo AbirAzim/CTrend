@@ -1548,6 +1548,8 @@ export class PostsService implements OnModuleInit {
             }
           : null,
       fixtureWinnerAt: post.fixtureWinnerAt ?? null,
+      fixtureId: post.fixtureId ?? null,
+      lineupAvailable: post.lineupAvailable ?? false,
     };
   }
 }

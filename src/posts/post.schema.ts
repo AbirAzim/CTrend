@@ -168,6 +168,14 @@ export class Post {
   /** When the campaign winner will be revealed after the match ends. Denormalized from Fixture.winnerScheduledAt. */
   @Prop({ type: Date, default: null })
   fixtureWinnerAt?: Date | null;
+
+  /** MongoDB ObjectId string of the linked Fixture document (matchType posts only). */
+  @Prop({ type: String, default: null })
+  fixtureId?: string | null;
+
+  /** True once lineups have been synced for this match. Used to gate the "See Details" button. */
+  @Prop({ default: false })
+  lineupAvailable: boolean;
 }
 
 export const PostSchema = SchemaFactory.createForClass(Post);

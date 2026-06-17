@@ -16,7 +16,8 @@ export type NotificationType =
   | 'VOTE_WINNER'
   | 'VOTE_PRIZE_CLAIMED'
   | 'SYSTEM'
-  | 'USER_GLOBAL_POST';
+  | 'USER_GLOBAL_POST'
+  | 'LINEUP_AVAILABLE';
 
 export type NotificationDocument = HydratedDocument<Notification>;
 
@@ -43,6 +44,7 @@ export class Notification {
       'VOTE_PRIZE_CLAIMED',
       'SYSTEM',
       'USER_GLOBAL_POST',
+      'LINEUP_AVAILABLE',
     ],
     required: true,
   })

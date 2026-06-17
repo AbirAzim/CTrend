@@ -1,10 +1,62 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { HydratedDocument, Types } from 'mongoose';
+import { HydratedDocument, Schema as MongooseSchema, Types } from 'mongoose';
 
 export type FixtureDocument = HydratedDocument<Fixture> & {
   createdAt: Date;
   updatedAt: Date;
 };
+
+export class MatchEventPlayer {
+  id?: number | null;
+  name?: string | null;
+}
+
+export class MatchEvent {
+  time: number;
+  timeExtra?: number | null;
+  team: string; // 'home' | 'away'
+  type: string; // 'Goal' | 'Card' | 'subst'
+  detail: string; // 'Normal Goal', 'Own Goal', 'Yellow Card', etc.
+  player: MatchEventPlayer;
+  assist?: MatchEventPlayer | null;
+}
+
+export class MatchLineupPlayer {
+  id?: number | null;
+  name: string;
+  number: number;
+  pos?: string | null;
+  grid?: string | null;
+  photo?: string | null;
+}
+
+export class MatchLineupCoach {
+  id?: number | null;
+  name: string;
+  photo?: string | null;
+}
+
+export class MatchLineup {
+  team: string; // 'home' | 'away'
+  formation: string;
+  startXI: MatchLineupPlayer[];
+  substitutes: MatchLineupPlayer[];
+  coach: MatchLineupCoach;
+}
+
+export class MatchStat {
+  type: string;
+  home?: string | null;
+  away?: string | null;
+}
+
+export class PlayerRating {
+  playerId: number;
+  name: string;
+  team: string; // 'home' | 'away'
+  rating?: string | null;
+  photo?: string | null;
+}
 
 export class FixtureTeam {
   name: string;
@@ -73,6 +125,33 @@ export class Fixture {
   venue?: FixtureVenue;
 
   /** Set once a campaign post has been created for this fixture */
+  /** API-Football team IDs for resolving home/away in events */
+  @Prop({ type: Number, default: null })
+  homeTeamExternalId?: number | null;
+
+  @Prop({ type: Number, default: null })
+  awayTeamExternalId?: number | null;
+
+  /** Match key events (goals, cards, substitutions) — live-synced */
+  @Prop({ type: [MongooseSchema.Types.Mixed], default: [] })
+  events: MatchEvent[];
+
+  /** Starting lineups — synced once when available */
+  @Prop({ type: [MongooseSchema.Types.Mixed], default: [] })
+  lineups: MatchLineup[];
+
+  /** Match statistics pairs (home vs away) */
+  @Prop({ type: [MongooseSchema.Types.Mixed], default: [] })
+  stats: MatchStat[];
+
+  /** Per-player match ratings */
+  @Prop({ type: [MongooseSchema.Types.Mixed], default: [] })
+  playerRatings: PlayerRating[];
+
+  /** Timestamp of last events/stats/lineups sync */
+  @Prop({ type: Date, default: null })
+  detailsSyncedAt?: Date | null;
+
   @Prop({ type: Types.ObjectId, ref: 'Post' })
   campaignPostId?: Types.ObjectId;
 

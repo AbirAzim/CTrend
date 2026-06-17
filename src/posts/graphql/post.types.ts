@@ -243,4 +243,12 @@ export class PostGql {
   /** When the campaign winner will be revealed after match ends. Null until match finishes. */
   @Field(() => Date, { nullable: true })
   fixtureWinnerAt?: Date | null;
+
+  /** Linked Fixture document id (matchType posts only). */
+  @Field(() => String, { nullable: true })
+  fixtureId?: string | null;
+
+  /** True once lineups are synced — gates the "See Details → Lineups" button. */
+  @Field()
+  lineupAvailable: boolean;
 }

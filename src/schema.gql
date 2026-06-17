@@ -232,6 +232,13 @@ enum FeedSort {
   TRENDING
 }
 
+type FixtureDetailsSyncResultGql {
+  error: String
+  events: Int!
+  lineups: Int!
+  stats: Int!
+}
+
 input FixtureFilterInput {
   group: String
   stage: String
@@ -241,17 +248,22 @@ type FixtureGql {
   autoScheduled: Boolean!
   awayTeam: FixtureTeamGql!
   campaignPostId: ID
+  detailsSyncedAt: DateTime
+  events: [MatchEventGql!]!
   externalId: Int!
   group: String
   hasDrawOption: Boolean!
   homeTeam: FixtureTeamGql!
   id: ID!
   kickoff: DateTime!
+  lineups: [MatchLineupGql!]!
   matchEndedAt: DateTime
   matchday: Int
   minute: Int
+  playerRatings: [PlayerRatingGql!]!
   score: FixtureScoreGql!
   stage: String!
+  stats: [MatchStatGql!]!
   status: String!
   venue: FixtureVenueGql
   winnerScheduledAt: DateTime
@@ -306,11 +318,55 @@ type InviteResultGql {
   status: String!
 }
 
+type MatchEventGql {
+  assist: MatchEventPlayerGql
+  detail: String!
+  player: MatchEventPlayerGql!
+  team: String!
+  time: Int!
+  timeExtra: Int
+  type: String!
+}
+
+type MatchEventPlayerGql {
+  id: Int
+  name: String
+}
+
+type MatchLineupCoachGql {
+  id: Int
+  name: String!
+  photo: String
+}
+
+type MatchLineupGql {
+  coach: MatchLineupCoachGql!
+  formation: String!
+  startXI: [MatchLineupPlayerGql!]!
+  substitutes: [MatchLineupPlayerGql!]!
+  team: String!
+}
+
+type MatchLineupPlayerGql {
+  grid: String
+  id: Int
+  name: String!
+  number: Int!
+  photo: String
+  pos: String
+}
+
 type MatchScoreGql {
   away: Int
   home: Int
   minute: Int
   status: String
+}
+
+type MatchStatGql {
+  away: String
+  home: String
+  type: String!
 }
 
 type MessageGql {
@@ -453,6 +509,8 @@ type Mutation {
   signup(displayName: String, email: String!, password: String!): Boolean!
   startDirectConversation(userId: ID!): ConversationGql!
   switchActiveRole(role: UserRole!): AuthPayloadGql!
+  syncAllFinishedFixtures: String!
+  syncFixtureDetails(fixtureId: ID!): FixtureDetailsSyncResultGql!
   syncWorldCupFixtures: Boolean!
   toggleCampaign(id: ID!, isActive: Boolean!): CampaignGql!
   unfriend(userId: ID!): Boolean!
@@ -530,6 +588,14 @@ type PlatformSettingsGql {
   minAndroidVersionCode: Int!
 }
 
+type PlayerRatingGql {
+  name: String!
+  photo: String
+  playerId: Int!
+  rating: String
+  team: String!
+}
+
 type PostCampaignSummaryGql {
   bannerImageUrl: String
   bannerText: String
@@ -570,6 +636,7 @@ type PostGql {
   downvoteCount: Int!
   editedBy: [UserGql!]
   endingSoonLeadMinutes: Int!
+  fixtureId: String
   fixtureWinnerAt: DateTime
   format: PostFormat!
   hypeCount: Int!
@@ -582,6 +649,7 @@ type PostGql {
   lastEditedBy: UserGql
   likeCount: Int!
   likesDisabled: Boolean!
+  lineupAvailable: Boolean!
   matchScore: MatchScoreGql
   matchType: Boolean!
   mySelectedOptionIndex: Int

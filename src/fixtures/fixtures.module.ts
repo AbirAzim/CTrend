@@ -10,6 +10,7 @@ import { FixturesResolver } from './fixtures.resolver';
 import { PostsModule } from '../posts/posts.module';
 import { CampaignsModule } from '../campaigns/campaigns.module';
 import { UsersModule } from '../users/users.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { UsersModule } from '../users/users.module';
     PostsModule,
     CampaignsModule,
     UsersModule,
+    NotificationsModule,
   ],
   providers: [
     FixturesService,

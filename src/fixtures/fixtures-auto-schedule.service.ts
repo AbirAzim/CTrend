@@ -25,8 +25,10 @@ export class FixturesAutoScheduleService implements OnModuleInit {
   }
 
   async onModuleInit(): Promise<void> {
-    // Run once on startup so deploys immediately fill the 72-hour window.
+    // Run once on startup so deploys immediately fill the 72-hour window
+    // and reconcile any finished matches that were missed during downtime.
     await this.scheduleUpcoming();
+    await this.fixturesService.reconcileFinishedPosts();
   }
 
   @Cron(CronExpression.EVERY_4_HOURS)
@@ -41,12 +43,13 @@ export class FixturesAutoScheduleService implements OnModuleInit {
     const adminId = admin._id.toHexString();
 
     const now = new Date();
+    const windowStart = new Date(now.getTime() - 48 * 60 * 60 * 1000); // backfill up to 48 h ago
     const windowEnd = new Date(now.getTime() + 72 * 60 * 60 * 1000);
 
-    // Fixtures kicking off within 72 h that don't yet have a campaign post
+    // Fixtures within [-48h, +72h] that don't yet have a campaign post
     const pending = await this.fixtureModel
       .find({
-        kickoff: { $gte: now, $lte: windowEnd },
+        kickoff: { $gte: windowStart, $lte: windowEnd },
         campaignPostId: { $exists: false },
       })
       .exec();

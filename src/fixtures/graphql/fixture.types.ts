@@ -95,8 +95,8 @@ export class MatchLineupGql {
   @Field(() => [MatchLineupPlayerGql])
   substitutes: MatchLineupPlayerGql[];
 
-  @Field(() => MatchLineupCoachGql)
-  coach: MatchLineupCoachGql;
+  @Field(() => MatchLineupCoachGql, { nullable: true })
+  coach?: MatchLineupCoachGql | null;
 }
 
 @ObjectType()

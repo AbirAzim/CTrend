@@ -43,6 +43,14 @@ export class FixturesResolver {
     return count > 0;
   }
 
+  @Mutation(() => String)
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async syncLiveNow(): Promise<string> {
+    const count = await this.fixturesService.syncLiveScores();
+    return `Live sync ran — ${count} fixture(s) refreshed`;
+  }
+
   @Mutation(() => FixtureDetailsSyncResultGql)
   @UseGuards(GqlAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
@@ -71,6 +79,14 @@ export class FixturesResolver {
     const result = await this.fixturesService.sendLineupNotification(fixtureId);
     if (result.error) return `Error: ${result.error}`;
     return `Lineup notification sent to ${result.sent} users`;
+  }
+
+  @Mutation(() => String)
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async reconcileFinishedMatchPosts(): Promise<string> {
+    await this.fixturesService.reconcileFinishedPosts();
+    return 'Reconciliation complete — check winner announcement cron in ~60s';
   }
 
   @Mutation(() => PostGql)

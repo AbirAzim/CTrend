@@ -348,7 +348,7 @@ type MatchLineupCoachGql {
 }
 
 type MatchLineupGql {
-  coach: MatchLineupCoachGql!
+  coach: MatchLineupCoachGql
   formation: String!
   startXI: [MatchLineupPlayerGql!]!
   substitutes: [MatchLineupPlayerGql!]!
@@ -490,6 +490,7 @@ type Mutation {
   promoteToAdmin(email: String!): UserGql!
   publishAndroidUpdateNotice(body: String!, minVersionCode: Int!, title: String!): Int!
   reactMessage(emoji: String, messageId: ID!): MessageGql!
+  reconcileFinishedMatchPosts: String!
   register(input: RegisterInput!): AuthPayloadGql!
   registerPushToken(platform: String, token: String!): Boolean!
   rejectAdminPromotion(token: String!): Boolean!
@@ -520,6 +521,7 @@ type Mutation {
   switchActiveRole(role: UserRole!): AuthPayloadGql!
   syncAllFinishedFixtures: String!
   syncFixtureDetails(fixtureId: ID!): FixtureDetailsSyncResultGql!
+  syncLiveNow: String!
   syncWorldCupFixtures: Boolean!
   toggleCampaign(id: ID!, isActive: Boolean!): CampaignGql!
   unfriend(userId: ID!): Boolean!

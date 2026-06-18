@@ -38,7 +38,7 @@ interface AfFixtureItem {
     status: { short: string; elapsed: number | null };
     venue?: { name: string | null; city: string | null } | null;
   };
-  league: { round: string };
+  league: { id: number; round: string };
   teams: { home: AfTeam; away: AfTeam };
   goals: { home: number | null; away: number | null };
 }
@@ -223,11 +223,12 @@ export class FixturesService {
     );
   }
 
-  /** Fetch only currently-live fixtures — 1 API call, small payload, real-time on pro plan. */
-  private fetchLiveFixtures(): Promise<AfFixtureItem[]> {
-    return this.apiFetch<AfFixtureItem[]>(
-      `/fixtures?live=${this.league}`,
-    );
+  /** Fetch only currently-live fixtures — 1 API call, real-time on pro plan.
+   * The API requires `live=all` or `live=id-id-id`; a bare league id is invalid. */
+  private async fetchLiveFixtures(): Promise<AfFixtureItem[]> {
+    const all = await this.apiFetch<AfFixtureItem[]>('/fixtures?live=all');
+    const leagueId = Number(this.league);
+    return all.filter((item) => item.league.id === leagueId);
   }
 
   private fetchMatchEvents(externalId: number): Promise<AfEvent[]> {
@@ -367,11 +368,9 @@ export class FixturesService {
             photo: p.player.photo
               ?? (p.player.id ? `https://media.api-sports.io/football/players/${p.player.id}.png` : null),
           })),
-          coach: {
-            id: l.coach.id ?? null,
-            name: l.coach.name,
-            photo: l.coach.photo ?? null,
-          },
+          coach: l.coach
+            ? { id: l.coach.id ?? null, name: l.coach.name, photo: l.coach.photo ?? null }
+            : null,
         }));
         update.lineups = lineups;
         newLineupsCount = lineups.length;
@@ -528,6 +527,12 @@ export class FixturesService {
    */
   async syncLiveScores(): Promise<number> {
     const items = await this.fetchLiveFixtures();
+    this.logger.log(`syncLiveScores: API returned ${items.length} live fixture(s)`);
+    for (const item of items) {
+      this.logger.log(
+        `  → fixture ${item.fixture.id}: ${item.teams.home.name} vs ${item.teams.away.name} | status=${item.fixture.status.short} elapsed=${item.fixture.status.elapsed} | score=${item.goals.home}-${item.goals.away}`,
+      );
+    }
     let updated = 0;
 
     for (const item of items) {
@@ -542,7 +547,11 @@ export class FixturesService {
         .exec();
 
       if (!existing) {
-        updated++;
+        // Fixture not yet in local DB — skip campaign-post wiring but log so the
+        // admin knows to run syncWorldCupFixtures to get the full record inserted.
+        this.logger.warn(
+          `syncLiveScores: fixture ${item.fixture.id} (${item.teams.home.name} vs ${item.teams.away.name}) not in DB — run syncWorldCupFixtures to import it`,
+        );
         continue;
       }
 
@@ -719,9 +728,72 @@ export class FixturesService {
    * fixtures refreshed, or null when it skipped (no key / no window).
    */
   async syncLiveIfActive(): Promise<number | null> {
-    if (!this.apiKey) return null;
+    if (!this.apiKey && !this.rapidApiKey) return null;
     if (!(await this.hasActiveWindow())) return null;
     return this.syncLiveScores();
+  }
+
+  /**
+   * Reconcile posts for fixtures that are FINISHED in the DB but whose campaign
+   * posts still have stale fixtureStatus. This catches matches that ended while
+   * the live-only endpoint was not returning them (e.g. finished just before a
+   * cron tick, or the server restarted mid-match).
+   *
+   * Runs on every cron tick — pure DB work, no external API calls.
+   */
+  async reconcileFinishedPosts(): Promise<void> {
+    const stale = await this.fixtureModel
+      .find({
+        status: 'FINISHED',
+        campaignPostId: { $exists: true, $ne: null },
+        $or: [{ matchEndedAt: null }, { winnerScheduledAt: null }],
+      })
+      .exec();
+
+    for (const fixture of stale) {
+      try {
+        const now = new Date();
+        const matchEndedAt = fixture.matchEndedAt ?? now;
+        const post = await this.postModel.findById(fixture.campaignPostId).exec();
+        const leadMin = post?.endingSoonLeadMinutes ?? 5;
+        // Schedule winner reveal immediately for already-past matches
+        const winnerScheduledAt = new Date(
+          Math.min(matchEndedAt.getTime() + leadMin * 60 * 1000, now.getTime()),
+        );
+
+        await this.fixtureModel.updateOne(
+          { _id: fixture._id },
+          { $set: { matchEndedAt, winnerScheduledAt } },
+        );
+
+        await this.postModel.updateOne(
+          { _id: fixture.campaignPostId },
+          {
+            $set: {
+              fixtureScore: {
+                home: fixture.score?.home ?? null,
+                away: fixture.score?.away ?? null,
+              },
+              fixtureStatus: 'FINISHED',
+              fixtureMinute: null,
+              fixtureWinnerAt: winnerScheduledAt,
+            },
+          },
+        );
+
+        await pubsub.publish(POST_UPDATED, {
+          postUpdated: { postId: (fixture.campaignPostId as Types.ObjectId).toHexString() },
+        });
+
+        this.logger.log(
+          `Reconciled finished fixture: ${fixture.homeTeam.name} vs ${fixture.awayTeam.name} — winner reveal at ${winnerScheduledAt.toISOString()}`,
+        );
+      } catch (err) {
+        this.logger.error(
+          `reconcileFinishedPosts: failed for fixture ${fixture._id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
   }
 
   async syncAllFinishedFixtures(): Promise<{ synced: number; skipped: number; errors: number }> {

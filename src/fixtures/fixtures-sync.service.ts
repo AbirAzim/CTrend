@@ -35,6 +35,9 @@ export class FixturesSyncService {
       if (count !== null) {
         this.logger.log(`Live fixture sync ran — ${count} fixtures refreshed`);
       }
+      // Always reconcile finished posts — catches matches that ended while the
+      // live-only endpoint wasn't returning them (no API calls, pure DB work).
+      await this.fixturesService.reconcileFinishedPosts();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.warn(`Live fixture sync skipped: ${message}`);

@@ -16,7 +16,7 @@ import { PostsService } from '../posts/posts.service';
 import { CampaignsService } from '../campaigns/campaigns.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { generateMatchCaption } from './caption-templates';
-import { POST_UPDATED, pubsub } from '../pubsub';
+import { POST_UPDATED, POST_VOTE_UPDATED, pubsub } from '../pubsub';
 
 // ── API-Football ──────────────────────────────────────────────────────────
 // Supports both direct api-sports.io and RapidAPI hosting.
@@ -614,9 +614,11 @@ export class FixturesService {
             newStatus === 'PAUSED' ||
             (prevStatus !== 'FINISHED' && newStatus === 'FINISHED')
           ) {
-            await pubsub.publish(POST_UPDATED, {
-              postUpdated: { postId: existing.campaignPostId.toHexString() },
-            });
+            const postId = existing.campaignPostId.toHexString();
+            await pubsub.publish(POST_UPDATED, { postUpdated: { postId } });
+            // Also publish on the vote channel so feed cards (which subscribe to
+            // POST_VOTE_UPDATED) receive live minute/score updates in real time.
+            await pubsub.publish(POST_VOTE_UPDATED, { postVoteUpdated: { postId } });
           }
         }
       }

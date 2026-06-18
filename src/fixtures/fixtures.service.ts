@@ -696,6 +696,80 @@ export class FixturesService {
 
       updated++;
     }
+    // ── Ghost-IN_PLAY cleanup ────────────────────────────────────────────────
+    // If a fixture is IN_PLAY/PAUSED in our DB but wasn't returned by the live
+    // endpoint, the match has likely ended. Fetch it individually so we get its
+    // final FINISHED status and score rather than leaving it stuck as "live".
+    const liveExternalIds = new Set(items.map((i) => i.fixture.id));
+    const ghosts = await this.fixtureModel
+      .find({ status: { $in: ['IN_PLAY', 'PAUSED'] } })
+      .exec();
+    for (const ghost of ghosts) {
+      if (liveExternalIds.has(ghost.externalId)) continue; // still live — handled above
+      // Fetch the individual fixture to get its current status
+      try {
+        const res = await this.apiFetch<AfFixtureItem[]>(
+          `/fixtures?id=${ghost.externalId}`,
+        );
+        if (!res.length) continue;
+        const item = res[0];
+        const newStatus = normalizeStatus(item.fixture.status.short);
+        const home = item.goals.home;
+        const away = item.goals.away;
+        this.logger.log(
+          `Ghost IN_PLAY fixture ${ghost.externalId} (${ghost.homeTeam.name} vs ${ghost.awayTeam.name}): now ${newStatus} ${home}-${away}`,
+        );
+        await this.fixtureModel.updateOne(
+          { _id: ghost._id },
+          {
+            $set: {
+              status: newStatus,
+              minute: null,
+              score: { home, away, winner: deriveWinner(home, away, newStatus) },
+            },
+          },
+        );
+        if (ghost.campaignPostId) {
+          await this.postModel.updateOne(
+            { _id: ghost.campaignPostId },
+            {
+              $set: {
+                fixtureScore: { home, away },
+                fixtureStatus: newStatus,
+                fixtureMinute: null,
+              },
+            },
+          );
+          const postId = ghost.campaignPostId.toHexString();
+          await pubsub.publish(POST_UPDATED, { postUpdated: { postId } });
+          await pubsub.publish(POST_VOTE_UPDATED, { postVoteUpdated: { postId } });
+        }
+        // Trigger FINISHED transition logic if needed
+        if (newStatus === 'FINISHED' && ghost.campaignPostId) {
+          const matchEndedAt = new Date();
+          const post = await this.postModel.findById(ghost.campaignPostId).exec();
+          const leadMin = post?.endingSoonLeadMinutes ?? 5;
+          const winnerScheduledAt = new Date(matchEndedAt.getTime() + leadMin * 60 * 1000);
+          await this.fixtureModel.updateOne(
+            { _id: ghost._id },
+            { $set: { matchEndedAt, winnerScheduledAt } },
+          );
+          await this.postModel.updateOne(
+            { _id: ghost.campaignPostId },
+            { $set: { fixtureWinnerAt: winnerScheduledAt } },
+          );
+          this.logger.log(
+            `Match finished (ghost cleanup): ${ghost.homeTeam.name} vs ${ghost.awayTeam.name}. Winner reveal at ${winnerScheduledAt.toISOString()}`,
+          );
+        }
+        updated++;
+      } catch (err) {
+        this.logger.warn(
+          `Ghost cleanup failed for fixture ${ghost.externalId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+
     return updated;
   }
 

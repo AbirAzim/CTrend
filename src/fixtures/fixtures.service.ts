@@ -730,37 +730,35 @@ export class FixturesService {
           },
         );
         if (ghost.campaignPostId) {
-          await this.postModel.updateOne(
-            { _id: ghost.campaignPostId },
-            {
-              $set: {
-                fixtureScore: { home, away },
-                fixtureStatus: newStatus,
-                fixtureMinute: null,
-              },
-            },
-          );
           const postId = ghost.campaignPostId.toHexString();
+          const postUpdate: Record<string, unknown> = {
+            fixtureScore: { home, away },
+            fixtureStatus: newStatus,
+            fixtureMinute: null,
+          };
+
+          // For FINISHED: compute winner reveal time and include it in the same
+          // DB write so the pubsub publish always reads the complete final state.
+          if (newStatus === 'FINISHED') {
+            const matchEndedAt = new Date();
+            const postDoc = await this.postModel.findById(ghost.campaignPostId).exec();
+            const leadMin = postDoc?.endingSoonLeadMinutes ?? 5;
+            const winnerScheduledAt = new Date(matchEndedAt.getTime() + leadMin * 60 * 1000);
+            await this.fixtureModel.updateOne(
+              { _id: ghost._id },
+              { $set: { matchEndedAt, winnerScheduledAt } },
+            );
+            postUpdate.fixtureWinnerAt = winnerScheduledAt;
+            this.logger.log(
+              `Match finished (ghost cleanup): ${ghost.homeTeam.name} vs ${ghost.awayTeam.name}. Winner reveal at ${winnerScheduledAt.toISOString()}`,
+            );
+          }
+
+          await this.postModel.updateOne({ _id: ghost.campaignPostId }, { $set: postUpdate });
+          // Publish after all DB writes are done so the subscription resolver
+          // reads the complete final state (including fixtureWinnerAt).
           await pubsub.publish(POST_UPDATED, { postUpdated: { postId } });
           await pubsub.publish(POST_VOTE_UPDATED, { postVoteUpdated: { postId } });
-        }
-        // Trigger FINISHED transition logic if needed
-        if (newStatus === 'FINISHED' && ghost.campaignPostId) {
-          const matchEndedAt = new Date();
-          const post = await this.postModel.findById(ghost.campaignPostId).exec();
-          const leadMin = post?.endingSoonLeadMinutes ?? 5;
-          const winnerScheduledAt = new Date(matchEndedAt.getTime() + leadMin * 60 * 1000);
-          await this.fixtureModel.updateOne(
-            { _id: ghost._id },
-            { $set: { matchEndedAt, winnerScheduledAt } },
-          );
-          await this.postModel.updateOne(
-            { _id: ghost.campaignPostId },
-            { $set: { fixtureWinnerAt: winnerScheduledAt } },
-          );
-          this.logger.log(
-            `Match finished (ghost cleanup): ${ghost.homeTeam.name} vs ${ghost.awayTeam.name}. Winner reveal at ${winnerScheduledAt.toISOString()}`,
-          );
         }
         updated++;
       } catch (err) {

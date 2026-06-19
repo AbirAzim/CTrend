@@ -797,6 +797,98 @@ export class FixturesService {
   }
 
   /**
+   * Fetches lineups for SCHEDULED/TIMED fixtures kicking off within 70 minutes
+   * that have no lineups yet. Runs on every active cron tick so lineups appear
+   * pre-match as soon as the football API publishes them (~60 min before kickoff).
+   * Uses the shared lastDetailSync throttle to avoid hammering the API.
+   */
+  async syncPreMatchLineups(): Promise<void> {
+    if (!this.apiKey && !this.rapidApiKey) return;
+    const now = Date.now();
+    const soon = new Date(now + 70 * 60 * 1000);
+    const fixtures = await this.fixtureModel
+      .find({
+        status: { $in: ['SCHEDULED', 'TIMED'] },
+        kickoff: { $gte: new Date(now), $lte: soon },
+        $or: [{ lineups: { $exists: false } }, { lineups: { $size: 0 } }],
+      })
+      .exec();
+
+    for (const fixture of fixtures) {
+      const exId = fixture.externalId;
+      const lastSync = this.lastDetailSync.get(exId) ?? 0;
+      if (Date.now() - lastSync < FixturesService.DETAIL_SYNC_INTERVAL) continue;
+      this.lastDetailSync.set(exId, Date.now());
+      const minsToKickoff = Math.round((fixture.kickoff.getTime() - Date.now()) / 60000);
+      this.logger.log(
+        `Pre-match lineup check for fixture ${exId} (${fixture.homeTeam.name} vs ${fixture.awayTeam.name}, kickoff in ${minsToKickoff} min)`,
+      );
+      try {
+        const lineupsRaw = await this.fetchMatchLineups(exId);
+        if (!lineupsRaw.length) {
+          this.logger.log(`No lineups yet for fixture ${exId}`);
+          continue;
+        }
+        const homeId = fixture.homeTeamExternalId;
+        const lineups = lineupsRaw.map((l) => ({
+          team:
+            l.team.id === homeId || l.team.name === fixture.homeTeam.name
+              ? 'home'
+              : 'away',
+          formation: l.formation,
+          startXI: l.startXI.map((p) => ({
+            id: p.player.id ?? null,
+            name: p.player.name,
+            number: p.player.number,
+            pos: p.player.pos ?? null,
+            grid: p.player.grid ?? null,
+            photo:
+              p.player.photo ??
+              (p.player.id
+                ? `https://media.api-sports.io/football/players/${p.player.id}.png`
+                : null),
+          })),
+          substitutes: l.substitutes.map((p) => ({
+            id: p.player.id ?? null,
+            name: p.player.name,
+            number: p.player.number,
+            pos: p.player.pos ?? null,
+            grid: p.player.grid ?? null,
+            photo:
+              p.player.photo ??
+              (p.player.id
+                ? `https://media.api-sports.io/football/players/${p.player.id}.png`
+                : null),
+          })),
+          coach: l.coach
+            ? { id: l.coach.id ?? null, name: l.coach.name, photo: l.coach.photo ?? null }
+            : null,
+        }));
+        await this.fixtureModel.updateOne({ _id: fixture._id }, { $set: { lineups } });
+        this.logger.log(
+          `Pre-match lineups saved for fixture ${exId}: ${lineups.length} team(s)`,
+        );
+        if (fixture.campaignPostId) {
+          const fixtureIdStr = (fixture._id as Types.ObjectId).toHexString();
+          const postIdStr = fixture.campaignPostId.toHexString();
+          const matchLabel = `${fixture.homeTeam.shortName ?? fixture.homeTeam.name} vs ${fixture.awayTeam.shortName ?? fixture.awayTeam.name}`;
+          await this.postModel.updateOne(
+            { _id: fixture.campaignPostId },
+            { $set: { lineupAvailable: true, fixtureId: fixtureIdStr } },
+          );
+          void this.notificationsService
+            .notifyLineupAvailable({ fixtureId: fixtureIdStr, matchLabel, postId: postIdStr })
+            .catch((err) => this.logger.error('Lineup notify failed', err));
+        }
+      } catch (err) {
+        this.logger.warn(
+          `Pre-match lineup sync failed for ${exId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+  }
+
+  /**
    * Cron entry point: refresh live scores only during live/imminent windows so
    * the API quota isn't wasted when nothing is on. Returns the number of
    * fixtures refreshed, or null when it skipped (no key / no window).
@@ -804,6 +896,7 @@ export class FixturesService {
   async syncLiveIfActive(): Promise<number | null> {
     if (!this.apiKey && !this.rapidApiKey) return null;
     if (!(await this.hasActiveWindow())) return null;
+    void this.syncPreMatchLineups();
     return this.syncLiveScores();
   }
 

@@ -264,13 +264,28 @@ export class FeedService {
             ],
             ...notScheduled,
           };
-        case FeedPostFilter.COMMUNITY:
-          // User global broadcast posts
-          return {
-            type: PostType.USER,
-            isUserGlobalBroadcast: true,
-            ...notScheduled,
-          };
+        case FeedPostFilter.COMMUNITY: {
+          // Global broadcasts + own posts + friends' posts (all USER-type content).
+          // Unauthenticated viewers see only global broadcasts.
+          if (!viewerId) {
+            return { type: PostType.USER, isUserGlobalBroadcast: true, ...notScheduled };
+          }
+          const viewerOidC = new Types.ObjectId(viewerId);
+          const followingIdsC = await this.followsService.getFollowingIds(viewerId);
+          const followingOidsC = followingIdsC.map((id) => new Types.ObjectId(id));
+          const communityParts: Record<string, unknown>[] = [
+            { type: PostType.USER, isUserGlobalBroadcast: true, ...notScheduled },
+            { type: PostType.USER, createdBy: viewerOidC, ...notScheduled },
+          ];
+          if (followingOidsC.length > 0) {
+            communityParts.push({
+              type: PostType.USER,
+              createdBy: { $in: followingOidsC },
+              ...notScheduled,
+            });
+          }
+          return { $or: communityParts };
+        }
         case FeedPostFilter.FRIEND: {
           // Friend/following posts — need to know who the viewer follows
           if (!viewerId) return { _id: null }; // unauthenticated: empty result

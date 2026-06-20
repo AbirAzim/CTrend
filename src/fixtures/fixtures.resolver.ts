@@ -1,7 +1,7 @@
 import { Args, ID, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { FixturesService } from './fixtures.service';
-import { FixtureGql, FixtureFilterInput, FixtureDetailsSyncResultGql } from './graphql/fixture.types';
+import { FixtureGql, FixtureFilterInput, FixtureDetailsSyncResultGql, TopScorerGql, TopAssistantGql } from './graphql/fixture.types';
 import { PostGql } from '../posts/graphql/post.types';
 import { PostsService } from '../posts/posts.service';
 import { GqlAuthGuard } from '../common/guards/gql-auth.guard';
@@ -25,6 +25,16 @@ export class FixturesResolver {
   ): Promise<FixtureGql[]> {
     const docs = await this.fixturesService.findAll(filter);
     return docs.map((d) => this.fixturesService.toGql(d));
+  }
+
+  @Query(() => [TopScorerGql])
+  async worldCupTopScorers(): Promise<TopScorerGql[]> {
+    return this.fixturesService.getTopScorers();
+  }
+
+  @Query(() => [TopAssistantGql])
+  async worldCupTopAssistants(): Promise<TopAssistantGql[]> {
+    return this.fixturesService.getTopAssistants();
   }
 
   @Query(() => FixtureGql, { nullable: true })

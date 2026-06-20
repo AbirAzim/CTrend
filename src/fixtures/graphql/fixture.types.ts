@@ -240,3 +240,39 @@ export class FixtureFilterInput {
   @Field(() => String, { nullable: true })
   group?: string;
 }
+
+@ObjectType()
+export class TopScorerGql {
+  @Field(() => Int, { nullable: true })
+  playerId?: number | null;
+
+  @Field()
+  name: string;
+
+  @Field()
+  team: string;
+
+  @Field(() => String, { nullable: true })
+  teamCrest?: string | null;
+
+  @Field(() => Int)
+  goals: number;
+}
+
+@ObjectType()
+export class TopAssistantGql {
+  @Field(() => Int, { nullable: true })
+  playerId?: number | null;
+
+  @Field()
+  name: string;
+
+  @Field()
+  team: string;
+
+  @Field(() => String, { nullable: true })
+  teamCrest?: string | null;
+
+  @Field(() => Int)
+  assists: number;
+}

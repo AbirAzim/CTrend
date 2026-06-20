@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { Fixture, FixtureDocument } from './fixture.schema';
 import { Post, PostDocument } from '../posts/post.schema';
 import { Category, CategoryDocument } from '../categories/category.schema';
-import { FixtureFilterInput, FixtureGql } from './graphql/fixture.types';
+import { FixtureFilterInput, FixtureGql, TopAssistantGql, TopScorerGql } from './graphql/fixture.types';
 import { PostFormat, PostStatus, PostType, Visibility } from '../common/enums';
 import { PostsService } from '../posts/posts.service';
 import { CampaignsService } from '../campaigns/campaigns.service';
@@ -1143,6 +1143,62 @@ export class FixturesService {
     }
 
     return post;
+  }
+
+  async getTopScorers(): Promise<TopScorerGql[]> {
+    const fixtures = await this.fixtureModel.find({
+      status: 'FINISHED',
+      'events.0': { $exists: true },
+    });
+    const map = new Map<string, TopScorerGql>();
+    for (const f of fixtures) {
+      for (const ev of f.events ?? []) {
+        if (ev.type !== 'Goal' || ev.detail === 'Own Goal' || !ev.player?.name) continue;
+        const key = `${ev.player.id ?? ''}::${ev.player.name}::${ev.team}`;
+        if (!map.has(key)) {
+          const teamDoc = ev.team === 'home' ? f.homeTeam : f.awayTeam;
+          map.set(key, {
+            playerId: ev.player.id ?? null,
+            name: ev.player.name,
+            team: teamDoc.name,
+            teamCrest: teamDoc.crest ?? null,
+            goals: 0,
+          });
+        }
+        map.get(key)!.goals++;
+      }
+    }
+    return [...map.values()]
+      .sort((a, b) => b.goals - a.goals || a.name.localeCompare(b.name))
+      .slice(0, 20);
+  }
+
+  async getTopAssistants(): Promise<TopAssistantGql[]> {
+    const fixtures = await this.fixtureModel.find({
+      status: 'FINISHED',
+      'events.0': { $exists: true },
+    });
+    const map = new Map<string, TopAssistantGql>();
+    for (const f of fixtures) {
+      for (const ev of f.events ?? []) {
+        if (ev.type !== 'Goal' || ev.detail === 'Own Goal' || !ev.assist?.name) continue;
+        const key = `${ev.assist.id ?? ''}::${ev.assist.name}::${ev.team}`;
+        if (!map.has(key)) {
+          const teamDoc = ev.team === 'home' ? f.homeTeam : f.awayTeam;
+          map.set(key, {
+            playerId: ev.assist.id ?? null,
+            name: ev.assist.name,
+            team: teamDoc.name,
+            teamCrest: teamDoc.crest ?? null,
+            assists: 0,
+          });
+        }
+        map.get(key)!.assists++;
+      }
+    }
+    return [...map.values()]
+      .sort((a, b) => b.assists - a.assists || a.name.localeCompare(b.name))
+      .slice(0, 20);
   }
 
   toGql(fixture: FixtureDocument): FixtureGql {

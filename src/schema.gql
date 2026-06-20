@@ -791,6 +791,8 @@ type Query {
   votersByPost(optionIndex: Int, postId: ID!, search: String, skip: Int, take: Int): [PostVoterGql!]!
   worldCupFixture(id: ID!): FixtureGql
   worldCupFixtures(filter: FixtureFilterInput): [FixtureGql!]!
+  worldCupTopAssistants: [TopAssistantGql!]!
+  worldCupTopScorers: [TopScorerGql!]!
 }
 
 type ReadReceiptGql {
@@ -842,6 +844,22 @@ type Subscription {
 enum SubscriptionPlan {
   FREE
   PREMIUM
+}
+
+type TopAssistantGql {
+  assists: Int!
+  name: String!
+  playerId: Int
+  team: String!
+  teamCrest: String
+}
+
+type TopScorerGql {
+  goals: Int!
+  name: String!
+  playerId: Int
+  team: String!
+  teamCrest: String
 }
 
 type TypingIndicatorGql {

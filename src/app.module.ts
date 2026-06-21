@@ -38,6 +38,7 @@ import { PlatformSettingsModule } from './platform-settings/platform-settings.mo
 import { PlatformSettingsService } from './platform-settings/platform-settings.service';
 import { createAndroidVersionEnforcementPlugin } from './common/plugins/android-version-enforcement.plugin';
 import { ContentReportsModule } from './content-reports/content-reports.module';
+import { MatchPredictionsModule } from './match-predictions/match-predictions.module';
 
 @Module({
   imports: [
@@ -227,6 +228,7 @@ import { ContentReportsModule } from './content-reports/content-reports.module';
     SearchModule,
     PlatformSettingsModule,
     ContentReportsModule,
+    MatchPredictionsModule,
   ],
   providers: [
     {

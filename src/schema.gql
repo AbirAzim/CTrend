@@ -364,6 +364,27 @@ type MatchLineupPlayerGql {
   pos: String
 }
 
+type MatchPredictionEventGql {
+  postId: ID!
+}
+
+type MatchPredictionGql {
+  awayScore: Int!
+  createdAt: DateTime!
+  homeScore: Int!
+  id: ID!
+  isWinner: Boolean!
+  updatedAt: DateTime!
+  user: UserGql
+}
+
+type MatchPredictionStateGql {
+  count: Int!
+  myPrediction: MatchPredictionGql
+  predictionsOpen: Boolean!
+  predictionsResolved: Boolean!
+}
+
 type MatchScoreGql {
   away: Int
   home: Int
@@ -470,6 +491,7 @@ type Mutation {
   createWorldCupCampaignPost(fixtureId: ID!): PostGql!
   deleteCategory(id: ID!): Boolean!
   deleteComment(commentId: ID!): [ID!]!
+  deleteMatchPrediction(postId: ID!): Boolean!
   deleteMessage(messageId: ID!): MessageGql!
   deletePost(postId: ID!): Boolean!
   editComment(commentId: ID!, content: String!): CommentGql!
@@ -518,6 +540,7 @@ type Mutation {
   setTyping(conversationId: ID!, isTyping: Boolean!): Boolean!
   signup(displayName: String, email: String!, password: String!): Boolean!
   startDirectConversation(userId: ID!): ConversationGql!
+  submitMatchPrediction(awayScore: Int!, homeScore: Int!, postId: ID!): MatchPredictionGql!
   switchActiveRole(role: UserRole!): AuthPayloadGql!
   syncAllFinishedFixtures: String!
   syncFixtureDetails(fixtureId: ID!): FixtureDetailsSyncResultGql!
@@ -772,6 +795,9 @@ type Query {
   listInvitations(status: InvitationStatus): [InvitationGql!]!
   listUsers(role: String, search: String, searchBy: String, skip: Int! = 0, sortBy: String, sortOrder: String, status: String, take: Int! = 50): [UserGql!]!
   listUsersCount(role: String, search: String, searchBy: String, status: String): Int!
+  matchPredictionState(postId: ID!): MatchPredictionStateGql!
+  matchPredictionWinners(postId: ID!): [MatchPredictionGql!]!
+  matchPredictions(postId: ID!, skip: Int, take: Int): [MatchPredictionGql!]!
   me: UserGql!
   messages(conversationId: ID!, skip: Int! = 0, take: Int! = 30): [MessageGql!]!
   myConversations: [ConversationGql!]!
@@ -828,6 +854,7 @@ type SearchUserGql {
 
 type Subscription {
   adminModeratorUserMessage: AdminModeratorUserMessageGql!
+  matchPredictionUpdated(postId: ID!): MatchPredictionEventGql!
   messageDeleted: MessageGql!
   messageReactionChanged: MessageReactionChangedGql!
   messageRead: MessageReadGql!

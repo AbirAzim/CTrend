@@ -13,6 +13,7 @@ export const MESSAGE_DELETED = 'MESSAGE_DELETED';
 export const TYPING_INDICATOR = 'TYPING_INDICATOR';
 export const USER_PRESENCE_CHANGED = 'USER_PRESENCE_CHANGED';
 export const NEW_NOTIFICATION = 'NEW_NOTIFICATION';
+export const MATCH_PREDICTION_UPDATED = 'MATCH_PREDICTION_UPDATED';
 
 export const pubsub = new PubSub();
 // Each active GraphQL subscription adds an EventEmitter listener.

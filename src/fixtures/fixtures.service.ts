@@ -1131,6 +1131,10 @@ export class FixturesService {
       status,
       scheduledAt,
       matchType: true,
+      // Denormalise the fixture link up-front so prediction/match features work
+      // before the first details sync (which previously was the only place this
+      // got set).
+      fixtureId: (fixture._id as Types.ObjectId).toHexString(),
     });
 
     fixture.campaignPostId = post._id as Types.ObjectId;

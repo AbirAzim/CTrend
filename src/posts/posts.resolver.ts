@@ -10,6 +10,7 @@ import {
 import { NotFoundException, UseGuards } from '@nestjs/common';
 import { PostsService } from './posts.service';
 import { PostGql } from './graphql/post.types';
+import { UserGql } from '../users/graphql/user.types';
 import { PostCampaignSummaryGql } from './graphql/post-campaign-summary.types';
 import { PostVoteWinnerGql } from './graphql/post-vote-winner.types';
 
@@ -80,6 +81,17 @@ export class PostsResolver {
   ) {
     await this.postsService.setReaction(user.id, postId, 'hype', active);
     return active;
+  }
+
+  /** Users who hyped a post — Instagram-style "hyped by" list. */
+  @Query(() => [UserGql])
+  async hypersByPost(
+    @Args('postId', { type: () => ID }) postId: string,
+    @Args('search', { type: () => String, nullable: true }) search?: string,
+    @Args('skip', { type: () => Int, nullable: true }) skip?: number,
+    @Args('take', { type: () => Int, nullable: true }) take?: number,
+  ) {
+    return this.postsService.listHypers(postId, search, skip ?? 0, take);
   }
 
   @Mutation(() => PostGql)

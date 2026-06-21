@@ -1034,6 +1034,46 @@ export class PostsService implements OnModuleInit {
     await this.postReactionModel.deleteOne({ userId: uid, postId: pid, kind });
   }
 
+  /**
+   * List the users who hyped a post, most recent first (Instagram-style "liked
+   * by" list). Supports name search + skip/take pagination for large lists.
+   */
+  async listHypers(
+    postId: string,
+    search?: string,
+    skip = 0,
+    take?: number,
+  ): Promise<UserGql[]> {
+    if (!Types.ObjectId.isValid(postId)) return [];
+    const query: Record<string, unknown> = {
+      postId: new Types.ObjectId(postId),
+      kind: 'hype',
+    };
+    const trimmedSearch = search?.trim();
+    if (trimmedSearch) {
+      const ids = await this.usersService.findIdsByNameSearch(trimmedSearch);
+      if (ids.length === 0) return [];
+      query.userId = { $in: ids };
+    }
+    let cursor = this.postReactionModel
+      .find(query)
+      .sort({ createdAt: -1 })
+      .skip(Math.max(0, skip));
+    if (take !== undefined && take > 0) cursor = cursor.limit(take);
+    const rows = await cursor.exec();
+    const users = await this.usersService.findByIds(
+      rows.map((r) => r.userId.toHexString()),
+    );
+    // Preserve the reaction order (findByIds may return a different order).
+    const byId = new Map(users.map((u) => [u._id.toHexString(), u]));
+    const out: UserGql[] = [];
+    for (const r of rows) {
+      const u = byId.get(r.userId.toHexString());
+      if (u) out.push(this.usersService.toGql(u));
+    }
+    return out;
+  }
+
   async create(
     authorId: string,
     input: CreatePostInput,

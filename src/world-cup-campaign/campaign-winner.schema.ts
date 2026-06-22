@@ -40,3 +40,7 @@ export class CampaignWinner {
 
 export const CampaignWinnerSchema =
   SchemaFactory.createForClass(CampaignWinner);
+// Win leaderboard aggregation: $match { campaignId, userId } → group by userId
+CampaignWinnerSchema.index({ campaignId: 1, userId: 1 });
+// findByPostId lookups
+CampaignWinnerSchema.index({ postId: 1 });

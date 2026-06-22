@@ -175,3 +175,5 @@ export class Fixture {
 export const FixtureSchema = SchemaFactory.createForClass(Fixture);
 FixtureSchema.index({ stage: 1, group: 1, kickoff: 1 });
 FixtureSchema.index({ winnerScheduledAt: 1, matchEndedAt: 1 });
+// Reverse lookup: findOne({ campaignPostId }) in prediction loadContext, etc.
+FixtureSchema.index({ campaignPostId: 1 });

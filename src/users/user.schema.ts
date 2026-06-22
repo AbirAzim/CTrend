@@ -101,3 +101,5 @@ export class User {
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
+// Coin leaderboard: find({ coins: { $gt: 0 } }).sort({ coins: -1 })
+UserSchema.index({ coins: -1 });

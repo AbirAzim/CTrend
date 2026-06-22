@@ -179,6 +179,27 @@ function deriveWinner(
   return 'DRAW';
 }
 
+/**
+ * Canonicalize a stored winner value. Older fixtures saved 'home'/'away'/'draw';
+ * deriveWinner now emits 'HOME_TEAM'/'AWAY_TEAM'/'DRAW'. Map both to the latter
+ * so all clients can rely on a single format.
+ */
+function normalizeWinner(winner?: string | null): string | null {
+  if (!winner) return null;
+  switch (winner.toUpperCase()) {
+    case 'HOME':
+    case 'HOME_TEAM':
+      return 'HOME_TEAM';
+    case 'AWAY':
+    case 'AWAY_TEAM':
+      return 'AWAY_TEAM';
+    case 'DRAW':
+      return 'DRAW';
+    default:
+      return winner;
+  }
+}
+
 @Injectable()
 export class FixturesService {
   private readonly logger = new Logger(FixturesService.name);
@@ -1269,7 +1290,10 @@ export class FixturesService {
       score: {
         home: fixture.score?.home ?? null,
         away: fixture.score?.away ?? null,
-        winner: fixture.score?.winner ?? null,
+        // Normalize to canonical uppercase — older fixtures were stored as
+        // 'home'/'away'/'draw' while deriveWinner now returns
+        // 'HOME_TEAM'/'AWAY_TEAM'/'DRAW'. Clients expect the latter.
+        winner: normalizeWinner(fixture.score?.winner),
       },
       venue: fixture.venue
         ? { name: fixture.venue.name, city: fixture.venue.city }

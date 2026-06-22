@@ -74,8 +74,10 @@ export class MatchLineupCoachGql {
   @Field(() => Int, { nullable: true })
   id?: number | null;
 
-  @Field()
-  name: string;
+  // API-Football occasionally returns a coach object with no name; keep this
+  // nullable so already-stored fixtures don't crash the whole query.
+  @Field(() => String, { nullable: true })
+  name?: string | null;
 
   @Field(() => String, { nullable: true })
   photo?: string | null;

@@ -7,6 +7,7 @@ import { VotesService } from './votes.service';
 import { VotesResolver } from './votes.resolver';
 import { UsersModule } from '../users/users.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { CoinsModule } from '../coins/coins.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     ]),
     UsersModule,
     forwardRef(() => NotificationsModule),
+    CoinsModule,
   ],
   providers: [VotesService, VotesResolver],
   exports: [VotesService],

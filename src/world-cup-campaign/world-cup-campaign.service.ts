@@ -17,6 +17,8 @@ import { UsersService } from '../users/users.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/notification.schema';
 import { CampaignWinnerGql } from './graphql/campaign-winner.types';
+import { CoinsService } from '../coins/coins.service';
+import { CoinType } from '../coins/coins.constants';
 
 @Injectable()
 export class WorldCupCampaignService {
@@ -30,6 +32,7 @@ export class WorldCupCampaignService {
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
     private usersService: UsersService,
     private notificationsService: NotificationsService,
+    private coinsService: CoinsService,
   ) {}
 
   /**
@@ -164,6 +167,12 @@ export class WorldCupCampaignService {
           voteWinnerPickedAt: pickedAt,
         },
       },
+    );
+    // Coins: reward the drawn campaign winner (once per match post).
+    await this.coinsService.award(
+      drawn.userId.toHexString(),
+      CoinType.CAMPAIGN_WINNER,
+      postId.toHexString(),
     );
     void this.notifyMatchResult(
       postId.toHexString(),

@@ -86,6 +86,18 @@ export class User {
   /** Last Android versionCode reported by the mobile app (X-Android-Version-Code header). */
   @Prop({ default: 0 })
   lastAndroidVersionCode?: number;
+
+  /** Gamification — lifetime coin balance (cached sum of the coin ledger). */
+  @Prop({ default: 0 })
+  coins: number;
+
+  /** Last day the daily-streak bonus was claimed (used to gate one/day). */
+  @Prop({ type: Date, default: null })
+  lastStreakAt?: Date | null;
+
+  /** Consecutive-day streak length. */
+  @Prop({ default: 0 })
+  streakDays?: number;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

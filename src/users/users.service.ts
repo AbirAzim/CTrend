@@ -35,6 +35,7 @@ export class UsersService {
       emailVerified: doc.emailVerified ?? false,
       createdAt:
         (doc as UserDocument & { createdAt?: Date }).createdAt ?? new Date(),
+      coins: doc.coins ?? 0,
     };
   }
 

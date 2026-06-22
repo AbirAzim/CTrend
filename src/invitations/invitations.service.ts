@@ -13,6 +13,8 @@ import { Invitation, InvitationDocument } from './invitation.schema';
 import { InvitationStatus, UserRole } from '../common/enums';
 import { UsersService } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
+import { CoinsService } from '../coins/coins.service';
+import { CoinType } from '../coins/coins.constants';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -28,6 +30,7 @@ export class InvitationsService {
     private usersService: UsersService,
     private mailService: MailService,
     private config: ConfigService,
+    private coinsService: CoinsService,
   ) {}
 
   async invite(
@@ -102,9 +105,18 @@ export class InvitationsService {
   }
 
   async markAccepted(invitationId: string): Promise<void> {
-    await this.invitationModel.findByIdAndUpdate(invitationId, {
-      status: InvitationStatus.ACCEPTED,
-    });
+    const invitation = await this.invitationModel.findByIdAndUpdate(
+      invitationId,
+      { status: InvitationStatus.ACCEPTED },
+    );
+    // Coins: reward the inviter once when their invite is accepted.
+    if (invitation?.invitedBy) {
+      await this.coinsService.award(
+        invitation.invitedBy.toHexString(),
+        CoinType.INVITE,
+        invitationId,
+      );
+    }
   }
 
   async listAll(status?: InvitationStatus): Promise<InvitationDocument[]> {

@@ -18,6 +18,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/notification.schema';
 import { OrgPostReach, PostType } from '../common/enums';
 import { PostVoterGql } from './graphql/vote.types';
+import { CoinsService } from '../coins/coins.service';
+import { CoinType } from '../coins/coins.constants';
 
 @Injectable()
 export class VotesService {
@@ -30,6 +32,7 @@ export class VotesService {
     private usersService: UsersService,
     @Inject(forwardRef(() => NotificationsService))
     private notificationsService: NotificationsService,
+    private coinsService: CoinsService,
   ) {}
 
   /** Notify post author when someone casts a new vote (not option changes / unvote). */
@@ -188,6 +191,17 @@ export class VotesService {
       });
       await this.postModel.updateOne({ _id: pid }, { $inc: { voteCount: 1 } });
       void this.notifyPostAuthorOfVote(post, userId, anonymous);
+      // Coins: voter earns for voting; author earns for being voted on (once
+      // per voter+post). No self-vote reward for the author.
+      const authorId = post.createdBy.toHexString();
+      await this.coinsService.award(userId, CoinType.VOTE, postId);
+      if (authorId !== userId) {
+        await this.coinsService.award(
+          authorId,
+          CoinType.POST_VOTED,
+          `${postId}:${userId}`,
+        );
+      }
     } else if (existing.selectedOptionIndex !== selectedOptionIndex) {
       existing.selectedOptionIndex = selectedOptionIndex;
       existing.anonymous = anonymous;

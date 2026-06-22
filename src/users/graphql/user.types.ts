@@ -1,4 +1,4 @@
-import { Field, ID, ObjectType } from '@nestjs/graphql';
+import { Field, ID, Int, ObjectType } from '@nestjs/graphql';
 import { UserRole } from '../../common/enums';
 
 @ObjectType()
@@ -47,4 +47,8 @@ export class UserGql {
 
   @Field()
   createdAt: Date;
+
+  /** Gamification — lifetime coin balance. */
+  @Field(() => Int, { nullable: true })
+  coins?: number;
 }

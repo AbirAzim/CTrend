@@ -5,6 +5,7 @@ import { InvitationsService } from './invitations.service';
 import { InvitationsResolver } from './invitations.resolver';
 import { UsersModule } from '../users/users.module';
 import { MailModule } from '../mail/mail.module';
+import { CoinsModule } from '../coins/coins.module';
 
 @Module({
   imports: [
@@ -13,6 +14,7 @@ import { MailModule } from '../mail/mail.module';
     ]),
     UsersModule,
     MailModule,
+    CoinsModule,
   ],
   providers: [InvitationsService, InvitationsResolver],
   exports: [InvitationsService],

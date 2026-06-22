@@ -19,6 +19,7 @@ import { MessagesModule } from '../messages/messages.module';
 import { PlatformSettingsModule } from '../platform-settings/platform-settings.module';
 import { ContentReportsModule } from '../content-reports/content-reports.module';
 import { WorldCupCampaignModule } from '../world-cup-campaign/world-cup-campaign.module';
+import { CoinsModule } from '../coins/coins.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { WorldCupCampaignModule } from '../world-cup-campaign/world-cup-campaign
     PlatformSettingsModule,
     ContentReportsModule,
     WorldCupCampaignModule,
+    CoinsModule,
   ],
   providers: [PostsService, PostsResolver, PostSchedulerService],
   exports: [PostsService],

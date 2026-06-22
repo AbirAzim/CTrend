@@ -11,6 +11,7 @@ import { PostsModule } from '../posts/posts.module';
 import { CampaignsModule } from '../campaigns/campaigns.module';
 import { UsersModule } from '../users/users.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { MatchPredictionsModule } from '../match-predictions/match-predictions.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     CampaignsModule,
     UsersModule,
     NotificationsModule,
+    MatchPredictionsModule,
   ],
   providers: [
     FixturesService,

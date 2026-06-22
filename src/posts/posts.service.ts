@@ -58,6 +58,8 @@ import { MessagesService } from '../messages/messages.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 import { ContentReportsService } from '../content-reports/content-reports.service';
 import { WorldCupCampaignService } from '../world-cup-campaign/world-cup-campaign.service';
+import { CoinsService } from '../coins/coins.service';
+import { CoinType } from '../coins/coins.constants';
 
 const PREMIUM_GLOBAL_MONTHLY = 20;
 const DEFAULT_ENDING_SOON_LEAD_MINUTES = 5;
@@ -117,6 +119,7 @@ export class PostsService implements OnModuleInit {
     private platformSettingsService: PlatformSettingsService,
     private contentReportsService: ContentReportsService,
     private worldCupCampaignService: WorldCupCampaignService,
+    private coinsService: CoinsService,
   ) {}
 
   private async resolveCampaignId(
@@ -272,6 +275,15 @@ export class PostsService implements OnModuleInit {
               err instanceof Error ? err.message : String(err)
             }`,
           ),
+        );
+      }
+      // Coins: reward the drawn vote winner (once per post). The atomic
+      // findOneAndUpdate guard above ensures this branch runs only once.
+      if (updated.voteWinnerUserId) {
+        await this.coinsService.award(
+          updated.voteWinnerUserId.toHexString(),
+          CoinType.VOTE_WINNER,
+          postId.toHexString(),
         );
       }
       return updated;
@@ -1028,10 +1040,38 @@ export class PostsService implements OnModuleInit {
           verbPhrase: 'hyped your post',
           title: 'New hype on your post',
         });
+        // Coins: actor earns for hyping; author earns for being hyped (once per
+        // actor+post). No self-hype reward.
+        const authorId = post.createdBy.toHexString();
+        await this.coinsService.award(userId, CoinType.HYPE, postId);
+        if (authorId !== userId) {
+          await this.coinsService.award(
+            authorId,
+            CoinType.POST_HYPED,
+            `${postId}:${userId}`,
+          );
+        }
       }
       return;
     }
-    await this.postReactionModel.deleteOne({ userId: uid, postId: pid, kind });
+    const removed = await this.postReactionModel.deleteOne({
+      userId: uid,
+      postId: pid,
+      kind,
+    });
+    // Coins: un-hyping reverses the hype reward (actor -5, author -2), keeping
+    // hype/unhype symmetric so the balance can't drift or be farmed.
+    if (kind === 'hype' && removed.deletedCount > 0) {
+      const authorId = post.createdBy.toHexString();
+      await this.coinsService.revoke(userId, CoinType.HYPE, postId);
+      if (authorId !== userId) {
+        await this.coinsService.revoke(
+          authorId,
+          CoinType.POST_HYPED,
+          `${postId}:${userId}`,
+        );
+      }
+    }
   }
 
   /**
@@ -1154,6 +1194,12 @@ export class PostsService implements OnModuleInit {
     if (status === PostStatus.PUBLISHED) {
       await this.publishNewPost(doc._id.toHexString());
     }
+    // Coins: reward the author for creating a post (once per post).
+    await this.coinsService.award(
+      authorId,
+      CoinType.POST,
+      doc._id.toHexString(),
+    );
     return doc;
   }
 

@@ -17,6 +17,7 @@ import { CampaignsService } from '../campaigns/campaigns.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { generateMatchCaption } from './caption-templates';
 import { POST_UPDATED, POST_VOTE_UPDATED, pubsub } from '../pubsub';
+import { MatchPredictionsService } from '../match-predictions/match-predictions.service';
 
 // ── API-Football ──────────────────────────────────────────────────────────
 // Supports both direct api-sports.io and RapidAPI hosting.
@@ -25,6 +26,34 @@ import { POST_UPDATED, POST_VOTE_UPDATED, pubsub } from '../pubsub';
 // a higher plan for those endpoints).
 const AF_BASE_DIRECT = 'https://v3.football.api-sports.io';
 const AF_BASE_RAPID = 'https://api-football-v1.p.rapidapi.com/v3';
+
+/**
+ * Manual coach corrections, keyed by team external id. API-Football sometimes
+ * returns a placeholder coach ({ id: 0, name: null }) or an outdated name; this
+ * fills in the real manager where we know it. Add entries as needed.
+ */
+const COACH_NAME_OVERRIDES: Record<number, string> = {
+  4673: 'D. Bazeley', // New Zealand — API returns a null-name placeholder
+};
+
+/**
+ * Resolve a lineup coach: prefer the API's value when it has a name, otherwise
+ * fall back to a manual override for that team, otherwise null.
+ */
+function resolveLineupCoach(
+  teamExternalId: number | undefined | null,
+  coach: { id?: number | null; name?: string | null; photo?: string | null } | null | undefined,
+): { id: number | null; name: string; photo: string | null } | null {
+  if (coach && coach.name) {
+    return { id: coach.id ?? null, name: coach.name, photo: coach.photo ?? null };
+  }
+  const override =
+    teamExternalId != null ? COACH_NAME_OVERRIDES[teamExternalId] : undefined;
+  if (override) {
+    return { id: coach?.id ?? null, name: override, photo: null };
+  }
+  return null;
+}
 
 interface AfTeam {
   id: number;
@@ -171,6 +200,7 @@ export class FixturesService {
     private postsService: PostsService,
     private campaignsService: CampaignsService,
     private notificationsService: NotificationsService,
+    private matchPredictionsService: MatchPredictionsService,
   ) {
     this.apiKey = this.configService.get<string>('API_FOOTBALL_KEY') ?? '';
     this.rapidApiKey = this.configService.get<string>('RAPID_API_FOOTBALL_KEY') ?? '';
@@ -368,9 +398,7 @@ export class FixturesService {
             photo: p.player.photo
               ?? (p.player.id ? `https://media.api-sports.io/football/players/${p.player.id}.png` : null),
           })),
-          coach: l.coach
-            ? { id: l.coach.id ?? null, name: l.coach.name, photo: l.coach.photo ?? null }
-            : null,
+          coach: resolveLineupCoach(l.team?.id, l.coach),
         }));
         update.lineups = lineups;
         newLineupsCount = lineups.length;
@@ -582,6 +610,21 @@ export class FixturesService {
           },
         },
       );
+
+      // ── Match just finished: award correct-prediction coin bonuses ───────
+      if (
+        !wasFinished &&
+        newStatus === 'FINISHED' &&
+        existing.campaignPostId &&
+        home != null &&
+        away != null
+      ) {
+        await this.matchPredictionsService.awardWinners(
+          existing.campaignPostId.toHexString(),
+          home,
+          away,
+        );
+      }
 
       // ── Live score changed: update denormalized fields on the campaign post ─
       if (existing.campaignPostId) {
@@ -860,9 +903,7 @@ export class FixturesService {
                 ? `https://media.api-sports.io/football/players/${p.player.id}.png`
                 : null),
           })),
-          coach: l.coach
-            ? { id: l.coach.id ?? null, name: l.coach.name, photo: l.coach.photo ?? null }
-            : null,
+          coach: resolveLineupCoach(l.team?.id, l.coach),
         }));
         await this.fixtureModel.updateOne({ _id: fixture._id }, { $set: { lineups } });
         this.logger.log(
@@ -1239,7 +1280,24 @@ export class FixturesService {
       matchEndedAt: fixture.matchEndedAt ?? null,
       winnerScheduledAt: fixture.winnerScheduledAt ?? null,
       events: fixture.events ?? [],
-      lineups: fixture.lineups ?? [],
+      // Apply coach overrides at read time too, so fixtures already stored with
+      // a missing coach (API gave a null-name placeholder) still show the real
+      // manager without waiting for a lineup re-fetch.
+      lineups: (fixture.lineups ?? []).map((l) => {
+        const maybeDoc = l as unknown as { toObject?: () => unknown };
+        const plain = (
+          typeof maybeDoc.toObject === 'function' ? maybeDoc.toObject() : l
+        ) as Record<string, unknown>;
+        return {
+          ...plain,
+          coach: resolveLineupCoach(
+            l.team === 'home'
+              ? fixture.homeTeamExternalId
+              : fixture.awayTeamExternalId,
+            l.coach,
+          ),
+        };
+      }) as FixtureGql['lineups'],
       stats: fixture.stats ?? [],
       playerRatings: fixture.playerRatings ?? [],
       detailsSyncedAt: fixture.detailsSyncedAt ?? null,

@@ -14,6 +14,8 @@ import { Fixture, FixtureDocument } from '../fixtures/fixture.schema';
 import { UsersService } from '../users/users.service';
 import { MatchPredictionGql } from './graphql/match-prediction.types';
 import { pubsub, MATCH_PREDICTION_UPDATED } from '../pubsub';
+import { CoinsService } from '../coins/coins.service';
+import { CoinType } from '../coins/coins.constants';
 
 type MatchContext = { post: PostDocument; fixture: FixtureDocument };
 
@@ -26,6 +28,7 @@ export class MatchPredictionsService {
     @InjectModel(Fixture.name)
     private readonly fixtureModel: Model<FixtureDocument>,
     private readonly usersService: UsersService,
+    private readonly coinsService: CoinsService,
   ) {}
 
   /** Resolve + validate that this post is a match post with a linked fixture. */
@@ -124,6 +127,8 @@ export class MatchPredictionsService {
     const doc = await this.predictionModel
       .findOne({ userId: uid, postId: pid })
       .exec();
+    // Coins: reward making a prediction (once per post — edits don't re-award).
+    await this.coinsService.award(userId, CoinType.PREDICTION, postId);
     await this.publishUpdate(postId);
     return this.toGql(doc as MatchPredictionDocument, fixture);
   }
@@ -197,6 +202,35 @@ export class MatchPredictionsService {
       predictionsOpen: this.isOpen(fixture),
       predictionsResolved: this.isResolved(fixture),
     };
+  }
+
+  /**
+   * Award the correct-prediction bonus to everyone who nailed the exact
+   * (pre-penalty) score. Idempotent — safe to call repeatedly on the same
+   * finished fixture. Called by FixturesService when a match transitions to
+   * FINISHED.
+   */
+  async awardWinners(
+    postId: string,
+    homeScore: number,
+    awayScore: number,
+  ): Promise<void> {
+    if (!Types.ObjectId.isValid(postId)) return;
+    const winners = await this.predictionModel
+      .find({
+        postId: new Types.ObjectId(postId),
+        homeScore,
+        awayScore,
+      })
+      .exec();
+    for (const w of winners) {
+      // refId = postId so each winner is rewarded exactly once per match.
+      await this.coinsService.award(
+        w.userId.toHexString(),
+        CoinType.PREDICTION_CORRECT,
+        postId,
+      );
+    }
   }
 
   private async publishUpdate(postId: string): Promise<void> {

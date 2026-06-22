@@ -10,6 +10,7 @@ import { CommentsService } from './comments.service';
 import { CommentsResolver } from './comments.resolver';
 import { UsersModule } from '../users/users.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { CoinsModule } from '../coins/coins.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     ]),
     UsersModule,
     NotificationsModule,
+    CoinsModule,
   ],
   providers: [CommentsService, CommentsResolver],
   exports: [CommentsService],

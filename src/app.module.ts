@@ -39,6 +39,7 @@ import { PlatformSettingsService } from './platform-settings/platform-settings.s
 import { createAndroidVersionEnforcementPlugin } from './common/plugins/android-version-enforcement.plugin';
 import { ContentReportsModule } from './content-reports/content-reports.module';
 import { MatchPredictionsModule } from './match-predictions/match-predictions.module';
+import { CoinsModule } from './coins/coins.module';
 
 @Module({
   imports: [
@@ -229,6 +230,7 @@ import { MatchPredictionsModule } from './match-predictions/match-predictions.mo
     PlatformSettingsModule,
     ContentReportsModule,
     MatchPredictionsModule,
+    CoinsModule,
   ],
   providers: [
     {

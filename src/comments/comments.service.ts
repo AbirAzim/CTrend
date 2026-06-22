@@ -20,6 +20,8 @@ import { UsersService } from '../users/users.service';
 import { CommentGql, CommentReactionCountGql } from './graphql/comment.types';
 import { UserDocument } from '../users/user.schema';
 import { NotificationsService } from '../notifications/notifications.service';
+import { CoinsService } from '../coins/coins.service';
+import { CoinType } from '../coins/coins.constants';
 
 @Injectable()
 export class CommentsService {
@@ -30,6 +32,7 @@ export class CommentsService {
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
     private usersService: UsersService,
     private notificationsService: NotificationsService,
+    private coinsService: CoinsService,
   ) {}
 
   private async actorName(userId: string): Promise<string> {
@@ -109,6 +112,13 @@ export class CommentsService {
     } catch {
       // Don't fail the comment create if notification fan-out fails
     }
+
+    // Coins: reward the commenter (once per comment).
+    await this.coinsService.award(
+      userId,
+      CoinType.COMMENT,
+      doc._id.toHexString(),
+    );
 
     return doc;
   }

@@ -109,6 +109,19 @@ type CheckoutSessionGql {
   url: String
 }
 
+type CoinHistoryItemGql {
+  amount: Int!
+  createdAt: DateTime!
+  id: ID!
+  type: String!
+}
+
+type CoinLeaderboardEntryGql {
+  coins: Int!
+  rank: Int!
+  user: UserGql!
+}
+
 type CommentGql {
   author: UserGql!
   content: String!
@@ -209,6 +222,12 @@ input CreatePostInput {
   type: PostType
   visibility: Visibility
   votingEndsAt: DateTime
+}
+
+type DailyStreakGql {
+  awarded: Int!
+  balance: Int!
+  streakDays: Int!
 }
 
 """
@@ -343,7 +362,7 @@ type MatchEventPlayerGql {
 
 type MatchLineupCoachGql {
   id: Int
-  name: String!
+  name: String
   photo: String
 }
 
@@ -479,6 +498,7 @@ type Mutation {
   cancelInvitation(id: ID!): Boolean!
   cancelScheduledPost(postId: ID!): Boolean!
   cancelSubscription(organizationId: ID): Boolean!
+  claimDailyCoins: DailyStreakGql!
   claimPostVotePrize(postId: ID!): PostGql!
   commentPost(input: CommentPostInput!, postId: ID!): CommentGql!
   createCampaign(input: CreateCampaignInput!): CampaignGql!
@@ -779,6 +799,8 @@ type Query {
   campaigns: [CampaignGql!]!
   categories: [CategoryGql!]!
   categoryPostCount(categoryId: ID!): Int!
+  coinHistory(skip: Int, take: Int, userId: ID): [CoinHistoryItemGql!]!
+  coinLeaderboard(take: Int): [CoinLeaderboardEntryGql!]!
   commentsByPost(postId: ID!): [CommentGql!]!
   feedPosts(campaignId: ID, postFilter: FeedPostFilter, scope: FeedScope, skip: Int = 0, sort: FeedSort, take: Int = 20): [PostGql!]!
   friendRequests: FriendRequestsGql!
@@ -800,6 +822,7 @@ type Query {
   matchPredictions(postId: ID!, skip: Int, take: Int): [MatchPredictionGql!]!
   me: UserGql!
   messages(conversationId: ID!, skip: Int! = 0, take: Int! = 30): [MessageGql!]!
+  myCoins: Int!
   myConversations: [ConversationGql!]!
   myFriends: [UserGql!]!
   myNotifications(skip: Int! = 0, take: Int! = 20): NotificationsPageGql!
@@ -940,6 +963,7 @@ input UpdateProfileInput {
 
 type UserGql {
   bio: String
+  coins: Int
   createdAt: DateTime!
   displayName: String
   email: String!

@@ -6,10 +6,13 @@ import { User, UserSchema } from '../users/user.schema';
 import { CategoriesModule } from '../categories/categories.module';
 import { UsersModule } from '../users/users.module';
 import { CampaignsModule } from '../campaigns/campaigns.module';
-import { SeedDummyPostsService } from './seed-dummy-posts.service';
 import { AdminSeedService } from './admin-seed.service';
 import { CampaignSeedService } from './campaign-seed.service';
 
+// NOTE: `SeedDummyPostsService` is intentionally NOT registered here. It used to
+// re-create the three demo compare posts (Ronaldo/Messi, iPhone/Android,
+// Apu Vai/Mamun Vai) on every startup, so deleting them never stuck. Leaving it
+// unregistered disables that seeding permanently.
 @Module({
   imports: [
     ConfigModule,
@@ -21,6 +24,6 @@ import { CampaignSeedService } from './campaign-seed.service';
     UsersModule,
     CampaignsModule,
   ],
-  providers: [SeedDummyPostsService, AdminSeedService, CampaignSeedService],
+  providers: [AdminSeedService, CampaignSeedService],
 })
 export class SeedModule {}

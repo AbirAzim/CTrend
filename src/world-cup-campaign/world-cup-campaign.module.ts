@@ -9,6 +9,7 @@ import { WinnerAnnouncementService } from './winner-announcement.service';
 import { WorldCupCampaignResolver } from './world-cup-campaign.resolver';
 import { UsersModule } from '../users/users.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { CoinsModule } from '../coins/coins.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { NotificationsModule } from '../notifications/notifications.module';
     ]),
     UsersModule,
     NotificationsModule,
+    CoinsModule,
   ],
   providers: [
     WorldCupCampaignService,

@@ -138,8 +138,11 @@ export class PostsResolver {
   ) {
     const post = await this.postsService.findById(id);
     if (!post) throw new NotFoundException('Post not found');
+    // Only published posts are viewable via direct link. Unpublished
+    // (scheduled/draft) posts — e.g. upcoming campaign match posts — return 404
+    // to everyone except their author (so we don't leak that they exist yet).
     if (
-      post.status === PostStatus.SCHEDULED &&
+      post.status !== PostStatus.PUBLISHED &&
       post.createdBy.toHexString() !== user?.id
     ) {
       throw new NotFoundException('Post not found');

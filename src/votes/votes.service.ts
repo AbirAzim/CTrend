@@ -16,7 +16,7 @@ import { POST_VOTE_UPDATED, pubsub, VOTE_UPDATED } from '../pubsub';
 import { UsersService } from '../users/users.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/notification.schema';
-import { OrgPostReach, PostType } from '../common/enums';
+import { OrgPostReach, PostType, PostStatus } from '../common/enums';
 import { PostVoterGql } from './graphql/vote.types';
 import { CoinsService } from '../coins/coins.service';
 import { CoinType } from '../coins/coins.constants';
@@ -132,6 +132,11 @@ export class VotesService {
     }
     const post = await this.postModel.findById(postId).exec();
     if (!post) throw new NotFoundException('Post not found');
+    // Voting is only allowed on published posts — scheduled/draft posts (e.g.
+    // upcoming campaign match posts) are not yet open.
+    if (post.status !== PostStatus.PUBLISHED) {
+      throw new ForbiddenException('This post is not open for voting yet');
+    }
     if (post.votingEndsAt && post.votingEndsAt.getTime() <= Date.now()) {
       throw new BadRequestException('Voting period has ended for this post');
     }

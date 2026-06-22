@@ -1279,7 +1279,22 @@ export class FixturesService {
       hasDrawOption: fixture.hasDrawOption ?? false,
       matchEndedAt: fixture.matchEndedAt ?? null,
       winnerScheduledAt: fixture.winnerScheduledAt ?? null,
-      events: fixture.events ?? [],
+      // Coalesce nullable event strings to "" so the field is never null and
+      // clients can safely call string methods (.toLowerCase/.includes) on them.
+      events: (fixture.events ?? []).map((e) => {
+        const ev = e as unknown as {
+          toObject?: () => unknown;
+        };
+        const plain = (
+          typeof ev.toObject === 'function' ? ev.toObject() : e
+        ) as Record<string, unknown>;
+        return {
+          ...plain,
+          team: (plain.team as string | null) ?? '',
+          type: (plain.type as string | null) ?? '',
+          detail: (plain.detail as string | null) ?? '',
+        };
+      }) as FixtureGql['events'],
       // Apply coach overrides at read time too, so fixtures already stored with
       // a missing coach (API gave a null-name placeholder) still show the real
       // manager without waiting for a lineup re-fetch.

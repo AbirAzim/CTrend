@@ -354,12 +354,12 @@ type InviteResultGql {
 
 type MatchEventGql {
   assist: MatchEventPlayerGql
-  detail: String!
-  player: MatchEventPlayerGql!
-  team: String!
+  detail: String
+  player: MatchEventPlayerGql
+  team: String
   time: Int!
   timeExtra: Int
-  type: String!
+  type: String
 }
 
 type MatchEventPlayerGql {

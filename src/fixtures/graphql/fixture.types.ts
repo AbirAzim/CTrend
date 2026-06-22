@@ -32,17 +32,19 @@ export class MatchEventGql {
   @Field(() => Int, { nullable: true })
   timeExtra?: number | null;
 
-  @Field()
-  team: string;
+  // API-Football occasionally omits these on some events (e.g. substitutions),
+  // so keep them nullable to avoid crashing the whole fixture query.
+  @Field(() => String, { nullable: true })
+  team?: string | null;
 
-  @Field()
-  type: string;
+  @Field(() => String, { nullable: true })
+  type?: string | null;
 
-  @Field()
-  detail: string;
+  @Field(() => String, { nullable: true })
+  detail?: string | null;
 
-  @Field(() => MatchEventPlayerGql)
-  player: MatchEventPlayerGql;
+  @Field(() => MatchEventPlayerGql, { nullable: true })
+  player?: MatchEventPlayerGql | null;
 
   @Field(() => MatchEventPlayerGql, { nullable: true })
   assist?: MatchEventPlayerGql | null;

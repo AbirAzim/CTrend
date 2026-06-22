@@ -83,6 +83,13 @@ type CampaignGql {
   startDate: DateTime
 }
 
+type CampaignWinLeaderboardEntryGql {
+  rank: Int!
+  totalPrize: Int!
+  user: UserGql
+  wins: Int!
+}
+
 type CampaignWinnerGql {
   campaignId: ID
   createdAt: DateTime!
@@ -794,6 +801,7 @@ type Query {
   adminReportedPosts(query: AdminReportedPostsQueryInput, skip: Int = 0, take: Int = 50): [PostGql!]!
   adminReportedPostsCount(filter: AdminReportedPostsFilterInput): Int!
   campaign(slug: String!): CampaignGql
+  campaignWinLeaderboard(campaignId: ID, take: Int): [CampaignWinLeaderboardEntryGql!]!
   campaignWinner(fixtureId: ID!): CampaignWinnerGql
   campaignWinners: [CampaignWinnerGql!]!
   campaigns: [CampaignGql!]!

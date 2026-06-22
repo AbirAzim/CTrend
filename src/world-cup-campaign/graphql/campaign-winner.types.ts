@@ -33,3 +33,21 @@ export class CampaignWinnerGql {
   @Field()
   createdAt: Date;
 }
+
+/** One row of the "most campaign wins" leaderboard. */
+@ObjectType()
+export class CampaignWinLeaderboardEntryGql {
+  @Field(() => Int)
+  rank: number;
+
+  /** Number of campaign wins (times drawn as the winner). */
+  @Field(() => Int)
+  wins: number;
+
+  /** Total prize amount across all wins. */
+  @Field(() => Int)
+  totalPrize: number;
+
+  @Field(() => UserGql, { nullable: true })
+  user?: UserGql | null;
+}

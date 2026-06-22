@@ -16,7 +16,10 @@ import { Post, PostDocument } from '../posts/post.schema';
 import { UsersService } from '../users/users.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/notification.schema';
-import { CampaignWinnerGql } from './graphql/campaign-winner.types';
+import {
+  CampaignWinnerGql,
+  CampaignWinLeaderboardEntryGql,
+} from './graphql/campaign-winner.types';
 import { CoinsService } from '../coins/coins.service';
 import { CoinType } from '../coins/coins.constants';
 
@@ -74,12 +77,24 @@ export class WorldCupCampaignService {
       .exec();
     if (existing) return this.toGql(existing);
 
-    const campaignObjId =
+    const postId = fixture.campaignPostId;
+
+    // Stamp the winner with its campaign so the per-campaign leaderboard can
+    // filter on it. The announce cron calls this without a campaignId, so fall
+    // back to the campaign the post belongs to.
+    let campaignObjId =
       campaignId && Types.ObjectId.isValid(campaignId)
         ? new Types.ObjectId(campaignId)
         : undefined;
-
-    const postId = fixture.campaignPostId;
+    if (!campaignObjId) {
+      const campaignPost = await this.postModel
+        .findById(postId)
+        .select('campaignId')
+        .exec();
+      if (campaignPost?.campaignId) {
+        campaignObjId = campaignPost.campaignId as Types.ObjectId;
+      }
+    }
     const scoreWinner = fixture.score?.winner ?? null; // HOME_TEAM | AWAY_TEAM | DRAW | null
 
     // Unknown result — record without a winner userId
@@ -278,6 +293,50 @@ export class WorldCupCampaignService {
       .sort({ createdAt: -1 })
       .exec();
     return Promise.all(docs.map((d) => this.toGql(d)));
+  }
+
+  /**
+   * Leaderboard of users with the most campaign wins. Counts CampaignWinner
+   * records that have a userId (real winners, not "no winner" rows), optionally
+   * scoped to one campaign, grouped by user and sorted by win count desc.
+   */
+  async winLeaderboard(
+    campaignId?: string,
+    take = 50,
+  ): Promise<CampaignWinLeaderboardEntryGql[]> {
+    const match: Record<string, unknown> = { userId: { $ne: null } };
+    if (campaignId && Types.ObjectId.isValid(campaignId)) {
+      match.campaignId = new Types.ObjectId(campaignId);
+    }
+    const rows = await this.campaignWinnerModel.aggregate<{
+      _id: Types.ObjectId;
+      wins: number;
+      totalPrize: number;
+    }>([
+      { $match: match },
+      {
+        $group: {
+          _id: '$userId',
+          wins: { $sum: 1 },
+          totalPrize: { $sum: { $ifNull: ['$prize', 0] } },
+        },
+      },
+      { $sort: { wins: -1, totalPrize: -1 } },
+      { $limit: Math.min(Math.max(1, take), 100) },
+    ]);
+
+    const entries = await Promise.all(
+      rows.map(async (r, i) => {
+        const userDoc = await this.usersService.findById(r._id.toHexString());
+        return {
+          rank: i + 1,
+          wins: r.wins,
+          totalPrize: r.totalPrize,
+          user: userDoc ? this.usersService.toGql(userDoc) : null,
+        };
+      }),
+    );
+    return entries;
   }
 
   async markPaid(winnerId: string): Promise<CampaignWinnerGql> {

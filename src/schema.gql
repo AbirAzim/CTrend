@@ -508,6 +508,7 @@ type Mutation {
   claimDailyCoins: DailyStreakGql!
   claimPostVotePrize(postId: ID!): PostGql!
   commentPost(input: CommentPostInput!, postId: ID!): CommentGql!
+  contactAdmin: ConversationGql!
   createCampaign(input: CreateCampaignInput!): CampaignGql!
   createCategory(name: String!): CategoryGql!
   createGroupConversation(memberIds: [ID!]!, name: String!): ConversationGql!

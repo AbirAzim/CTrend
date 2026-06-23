@@ -302,6 +302,17 @@ export class VotesService {
         { _id: pid, voteCount: { $gt: 0 } },
         { $inc: { voteCount: -1 } },
       );
+      // Coins: unvoting reverses the vote reward (voter -10, author -2),
+      // symmetric with hype/un-hype so the balance can't drift.
+      const authorId = post.createdBy.toHexString();
+      await this.coinsService.revoke(userId, CoinType.VOTE, postId);
+      if (authorId !== userId) {
+        await this.coinsService.revoke(
+          authorId,
+          CoinType.POST_VOTED,
+          `${postId}:${userId}`,
+        );
+      }
     }
     const stats = await this.getStats(postId, post.options.length);
     await pubsub.publish(VOTE_UPDATED, {

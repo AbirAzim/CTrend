@@ -35,6 +35,10 @@ export class Conversation {
   // unreadCounts stored as plain object: { [userId]: count }
   @Prop({ type: Object, default: {} })
   unreadCounts: Record<string, number>;
+
+  // Whether the "Contact admin" automated welcome has been posted (once per thread).
+  @Prop({ type: Boolean, default: false })
+  supportWelcomeSent?: boolean;
 }
 
 export const ConversationSchema = SchemaFactory.createForClass(Conversation);

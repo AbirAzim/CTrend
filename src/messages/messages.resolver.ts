@@ -149,6 +149,13 @@ export class MessagesResolver {
     return this.messagesService.conversationToGql(convo, user.id);
   }
 
+  /** User taps "Contact admin" — open (and seed) their support thread. */
+  @Mutation(() => ConversationGql)
+  @UseGuards(GqlAuthGuard)
+  async contactAdmin(@CurrentUser() user: ReqUser) {
+    return this.messagesService.contactAdmin(user.id);
+  }
+
   @Mutation(() => ConversationGql)
   @UseGuards(GqlAuthGuard)
   async createGroupConversation(

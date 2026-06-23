@@ -180,7 +180,8 @@ export class MessagesService {
 
   async getOrCreateModeratorConversation(
     targetUserId: string,
-    adminId: string,
+    // Omitted when the user starts the thread themselves (Contact admin).
+    adminId?: string,
   ): Promise<ConversationDocument> {
     const target = await this.usersService.findById(targetUserId);
     if (!target) throw new NotFoundException('User not found');
@@ -199,9 +200,55 @@ export class MessagesService {
       type: 'moderator',
       participantIds: [targetOid],
       name: MODERATOR_DISPLAY_NAME,
-      createdBy: new Types.ObjectId(adminId),
+      createdBy: new Types.ObjectId(adminId ?? targetUserId),
       unreadCounts: {},
     });
+  }
+
+  /**
+   * User-initiated "Contact admin": get/create the user's moderator (support)
+   * thread, and on first contact post an automated welcome message from the
+   * moderator so the user knows their query is received.
+   */
+  async contactAdmin(userId: string): Promise<ConversationGql> {
+    const convo = await this.getOrCreateModeratorConversation(userId);
+
+    // Post the welcome once per thread — even if the user previously only
+    // received admin broadcasts (so it's not gated on an empty conversation).
+    if (!convo.supportWelcomeSent) {
+      const welcome =
+        '👋 Welcome to Ke Jitbe support! Thanks for reaching out — ask us ' +
+        'anything here (bugs, questions, feedback) and our team will get back ' +
+        'to you as soon as possible. We really appreciate you being here! 🙏';
+      const msg = await this.messageModel.create({
+        conversationId: convo._id,
+        senderId: new Types.ObjectId(MODERATOR_SENDER_OBJECT_ID),
+        isModeratorMessage: true,
+        text: welcome,
+        readBy: [],
+      });
+      await this.conversationModel.updateOne(
+        { _id: convo._id },
+        {
+          $set: {
+            lastMessageText: welcome.slice(0, 100),
+            lastMessageAt: msg.createdAt,
+            [`unreadCounts.${userId}`]:
+              (convo.unreadCounts?.[userId] ?? 0) + 1,
+            supportWelcomeSent: true,
+          },
+        },
+      );
+      const userGql = await this.messageToGql(msg, userId);
+      await pubsub.publish(NEW_MESSAGE, {
+        newMessage: userGql,
+        conversationId: convo._id.toHexString(),
+        participantIds: [userId],
+      });
+    }
+
+    const fresh = await this.conversationModel.findById(convo._id).exec();
+    return this.conversationToGql(fresh ?? convo, userId);
   }
 
   async sendModeratorMessage(

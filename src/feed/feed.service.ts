@@ -74,7 +74,15 @@ export class FeedService {
     take: number,
   ): Promise<PostDocument[]> {
     if (sort !== FeedSort.LATEST) {
-      return this.postModel.find(filter).sort(sortSpec).skip(skip).limit(take).exec();
+      // pinnedAt: -1 floats admin-pinned posts (non-null dates, newest first)
+      // above all unpinned posts (null sorts last), then the requested order.
+      const pinnedFirst: Record<string, 1 | -1> = { pinnedAt: -1, ...sortSpec };
+      return this.postModel
+        .find(filter)
+        .sort(pinnedFirst)
+        .skip(skip)
+        .limit(take)
+        .exec();
     }
 
     const now = new Date();
@@ -87,6 +95,9 @@ export class FeedService {
     // not finished" the same as confirmed-live so it never drops out.
     const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
     // Year 3000 in ms — live matches float here (unreachable by any real createdAt)
+    // 1 quadrillion ms — admin-pinned posts float above every other tier
+    // (well clear of the live-match range ~30.75T).
+    const PINNED_BASE_MS = 1000000000000000;
     const LIVE_BASE_MS = 32503680000000;
     // Year 2253 in ms — revealing matches float here (below live, above upcoming)
     const REVEAL_BASE_MS = 8000000000000;
@@ -101,6 +112,18 @@ export class FeedService {
             _score: {
               $switch: {
                 branches: [
+                  {
+                    // Tier -1: admin-pinned posts — always above everything else.
+                    // Newest pin sorts highest (PINNED_BASE keeps this tier well
+                    // clear of the live-match tier's range).
+                    // NB: aggregation `$ne: ['$pinnedAt', null]` is TRUE for a
+                    // *missing* field, so guard with $ifNull — otherwise every
+                    // legacy post (no pinnedAt) gets a null score and sinks.
+                    case: { $ne: [{ $ifNull: ['$pinnedAt', null] }, null] },
+                    then: {
+                      $add: [PINNED_BASE_MS, { $toLong: '$pinnedAt' }],
+                    },
+                  },
                   {
                     // Tier 0: live matches — nearest kickoff first. Also covers the
                     // post-kickoff grace window (votingEndsAt just passed, sync cron
@@ -228,6 +251,37 @@ export class FeedService {
   }
 
   private async buildFilter(
+    scope: FeedScope,
+    viewerId?: string,
+    viewerRole?: string,
+    campaignId?: string,
+    postFilter?: FeedPostFilter,
+  ): Promise<Record<string, unknown>> {
+    const base = await this.buildBaseFilter(
+      scope,
+      viewerId,
+      viewerRole,
+      campaignId,
+      postFilter,
+    );
+
+    // Admin-pinned posts float to the top of the "All" and "Community" feeds
+    // regardless of post type. OR them into the filter (and thus into
+    // countDocuments) so skip-based pagination stays consistent — pinned posts
+    // live in the same sorted result set, never prepended separately.
+    const includePinned =
+      !campaignId &&
+      (!postFilter ||
+        postFilter === FeedPostFilter.ALL ||
+        postFilter === FeedPostFilter.COMMUNITY);
+    if (!includePinned) return base;
+
+    return {
+      $or: [base, { pinnedAt: { $ne: null }, status: PostStatus.PUBLISHED }],
+    };
+  }
+
+  private async buildBaseFilter(
     _scope: FeedScope,
     viewerId?: string,
     viewerRole?: string,

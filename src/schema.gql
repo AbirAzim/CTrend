@@ -536,6 +536,7 @@ type Mutation {
   markConversationRead(conversationId: ID!): Boolean!
   markModeratorThreadReadForAdmin(userId: ID!): Boolean!
   markNotificationRead(id: ID!): Boolean!
+  pinPost(postId: ID!): PostGql!
   processMatchResult(campaignId: ID, fixtureId: ID!): CampaignWinnerGql!
   promoteToAdmin(email: String!): UserGql!
   publishAndroidUpdateNotice(body: String!, minVersionCode: Int!, title: String!): Int!
@@ -576,6 +577,7 @@ type Mutation {
   syncWorldCupFixtures: Boolean!
   toggleCampaign(id: ID!, isActive: Boolean!): CampaignGql!
   unfriend(userId: ID!): Boolean!
+  unpinPost(postId: ID!): PostGql!
   unregisterPushToken(token: String!): Boolean!
   updateCampaign(id: ID!, input: UpdateCampaignInput!): CampaignGql!
   updateCategory(color: String, id: ID!, name: String!): CategoryGql!
@@ -720,6 +722,7 @@ type PostGql {
   optionStats: [VoteOptionStatGql!]!
   options: [PostOptionGql!]!
   orgReach: OrgPostReach
+  pinned: Boolean!
   recentComments: [CommentGql!]!
   reportCount: Int!
   saveCount: Int!

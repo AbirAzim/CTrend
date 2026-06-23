@@ -106,6 +106,28 @@ export class PostsResolver {
   }
 
   @Mutation(() => PostGql)
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async pinPost(
+    @CurrentUser() user: ReqUser,
+    @Args('postId', { type: () => ID }) postId: string,
+  ) {
+    const post = await this.postsService.setPinned(postId, true);
+    return this.postsService.toGql(post, user.id);
+  }
+
+  @Mutation(() => PostGql)
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async unpinPost(
+    @CurrentUser() user: ReqUser,
+    @Args('postId', { type: () => ID }) postId: string,
+  ) {
+    const post = await this.postsService.setPinned(postId, false);
+    return this.postsService.toGql(post, user.id);
+  }
+
+  @Mutation(() => PostGql)
   @UseGuards(GqlAuthGuard)
   async extendPostVoting(
     @CurrentUser() user: ReqUser,

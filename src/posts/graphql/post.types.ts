@@ -251,4 +251,8 @@ export class PostGql {
   /** True once lineups are synced — gates the "See Details → Lineups" button. */
   @Field()
   lineupAvailable: boolean;
+
+  /** True when an admin has pinned this post to the top of the feed. */
+  @Field()
+  pinned: boolean;
 }

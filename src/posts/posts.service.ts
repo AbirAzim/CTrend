@@ -1637,6 +1637,29 @@ export class PostsService implements OnModuleInit {
       fixtureWinnerAt: post.fixtureWinnerAt ?? null,
       fixtureId: post.fixtureId ?? null,
       lineupAvailable: post.lineupAvailable ?? false,
+      pinned: Boolean(post.pinnedAt),
     };
+  }
+
+  /**
+   * Admin-only: pin or unpin a post. Pinned posts float to the top of the
+   * feed (All + Community filters) regardless of post type. Re-pinning an
+   * already-pinned post refreshes its pin timestamp (moves it above older pins).
+   */
+  async setPinned(postId: string, pinned: boolean): Promise<PostDocument> {
+    if (!Types.ObjectId.isValid(postId)) {
+      throw new NotFoundException('Post not found');
+    }
+    const updated = await this.postModel
+      .findByIdAndUpdate(
+        postId,
+        { $set: { pinnedAt: pinned ? new Date() : null } },
+        { new: true },
+      )
+      .exec();
+    if (!updated) {
+      throw new NotFoundException('Post not found');
+    }
+    return updated;
   }
 }

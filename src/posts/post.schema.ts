@@ -176,6 +176,14 @@ export class Post {
   /** True once lineups have been synced for this match. Used to gate the "See Details" button. */
   @Prop({ default: false })
   lineupAvailable: boolean;
+
+  /**
+   * Admin pin: when set, the post is pinned to the top of the feed in the
+   * "All" and "Community" filters regardless of post type. Most recently
+   * pinned posts sort above earlier pins. Null/unset = not pinned.
+   */
+  @Prop({ type: Date, default: null })
+  pinnedAt?: Date | null;
 }
 
 export const PostSchema = SchemaFactory.createForClass(Post);
@@ -186,3 +194,5 @@ PostSchema.index({ status: 1, scheduledAt: 1 });
 PostSchema.index({ type: 1, createdBy: 1, status: 1 });
 PostSchema.index({ type: 1, orgReach: 1, status: 1 });
 PostSchema.index({ reportCount: -1, createdAt: -1 });
+// Pinned posts: fetch admin-pinned posts (newest pin first) for any feed filter.
+PostSchema.index({ pinnedAt: -1 });

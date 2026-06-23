@@ -261,6 +261,9 @@ export class TopScorerGql {
 
   @Field(() => Int)
   goals: number;
+
+  @Field(() => Int)
+  matchesPlayed: number;
 }
 
 @ObjectType()
@@ -279,4 +282,7 @@ export class TopAssistantGql {
 
   @Field(() => Int)
   assists: number;
+
+  @Field(() => Int)
+  matchesPlayed: number;
 }

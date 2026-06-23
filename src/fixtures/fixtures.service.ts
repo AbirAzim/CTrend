@@ -1211,16 +1211,54 @@ export class FixturesService {
     return post;
   }
 
+  /**
+   * Matches played per player id — counts distinct finished fixtures where the
+   * player has a real (non-zero) rating (API rates everyone who featured).
+   */
+  private appearancesByPlayer(
+    fixtures: FixtureDocument[],
+  ): Map<number, number> {
+    const sets = new Map<number, Set<string>>();
+    for (const f of fixtures) {
+      const fid = f._id.toHexString();
+      for (const r of f.playerRatings ?? []) {
+        if (r.playerId == null) continue;
+        if (!(parseFloat(r.rating ?? '0') > 0)) continue;
+        if (!sets.has(r.playerId)) sets.set(r.playerId, new Set());
+        sets.get(r.playerId)!.add(fid);
+      }
+    }
+    const out = new Map<number, number>();
+    for (const [pid, s] of sets) out.set(pid, s.size);
+    return out;
+  }
+
+  /** A real goal for scorer/assist tallies — excludes own goals, disallowed
+   * goals, missed penalties and shootout goals. */
+  private isCountedGoal(detail?: string | null): boolean {
+    const d = (detail || '').toLowerCase();
+    return (
+      !d.includes('own goal') &&
+      !d.includes('disallow') &&
+      !d.includes('missed') &&
+      !d.includes('shootout')
+    );
+  }
+
   async getTopScorers(): Promise<TopScorerGql[]> {
-    const fixtures = await this.fixtureModel.find({
-      status: 'FINISHED',
-      'events.0': { $exists: true },
-    });
+    const fixtures = await this.fixtureModel.find({ status: 'FINISHED' });
+    const apps = this.appearancesByPlayer(fixtures);
     const map = new Map<string, TopScorerGql>();
     for (const f of fixtures) {
       for (const ev of f.events ?? []) {
-        if (ev.type !== 'Goal' || ev.detail === 'Own Goal' || !ev.player?.name) continue;
-        const key = `${ev.player.id ?? ''}::${ev.player.name}::${ev.team}`;
+        if (ev.type !== 'Goal' || !this.isCountedGoal(ev.detail) || !ev.player?.name) continue;
+        // Group by player id when available (name varies across matches, e.g.
+        // "Erling Haaland" vs "E. Haaland", and home/away side flips) — only
+        // fall back to name when there's no id.
+        const key =
+          ev.player.id != null
+            ? `id:${ev.player.id}`
+            : `nm:${ev.player.name.toLowerCase().trim()}`;
         if (!map.has(key)) {
           const teamDoc = ev.team === 'home' ? f.homeTeam : f.awayTeam;
           map.set(key, {
@@ -1229,6 +1267,7 @@ export class FixturesService {
             team: teamDoc.name,
             teamCrest: teamDoc.crest ?? null,
             goals: 0,
+            matchesPlayed: ev.player.id != null ? (apps.get(ev.player.id) ?? 0) : 0,
           });
         }
         map.get(key)!.goals++;
@@ -1240,15 +1279,17 @@ export class FixturesService {
   }
 
   async getTopAssistants(): Promise<TopAssistantGql[]> {
-    const fixtures = await this.fixtureModel.find({
-      status: 'FINISHED',
-      'events.0': { $exists: true },
-    });
+    const fixtures = await this.fixtureModel.find({ status: 'FINISHED' });
+    const apps = this.appearancesByPlayer(fixtures);
     const map = new Map<string, TopAssistantGql>();
     for (const f of fixtures) {
       for (const ev of f.events ?? []) {
-        if (ev.type !== 'Goal' || ev.detail === 'Own Goal' || !ev.assist?.name) continue;
-        const key = `${ev.assist.id ?? ''}::${ev.assist.name}::${ev.team}`;
+        if (ev.type !== 'Goal' || !this.isCountedGoal(ev.detail) || !ev.assist?.name) continue;
+        // Group by player id when available (name/side vary across matches).
+        const key =
+          ev.assist.id != null
+            ? `id:${ev.assist.id}`
+            : `nm:${ev.assist.name.toLowerCase().trim()}`;
         if (!map.has(key)) {
           const teamDoc = ev.team === 'home' ? f.homeTeam : f.awayTeam;
           map.set(key, {
@@ -1257,6 +1298,7 @@ export class FixturesService {
             team: teamDoc.name,
             teamCrest: teamDoc.crest ?? null,
             assists: 0,
+            matchesPlayed: ev.assist.id != null ? (apps.get(ev.assist.id) ?? 0) : 0,
           });
         }
         map.get(key)!.assists++;

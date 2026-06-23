@@ -908,6 +908,7 @@ enum SubscriptionPlan {
 
 type TopAssistantGql {
   assists: Int!
+  matchesPlayed: Int!
   name: String!
   playerId: Int
   team: String!
@@ -916,6 +917,7 @@ type TopAssistantGql {
 
 type TopScorerGql {
   goals: Int!
+  matchesPlayed: Int!
   name: String!
   playerId: Int
   team: String!

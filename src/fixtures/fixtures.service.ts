@@ -107,9 +107,40 @@ interface AfStatTeam {
   team: { id: number; name: string };
   statistics: AfStatItem[];
 }
+interface AfPlayerStatLine {
+  games?: {
+    rating?: string | null;
+    minutes?: number | null;
+    number?: number | null;
+    position?: string | null;
+    captain?: boolean | null;
+    substitute?: boolean | null;
+  } | null;
+  offsides?: number | null;
+  shots?: { total?: number | null; on?: number | null } | null;
+  goals?: {
+    total?: number | null;
+    conceded?: number | null;
+    assists?: number | null;
+    saves?: number | null;
+  } | null;
+  passes?: { total?: number | null; key?: number | null; accuracy?: number | string | null } | null;
+  tackles?: { total?: number | null; blocks?: number | null; interceptions?: number | null } | null;
+  duels?: { total?: number | null; won?: number | null } | null;
+  dribbles?: { attempts?: number | null; success?: number | null; past?: number | null } | null;
+  fouls?: { drawn?: number | null; committed?: number | null } | null;
+  cards?: { yellow?: number | null; red?: number | null } | null;
+  penalty?: {
+    won?: number | null;
+    committed?: number | null;
+    scored?: number | null;
+    missed?: number | null;
+    saved?: number | null;
+  } | null;
+}
 interface AfPlayerStatEntry {
   player: { id: number; name: string; photo: string };
-  statistics: Array<{ games: { rating: string | null; minutes: number | null } }>;
+  statistics: AfPlayerStatLine[];
 }
 interface AfPlayerStatTeam {
   team: { id: number; name: string };
@@ -370,27 +401,78 @@ export class FixturesService {
           : null,
       }));
 
+      const teamSideOf = (teamData: AfPlayerStatTeam) =>
+        teamData.team.id === homeId || teamData.team.name === fixture.homeTeam.name
+          ? 'home'
+          : 'away';
+
       const playerRatings = (ratingsRaw ?? []).flatMap((teamData) => {
-        const teamSide =
-          teamData.team.id === homeId || teamData.team.name === fixture.homeTeam.name
-            ? 'home'
-            : 'away';
+        const teamSide = teamSideOf(teamData);
         return (teamData.players ?? [])
           .filter((p) => p.statistics?.[0]?.games?.rating != null)
           .map((p) => ({
             playerId: p.player.id,
             name: p.player.name,
             team: teamSide,
-            rating: p.statistics[0].games.rating,
+            rating: p.statistics[0].games?.rating ?? null,
             photo: p.player.photo
               ?? `https://media.api-sports.io/football/players/${p.player.id}.png`,
           }));
+      });
+
+      const toNum = (v: number | string | null | undefined): number | null => {
+        if (v == null) return null;
+        const n = typeof v === 'string' ? parseInt(v, 10) : v;
+        return Number.isFinite(n) ? n : null;
+      };
+
+      // Full per-player stat lines for the player match card.
+      const playerMatchStats = (ratingsRaw ?? []).flatMap((teamData) => {
+        const teamSide = teamSideOf(teamData);
+        return (teamData.players ?? []).map((p) => {
+          const s = p.statistics?.[0] ?? {};
+          return {
+            playerId: p.player.id,
+            name: p.player.name,
+            team: teamSide,
+            photo: p.player.photo
+              ?? `https://media.api-sports.io/football/players/${p.player.id}.png`,
+            number: s.games?.number ?? null,
+            position: s.games?.position ?? null,
+            minutes: s.games?.minutes ?? null,
+            rating: s.games?.rating ?? null,
+            captain: s.games?.captain ?? null,
+            substitute: s.games?.substitute ?? null,
+            goals: s.goals?.total ?? null,
+            assists: s.goals?.assists ?? null,
+            saves: s.goals?.saves ?? null,
+            shotsTotal: s.shots?.total ?? null,
+            shotsOn: s.shots?.on ?? null,
+            keyPasses: s.passes?.key ?? null,
+            passesTotal: s.passes?.total ?? null,
+            passAccuracy: toNum(s.passes?.accuracy),
+            dribblesAttempts: s.dribbles?.attempts ?? null,
+            dribblesSuccess: s.dribbles?.success ?? null,
+            foulsDrawn: s.fouls?.drawn ?? null,
+            foulsCommitted: s.fouls?.committed ?? null,
+            tacklesTotal: s.tackles?.total ?? null,
+            interceptions: s.tackles?.interceptions ?? null,
+            duelsTotal: s.duels?.total ?? null,
+            duelsWon: s.duels?.won ?? null,
+            offsides: s.offsides ?? null,
+            yellow: s.cards?.yellow ?? null,
+            red: s.cards?.red ?? null,
+            penaltyScored: s.penalty?.scored ?? null,
+            penaltyMissed: s.penalty?.missed ?? null,
+          };
+        });
       });
 
       const update: Record<string, unknown> = {
         events,
         stats,
         playerRatings,
+        playerMatchStats,
         detailsSyncedAt: new Date(),
       };
 
@@ -1381,6 +1463,7 @@ export class FixturesService {
       }) as FixtureGql['lineups'],
       stats: fixture.stats ?? [],
       playerRatings: fixture.playerRatings ?? [],
+      playerMatchStats: fixture.playerMatchStats ?? [],
       detailsSyncedAt: fixture.detailsSyncedAt ?? null,
     };
   }

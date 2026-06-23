@@ -58,6 +58,41 @@ export class PlayerRating {
   photo?: string | null;
 }
 
+/** Per-player per-match stat line from API-Football `/fixtures/players`. */
+export class PlayerMatchStat {
+  playerId: number;
+  name: string;
+  team: string; // 'home' | 'away'
+  photo?: string | null;
+  number?: number | null;
+  position?: string | null;
+  minutes?: number | null;
+  rating?: string | null;
+  captain?: boolean | null;
+  substitute?: boolean | null;
+  goals?: number | null;
+  assists?: number | null;
+  shotsTotal?: number | null;
+  shotsOn?: number | null;
+  keyPasses?: number | null; // "chances created"
+  passesTotal?: number | null;
+  passAccuracy?: number | null;
+  dribblesAttempts?: number | null;
+  dribblesSuccess?: number | null;
+  foulsDrawn?: number | null; // "fouled"
+  foulsCommitted?: number | null;
+  tacklesTotal?: number | null;
+  interceptions?: number | null;
+  duelsTotal?: number | null;
+  duelsWon?: number | null;
+  offsides?: number | null;
+  yellow?: number | null;
+  red?: number | null;
+  penaltyScored?: number | null;
+  penaltyMissed?: number | null;
+  saves?: number | null; // goalkeepers
+}
+
 export class FixtureTeam {
   name: string;
   shortName: string;
@@ -147,6 +182,10 @@ export class Fixture {
   /** Per-player match ratings */
   @Prop({ type: [MongooseSchema.Types.Mixed], default: [] })
   playerRatings: PlayerRating[];
+
+  /** Per-player full match stat lines (for the player match card) */
+  @Prop({ type: [MongooseSchema.Types.Mixed], default: [] })
+  playerMatchStats: PlayerMatchStat[];
 
   /** Timestamp of last events/stats/lineups sync */
   @Prop({ type: Date, default: null })

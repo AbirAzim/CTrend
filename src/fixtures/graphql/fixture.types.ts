@@ -134,6 +134,102 @@ export class PlayerRatingGql {
 }
 
 @ObjectType()
+export class PlayerMatchStatGql {
+  @Field(() => Int)
+  playerId: number;
+
+  @Field()
+  name: string;
+
+  @Field()
+  team: string;
+
+  @Field(() => String, { nullable: true })
+  photo?: string | null;
+
+  @Field(() => Int, { nullable: true })
+  number?: number | null;
+
+  @Field(() => String, { nullable: true })
+  position?: string | null;
+
+  @Field(() => Int, { nullable: true })
+  minutes?: number | null;
+
+  @Field(() => String, { nullable: true })
+  rating?: string | null;
+
+  @Field(() => Boolean, { nullable: true })
+  captain?: boolean | null;
+
+  @Field(() => Boolean, { nullable: true })
+  substitute?: boolean | null;
+
+  @Field(() => Int, { nullable: true })
+  goals?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  assists?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  shotsTotal?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  shotsOn?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  keyPasses?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  passesTotal?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  passAccuracy?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  dribblesAttempts?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  dribblesSuccess?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  foulsDrawn?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  foulsCommitted?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  tacklesTotal?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  interceptions?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  duelsTotal?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  duelsWon?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  offsides?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  yellow?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  red?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  penaltyScored?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  penaltyMissed?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  saves?: number | null;
+}
+
+@ObjectType()
 export class FixtureTeamGql {
   @Field(() => String, { nullable: true })
   name?: string | null;
@@ -231,6 +327,9 @@ export class FixtureGql {
 
   @Field(() => [PlayerRatingGql])
   playerRatings: PlayerRatingGql[];
+
+  @Field(() => [PlayerMatchStatGql])
+  playerMatchStats: PlayerMatchStatGql[];
 
   @Field(() => Date, { nullable: true })
   detailsSyncedAt?: Date | null;

@@ -294,6 +294,7 @@ type FixtureGql {
   matchEndedAt: DateTime
   matchday: Int
   minute: Int
+  playerMatchStats: [PlayerMatchStatGql!]!
   playerRatings: [PlayerRatingGql!]!
   score: FixtureScoreGql!
   stage: String!
@@ -650,6 +651,40 @@ type PlatformSettingsGql {
   androidUpdateBody: String!
   androidUpdateTitle: String!
   minAndroidVersionCode: Int!
+}
+
+type PlayerMatchStatGql {
+  assists: Int
+  captain: Boolean
+  dribblesAttempts: Int
+  dribblesSuccess: Int
+  duelsTotal: Int
+  duelsWon: Int
+  foulsCommitted: Int
+  foulsDrawn: Int
+  goals: Int
+  interceptions: Int
+  keyPasses: Int
+  minutes: Int
+  name: String!
+  number: Int
+  offsides: Int
+  passAccuracy: Int
+  passesTotal: Int
+  penaltyMissed: Int
+  penaltyScored: Int
+  photo: String
+  playerId: Int!
+  position: String
+  rating: String
+  red: Int
+  saves: Int
+  shotsOn: Int
+  shotsTotal: Int
+  substitute: Boolean
+  tacklesTotal: Int
+  team: String!
+  yellow: Int
 }
 
 type PlayerRatingGql {

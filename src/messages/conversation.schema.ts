@@ -36,9 +36,10 @@ export class Conversation {
   @Prop({ type: Object, default: {} })
   unreadCounts: Record<string, number>;
 
-  // Whether the "Contact admin" automated welcome has been posted (once per thread).
-  @Prop({ type: Boolean, default: false })
-  supportWelcomeSent?: boolean;
+  // When the "Contact admin" automated welcome was last posted — re-sent if the
+  // user taps Contact admin again after a 24h cooldown.
+  @Prop({ type: Date })
+  supportWelcomeAt?: Date;
 }
 
 export const ConversationSchema = SchemaFactory.createForClass(Conversation);

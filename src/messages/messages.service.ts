@@ -213,9 +213,13 @@ export class MessagesService {
   async contactAdmin(userId: string): Promise<ConversationGql> {
     const convo = await this.getOrCreateModeratorConversation(userId);
 
-    // Post the welcome once per thread — even if the user previously only
-    // received admin broadcasts (so it's not gated on an empty conversation).
-    if (!convo.supportWelcomeSent) {
+    // Post the welcome on first contact, then re-send it only if the user taps
+    // Contact admin again after a 24h cooldown (avoids spamming on every tap).
+    const WELCOME_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+    const lastWelcomeAt = convo.supportWelcomeAt
+      ? new Date(convo.supportWelcomeAt).getTime()
+      : 0;
+    if (Date.now() - lastWelcomeAt >= WELCOME_COOLDOWN_MS) {
       const welcome =
         '👋 Welcome to Ke Jitbe support! Thanks for reaching out — ask us ' +
         'anything here (bugs, questions, feedback) and our team will get back ' +
@@ -235,7 +239,7 @@ export class MessagesService {
             lastMessageAt: msg.createdAt,
             [`unreadCounts.${userId}`]:
               (convo.unreadCounts?.[userId] ?? 0) + 1,
-            supportWelcomeSent: true,
+            supportWelcomeAt: msg.createdAt,
           },
         },
       );

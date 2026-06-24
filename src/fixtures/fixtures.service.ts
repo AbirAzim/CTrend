@@ -16,7 +16,12 @@ import { PostsService } from '../posts/posts.service';
 import { CampaignsService } from '../campaigns/campaigns.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { generateMatchCaption } from './caption-templates';
-import { POST_UPDATED, POST_VOTE_UPDATED, pubsub } from '../pubsub';
+import {
+  POST_UPDATED,
+  POST_VOTE_UPDATED,
+  MATCH_PREDICTION_UPDATED,
+  pubsub,
+} from '../pubsub';
 import { MatchPredictionsService } from '../match-predictions/match-predictions.service';
 
 // ── API-Football ──────────────────────────────────────────────────────────
@@ -837,6 +842,13 @@ export class FixturesService {
           await pubsub.publish(POST_UPDATED, {
             postUpdated: { postId: post._id.toHexString() },
           });
+          // Score-prediction winners resolve the instant the match is FINISHED
+          // (status + final score). Nudge viewers to refetch now so the winners
+          // show immediately at full-time, not when the +5min campaign reveal
+          // (or a remount) happens to refresh the post.
+          await pubsub.publish(MATCH_PREDICTION_UPDATED, {
+            matchPredictionUpdated: { postId: post._id.toHexString() },
+          });
         }
       }
 
@@ -905,6 +917,12 @@ export class FixturesService {
           // reads the complete final state (including fixtureWinnerAt).
           await pubsub.publish(POST_UPDATED, { postUpdated: { postId } });
           await pubsub.publish(POST_VOTE_UPDATED, { postVoteUpdated: { postId } });
+          if (newStatus === 'FINISHED') {
+            // Refresh score-prediction winners immediately at full-time.
+            await pubsub.publish(MATCH_PREDICTION_UPDATED, {
+              matchPredictionUpdated: { postId },
+            });
+          }
         }
         updated++;
       } catch (err) {

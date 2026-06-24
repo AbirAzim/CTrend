@@ -13,6 +13,10 @@ import {
 import { Fixture, FixtureDocument } from '../fixtures/fixture.schema';
 import { Vote, VoteDocument } from '../votes/vote.schema';
 import { Post, PostDocument } from '../posts/post.schema';
+import {
+  MatchPrediction,
+  MatchPredictionDocument,
+} from '../match-predictions/match-prediction.schema';
 import { UsersService } from '../users/users.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/notification.schema';
@@ -33,6 +37,8 @@ export class WorldCupCampaignService {
     @InjectModel(Fixture.name) private fixtureModel: Model<FixtureDocument>,
     @InjectModel(Vote.name) private voteModel: Model<VoteDocument>,
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
+    @InjectModel(MatchPrediction.name)
+    private matchPredictionModel: Model<MatchPredictionDocument>,
     private usersService: UsersService,
     private notificationsService: NotificationsService,
     private coinsService: CoinsService,
@@ -160,8 +166,36 @@ export class WorldCupCampaignService {
       return this.toGql(record);
     }
 
-    const drawn =
-      eligibleVotes[Math.floor(Math.random() * eligibleVotes.length)];
+    // ── Priority tier ──────────────────────────────────────────────────────
+    // Users who BOTH voted for the correct winner AND predicted the exact final
+    // score win first. Only fall back to the full correct-winner pool if nobody
+    // nailed the exact score (preserves the existing random-draw behaviour).
+    let wonViaExactScore = false;
+    let pool = eligibleVotes;
+    const finalHome = fixture.score?.home;
+    const finalAway = fixture.score?.away;
+    if (finalHome != null && finalAway != null) {
+      const exactPredictorIds = await this.matchPredictionModel
+        .find({
+          fixtureId: fixture._id,
+          homeScore: finalHome,
+          awayScore: finalAway,
+        })
+        .distinct('userId')
+        .exec();
+      if (exactPredictorIds.length) {
+        const exactSet = new Set(exactPredictorIds.map((id) => id.toString()));
+        const priority = eligibleVotes.filter((v) =>
+          exactSet.has(v.userId.toString()),
+        );
+        if (priority.length) {
+          pool = priority;
+          wonViaExactScore = true;
+        }
+      }
+    }
+
+    const drawn = pool[Math.floor(Math.random() * pool.length)];
     const pickedAt = new Date();
     const record = await this.campaignWinnerModel.create({
       campaignId: campaignObjId,
@@ -171,6 +205,9 @@ export class WorldCupCampaignService {
       prize: 100,
       winningOption: winningOptionIndex,
       paid: false,
+      ...(wonViaExactScore
+        ? { note: 'Won via exact score prediction 🎯' }
+        : {}),
     });
     // Stamp the post so claimPostVotePrize can verify winner eligibility
     await this.postModel.updateOne(

@@ -455,7 +455,15 @@ export class FixturesService {
             shotsOn: s.shots?.on ?? null,
             keyPasses: s.passes?.key ?? null,
             passesTotal: s.passes?.total ?? null,
-            passAccuracy: toNum(s.passes?.accuracy),
+            // API-Football's passes.accuracy is the COUNT of accurate passes,
+            // not a percentage — convert it to a % of total passes.
+            passAccuracy: (() => {
+              const acc = toNum(s.passes?.accuracy);
+              const tot = s.passes?.total ?? null;
+              return acc != null && tot != null && tot > 0
+                ? Math.round((acc / tot) * 100)
+                : null;
+            })(),
             dribblesAttempts: s.dribbles?.attempts ?? null,
             dribblesSuccess: s.dribbles?.success ?? null,
             foulsDrawn: s.fouls?.drawn ?? null,

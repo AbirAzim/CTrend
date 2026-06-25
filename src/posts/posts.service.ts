@@ -1288,7 +1288,7 @@ export class PostsService implements OnModuleInit {
     );
     const scheduledAt = this.parseFutureDate(input.scheduledAt, 'scheduledAt');
     const status = scheduledAt ? PostStatus.SCHEDULED : PostStatus.PUBLISHED;
-    const campaignOid = await this.resolveCampaignId(input.campaignId);
+    const campaignOid = await this.resolveCampaignId(input.campaignId, adminId, UserRole.ADMIN);
     const isAnnouncement = format === PostFormat.ANNOUNCEMENT;
     const doc = await this.postModel.create({
       type: PostType.SYSTEM,

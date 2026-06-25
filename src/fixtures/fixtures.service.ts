@@ -189,6 +189,7 @@ function parseMatchday(round: string): number | null {
 function mapStage(round: string): string {
   const r = (round ?? '').toLowerCase();
   if (r.includes('group')) return 'GROUP_STAGE';
+  if (r.includes('32')) return 'LAST_32';
   if (r.includes('16')) return 'LAST_16';
   if (r.includes('quarter')) return 'QUARTER_FINALS';
   if (r.includes('semi')) return 'SEMI_FINALS';
@@ -197,10 +198,10 @@ function mapStage(round: string): string {
   return 'GROUP_STAGE';
 }
 
-/** "Group A" → "GROUP_A". */
+/** "Group A" → "GROUP_A". Requires a standalone letter so "Group Stage" doesn't match as "GROUP_S". */
 function normalizeGroup(g?: string | null): string | null {
   if (!g) return null;
-  const m = /group\s+([a-z])/i.exec(g);
+  const m = /group\s+([a-z])\b/i.exec(g);
   return m ? `GROUP_${m[1].toUpperCase()}` : null;
 }
 

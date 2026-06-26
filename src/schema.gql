@@ -891,6 +891,7 @@ type Query {
   previewInvites(emails: [String!]!): [InvitePreviewGql!]!
   publicCampaigns: [CampaignGql!]!
   referralPoints(userId: ID!): Int!
+  referralPointsHistory(skip: Int, take: Int, userId: ID): [CoinHistoryItemGql!]!
   unreadNotificationCount: Int!
   userCampaignWinSummary(userId: ID!): [UserCampaignWinSummaryGql!]!
   userFriends(userId: ID!): [UserGql!]!

@@ -36,6 +36,30 @@ export class CoinsResolver {
     return this.coins.getReferralPoints(userId);
   }
 
+  /** Referral-point history (INVITE + REFERRAL_INVITEE ledger entries). */
+  @Query(() => [CoinHistoryItemGql])
+  @UseGuards(OptionalJwtGqlGuard)
+  async referralPointsHistory(
+    @CurrentUser() viewer: ReqUser | undefined,
+    @Args('userId', { type: () => ID, nullable: true }) userId?: string | null,
+    @Args('skip', { type: () => Int, nullable: true }) skip?: number,
+    @Args('take', { type: () => Int, nullable: true }) take?: number,
+  ): Promise<CoinHistoryItemGql[]> {
+    const targetId = userId ?? viewer?.id;
+    if (!targetId) return [];
+    const rows = await this.coins.getReferralPointsHistory(
+      targetId,
+      skip ?? 0,
+      take ?? 30,
+    );
+    return rows.map((r) => ({
+      id: r._id.toHexString(),
+      type: r.type,
+      amount: r.amount,
+      createdAt: r.createdAt ?? new Date(),
+    }));
+  }
+
   /** Public coin history for any user (shown on profiles). When `userId` is
    * omitted, returns the viewer's own history. */
   @Query(() => [CoinHistoryItemGql])

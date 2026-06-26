@@ -118,6 +118,24 @@ export class CoinsService {
     return rows[0]?.total ?? 0;
   }
 
+  /** Paginated referral-point ledger (INVITE + REFERRAL_INVITEE only). */
+  async getReferralPointsHistory(
+    userId: string,
+    skip = 0,
+    take = 30,
+  ): Promise<CoinLedgerDocument[]> {
+    if (!Types.ObjectId.isValid(userId)) return [];
+    return this.ledgerModel
+      .find({
+        userId: new Types.ObjectId(userId),
+        type: { $in: [CoinType.INVITE, CoinType.REFERRAL_INVITEE] },
+      })
+      .sort({ createdAt: -1 })
+      .skip(Math.max(0, skip))
+      .limit(Math.min(Math.max(1, take), 100))
+      .exec();
+  }
+
   async getHistory(
     userId: string,
     skip = 0,

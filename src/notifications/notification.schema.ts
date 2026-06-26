@@ -21,7 +21,10 @@ export type NotificationType =
   | 'REFERRAL_JOINED'
   | 'REFERRAL_REDEEMED';
 
-export type NotificationDocument = HydratedDocument<Notification>;
+export type NotificationDocument = HydratedDocument<Notification> & {
+  createdAt: Date;
+  updatedAt: Date;
+};
 
 @Schema({ timestamps: true })
 export class Notification {

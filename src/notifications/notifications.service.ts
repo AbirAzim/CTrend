@@ -138,8 +138,6 @@ export class NotificationsService {
         params.verbPhrase,
       );
       existing.title = params.title;
-      existing.markModified('createdAt');
-      existing.createdAt = new Date();
       await existing.save();
       const gql = this.toGql(existing);
       await pubsub.publish(NEW_NOTIFICATION, {
@@ -706,8 +704,8 @@ export class NotificationsService {
       latestActorName: doc.latestActorName,
       read: doc.read,
       archived: doc.archived ?? false,
-      createdAt: (doc as any).createdAt,
-      updatedAt: (doc as any).updatedAt ?? (doc as any).createdAt,
+      createdAt: doc.createdAt,
+      updatedAt: doc.updatedAt ?? doc.createdAt,
     };
   }
 }

@@ -38,6 +38,15 @@ export class PlatformSettingsResolver {
     return this.platformSettingsService.setMinAndroidVersionCode(versionCode);
   }
 
+  @Mutation(() => PlatformSettingsGql)
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async setReferralSystemEnabled(
+    @Args('enabled') enabled: boolean,
+  ): Promise<PlatformSettingsGql> {
+    return this.platformSettingsService.setReferralSystemEnabled(enabled);
+  }
+
   /** Set min version + update message, then push/notify only outdated Android users. */
   @Mutation(() => Int)
   @UseGuards(GqlAuthGuard, RolesGuard)

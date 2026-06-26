@@ -15,6 +15,16 @@ export class PlatformSettingsService {
     private readonly model: Model<PlatformSettingsDocument>,
   ) {}
 
+  private toGqlFromDoc(doc: PlatformSettingsDocument | null): PlatformSettingsGql {
+    return {
+      allowUserGlobalPosts: doc?.allowUserGlobalPosts ?? false,
+      minAndroidVersionCode: doc?.minAndroidVersionCode ?? 0,
+      androidUpdateTitle: doc?.androidUpdateTitle ?? '',
+      androidUpdateBody: doc?.androidUpdateBody ?? '',
+      referralSystemEnabled: doc?.referralSystemEnabled ?? false,
+    };
+  }
+
   async getDocument(): Promise<PlatformSettingsDocument> {
     const existing = await this.model
       .findOne({ key: PLATFORM_SETTINGS_KEY })
@@ -26,22 +36,23 @@ export class PlatformSettingsService {
       minAndroidVersionCode: 0,
       androidUpdateTitle: '',
       androidUpdateBody: '',
+      referralSystemEnabled: false,
     });
   }
 
   async toGql(): Promise<PlatformSettingsGql> {
     const doc = await this.getDocument();
-    return {
-      allowUserGlobalPosts: doc.allowUserGlobalPosts ?? false,
-      minAndroidVersionCode: doc.minAndroidVersionCode ?? 0,
-      androidUpdateTitle: doc.androidUpdateTitle ?? '',
-      androidUpdateBody: doc.androidUpdateBody ?? '',
-    };
+    return this.toGqlFromDoc(doc);
   }
 
   async isUserGlobalPostsAllowed(): Promise<boolean> {
     const doc = await this.getDocument();
     return Boolean(doc.allowUserGlobalPosts);
+  }
+
+  async isReferralSystemEnabled(): Promise<boolean> {
+    const doc = await this.getDocument();
+    return Boolean(doc.referralSystemEnabled);
   }
 
   async setAllowUserGlobalPosts(enabled: boolean): Promise<PlatformSettingsGql> {
@@ -52,12 +63,18 @@ export class PlatformSettingsService {
         { upsert: true, new: true },
       )
       .exec();
-    return {
-      allowUserGlobalPosts: doc?.allowUserGlobalPosts ?? false,
-      minAndroidVersionCode: doc?.minAndroidVersionCode ?? 0,
-      androidUpdateTitle: doc?.androidUpdateTitle ?? '',
-      androidUpdateBody: doc?.androidUpdateBody ?? '',
-    };
+    return this.toGqlFromDoc(doc);
+  }
+
+  async setReferralSystemEnabled(enabled: boolean): Promise<PlatformSettingsGql> {
+    const doc = await this.model
+      .findOneAndUpdate(
+        { key: PLATFORM_SETTINGS_KEY },
+        { $set: { referralSystemEnabled: enabled } },
+        { upsert: true, new: true },
+      )
+      .exec();
+    return this.toGqlFromDoc(doc);
   }
 
   async setMinAndroidVersionCode(versionCode: number): Promise<PlatformSettingsGql> {
@@ -69,12 +86,7 @@ export class PlatformSettingsService {
         { upsert: true, new: true },
       )
       .exec();
-    return {
-      allowUserGlobalPosts: doc?.allowUserGlobalPosts ?? false,
-      minAndroidVersionCode: doc?.minAndroidVersionCode ?? 0,
-      androidUpdateTitle: doc?.androidUpdateTitle ?? '',
-      androidUpdateBody: doc?.androidUpdateBody ?? '',
-    };
+    return this.toGqlFromDoc(doc);
   }
 
   async publishAndroidUpdateNotice(
@@ -96,11 +108,6 @@ export class PlatformSettingsService {
         { upsert: true, new: true },
       )
       .exec();
-    return {
-      allowUserGlobalPosts: doc?.allowUserGlobalPosts ?? false,
-      minAndroidVersionCode: doc?.minAndroidVersionCode ?? 0,
-      androidUpdateTitle: doc?.androidUpdateTitle ?? '',
-      androidUpdateBody: doc?.androidUpdateBody ?? '',
-    };
+    return this.toGqlFromDoc(doc);
   }
 }

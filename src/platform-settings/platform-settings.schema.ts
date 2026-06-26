@@ -24,6 +24,10 @@ export class PlatformSettings {
 
   @Prop({ default: '' })
   androidUpdateBody: string;
+
+  /** When true, referral invites, code redemption, and referral-point awards are active. */
+  @Prop({ default: false })
+  referralSystemEnabled: boolean;
 }
 
 export const PlatformSettingsSchema =

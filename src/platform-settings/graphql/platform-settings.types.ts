@@ -14,4 +14,8 @@ export class PlatformSettingsGql {
 
   @Field()
   androidUpdateBody: string;
+
+  /** Referral invites, code redemption, and referral-point awards. Default off. */
+  @Field()
+  referralSystemEnabled: boolean;
 }

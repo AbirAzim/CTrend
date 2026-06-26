@@ -576,6 +576,7 @@ type Mutation {
   setPostHype(active: Boolean!, postId: ID!): Boolean!
   setPostKeep(keep: Boolean!, postId: ID!): Boolean!
   setPostLike(active: Boolean!, postId: ID!): Boolean!
+  setReferralSystemEnabled(enabled: Boolean!): PlatformSettingsGql!
   setTyping(conversationId: ID!, isTyping: Boolean!): Boolean!
   signup(displayName: String, email: String!, password: String!): Boolean!
   startDirectConversation(userId: ID!): ConversationGql!
@@ -661,6 +662,7 @@ type PlatformSettingsGql {
   androidUpdateBody: String!
   androidUpdateTitle: String!
   minAndroidVersionCode: Int!
+  referralSystemEnabled: Boolean!
 }
 
 type PlayerMatchStatGql {

@@ -17,6 +17,7 @@ import { MailService } from '../mail/mail.service';
 import { CoinsService } from '../coins/coins.service';
 import { CoinType } from '../coins/coins.constants';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const REFERRAL_CODE_LEN = 8;
@@ -51,7 +52,14 @@ export class InvitationsService {
     private config: ConfigService,
     private coinsService: CoinsService,
     private notificationsService: NotificationsService,
+    private platformSettingsService: PlatformSettingsService,
   ) {}
+
+  private async assertReferralEnabled(): Promise<void> {
+    if (!(await this.platformSettingsService.isReferralSystemEnabled())) {
+      throw new BadRequestException('Referral program is currently disabled');
+    }
+  }
 
   private async uniqueReferralCode(): Promise<string> {
     for (let attempt = 0; attempt < 12; attempt++) {
@@ -157,6 +165,7 @@ export class InvitationsService {
     rawCode: string,
     userId: string,
   ): Promise<RedeemReferralResult> {
+    await this.assertReferralEnabled();
     const code = rawCode.trim().toUpperCase();
     if (!code) {
       throw new BadRequestException('Referral code is required');
@@ -222,6 +231,13 @@ export class InvitationsService {
 
     if (!updated) {
       throw new BadRequestException('This invitation has already been redeemed');
+    }
+
+    const referralEnabled =
+      await this.platformSettingsService.isReferralSystemEnabled();
+    if (!referralEnabled) {
+      const balance = await this.coinsService.getBalance(inviteeUserId);
+      return { inviteeCoins: 0, inviterCoins: 0, balance };
     }
 
     const inviterId = invitation.invitedBy.toHexString();

@@ -860,6 +860,7 @@ type Query {
   categoryPostCount(categoryId: ID!): Int!
   coinHistory(skip: Int, take: Int, userId: ID): [CoinHistoryItemGql!]!
   coinLeaderboard(take: Int): [CoinLeaderboardEntryGql!]!
+  coinLeaderboardRank(userId: ID): Int
   commentsByPost(postId: ID!): [CommentGql!]!
   feedPosts(campaignId: ID, postFilter: FeedPostFilter, scope: FeedScope, skip: Int = 0, sort: FeedSort, take: Int = 20): [PostGql!]!
   friendRequests: FriendRequestsGql!

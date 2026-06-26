@@ -120,6 +120,8 @@ type CoinHistoryItemGql {
   amount: Int!
   createdAt: DateTime!
   id: ID!
+  relatedUserId: ID
+  relatedUserName: String
   type: String!
 }
 

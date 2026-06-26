@@ -16,6 +16,7 @@ import { UsersService } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
 import { CoinsService } from '../coins/coins.service';
 import { CoinType } from '../coins/coins.constants';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const REFERRAL_CODE_LEN = 8;
@@ -49,6 +50,7 @@ export class InvitationsService {
     private mailService: MailService,
     private config: ConfigService,
     private coinsService: CoinsService,
+    private notificationsService: NotificationsService,
   ) {}
 
   private async uniqueReferralCode(): Promise<string> {
@@ -227,18 +229,79 @@ export class InvitationsService {
       inviteeUserId,
       CoinType.REFERRAL_INVITEE,
       invitationId,
+      undefined,
+      inviterId,
     );
     const inviterAward = await this.coinsService.award(
       inviterId,
       CoinType.INVITE,
       invitationId,
+      undefined,
+      inviteeUserId,
     );
+
+    void this.notifyReferralRewards({
+      inviterId,
+      inviteeUserId,
+      inviterAwarded: inviterAward.awarded,
+      inviteeAwarded: inviteeAward.awarded,
+    });
 
     return {
       inviteeCoins: inviteeAward.awarded,
       inviterCoins: inviterAward.awarded,
       balance: inviteeAward.balance,
     };
+  }
+
+  private async notifyReferralRewards(params: {
+    inviterId: string;
+    inviteeUserId: string;
+    inviterAwarded: number;
+    inviteeAwarded: number;
+  }): Promise<void> {
+    try {
+      const [invitee, inviter] = await Promise.all([
+        this.usersService.findById(params.inviteeUserId),
+        this.usersService.findById(params.inviterId),
+      ]);
+      const inviteeName =
+        invitee?.displayName?.trim() ||
+        invitee?.username?.trim() ||
+        'Someone';
+      const inviterName =
+        inviter?.displayName?.trim() ||
+        inviter?.username?.trim() ||
+        'Your friend';
+
+      if (params.inviterAwarded > 0) {
+        await this.notificationsService.create({
+          userId: params.inviterId,
+          type: 'REFERRAL_JOINED',
+          title: `+${params.inviterAwarded} referral points`,
+          body: `${inviteeName} joined using your invite code`,
+          referenceId: params.inviteeUserId,
+          referenceType: 'POINTS',
+          actorId: params.inviteeUserId,
+          actorName: inviteeName,
+        });
+      }
+
+      if (params.inviteeAwarded > 0) {
+        await this.notificationsService.create({
+          userId: params.inviteeUserId,
+          type: 'REFERRAL_REDEEMED',
+          title: `+${params.inviteeAwarded} referral points`,
+          body: `You joined with ${inviterName}'s invite code`,
+          referenceId: params.inviterId,
+          referenceType: 'POINTS',
+          actorId: params.inviterId,
+          actorName: inviterName,
+        });
+      }
+    } catch {
+      /* notifications must not block referral fulfillment */
+    }
   }
 
   async listAll(status?: InvitationStatus): Promise<InvitationDocument[]> {

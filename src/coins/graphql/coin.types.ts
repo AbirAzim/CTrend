@@ -15,6 +15,13 @@ export class CoinHistoryItemGql {
 
   @Field()
   createdAt: Date;
+
+  /** Invitee (INVITE) or inviter (REFERRAL_INVITEE) — referral history only. */
+  @Field(() => ID, { nullable: true })
+  relatedUserId?: string;
+
+  @Field({ nullable: true })
+  relatedUserName?: string;
 }
 
 @ObjectType()

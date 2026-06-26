@@ -52,12 +52,25 @@ export class CoinsResolver {
       skip ?? 0,
       take ?? 30,
     );
-    return rows.map((r) => ({
-      id: r._id.toHexString(),
-      type: r.type,
-      amount: r.amount,
-      createdAt: r.createdAt ?? new Date(),
-    }));
+    return Promise.all(
+      rows.map(async (r) => {
+        let relatedUserName: string | undefined;
+        const relatedId = r.relatedUserId?.toHexString();
+        if (relatedId) {
+          const u = await this.usersService.findById(relatedId);
+          relatedUserName =
+            u?.displayName?.trim() || u?.username?.trim() || undefined;
+        }
+        return {
+          id: r._id.toHexString(),
+          type: r.type,
+          amount: r.amount,
+          createdAt: r.createdAt ?? new Date(),
+          relatedUserId: relatedId,
+          relatedUserName,
+        };
+      }),
+    );
   }
 
   /** Public coin history for any user (shown on profiles). When `userId` is

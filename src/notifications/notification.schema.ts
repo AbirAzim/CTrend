@@ -17,7 +17,9 @@ export type NotificationType =
   | 'VOTE_PRIZE_CLAIMED'
   | 'SYSTEM'
   | 'USER_GLOBAL_POST'
-  | 'LINEUP_AVAILABLE';
+  | 'LINEUP_AVAILABLE'
+  | 'REFERRAL_JOINED'
+  | 'REFERRAL_REDEEMED';
 
 export type NotificationDocument = HydratedDocument<Notification>;
 
@@ -45,6 +47,8 @@ export class Notification {
       'SYSTEM',
       'USER_GLOBAL_POST',
       'LINEUP_AVAILABLE',
+      'REFERRAL_JOINED',
+      'REFERRAL_REDEEMED',
     ],
     required: true,
   })

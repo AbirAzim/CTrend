@@ -26,6 +26,10 @@ export class CoinLedger {
 
   @Prop({ required: true })
   amount: number;
+
+  /** For referral events — the other party (invitee on INVITE, inviter on REFERRAL_INVITEE). */
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  relatedUserId?: Types.ObjectId;
 }
 
 export const CoinLedgerSchema = SchemaFactory.createForClass(CoinLedger);

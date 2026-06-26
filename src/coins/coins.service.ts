@@ -27,6 +27,7 @@ export class CoinsService {
     type: CoinTypeValue,
     refId: string,
     amountOverride?: number,
+    relatedUserId?: string,
   ): Promise<AwardResult> {
     try {
       if (!userId || !Types.ObjectId.isValid(userId)) {
@@ -38,7 +39,17 @@ export class CoinsService {
 
       const res = await this.ledgerModel.updateOne(
         { userId: uid, type, refId },
-        { $setOnInsert: { userId: uid, type, refId, amount } },
+        {
+          $setOnInsert: {
+            userId: uid,
+            type,
+            refId,
+            amount,
+            ...(relatedUserId && Types.ObjectId.isValid(relatedUserId)
+              ? { relatedUserId: new Types.ObjectId(relatedUserId) }
+              : {}),
+          },
+        },
         { upsert: true },
       );
       if (res.upsertedCount && res.upsertedCount > 0) {

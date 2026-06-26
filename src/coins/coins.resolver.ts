@@ -27,6 +27,15 @@ export class CoinsResolver {
     return this.coins.getBalance(user.id);
   }
 
+  /** Referral / invite points earned (public on profiles). */
+  @Query(() => Int)
+  @UseGuards(OptionalJwtGqlGuard)
+  async referralPoints(
+    @Args('userId', { type: () => ID }) userId: string,
+  ): Promise<number> {
+    return this.coins.getReferralPoints(userId);
+  }
+
   /** Public coin history for any user (shown on profiles). When `userId` is
    * omitted, returns the viewer's own history. */
   @Query(() => [CoinHistoryItemGql])

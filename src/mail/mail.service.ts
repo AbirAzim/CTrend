@@ -126,18 +126,34 @@ export class MailService implements OnModuleInit {
     to: string,
     inviteUrl: string,
     inviterName: string,
+    referralCode: string,
   ): Promise<void> {
+    const signupUrl = this.config.get<string>(
+      'FRONTEND_URL',
+      'https://kejitbe.app',
+    );
     const html = this.baseTemplate(`
       <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1A1A2E;text-align:center;">
         You're invited to Ke Jitbe
       </h2>
       ${this.logoImgTag(48, '20px')}
-      <p style="margin:0 0 28px;font-size:15px;color:#555;line-height:1.6;text-align:center;">
+      <p style="margin:0 0 20px;font-size:15px;color:#555;line-height:1.6;text-align:center;">
         <strong>${inviterName}</strong> has invited you to join Ke Jitbe —<br>
         the platform where you compare, vote, and see the trend.<br>
         This invitation expires in <strong>7 days</strong>.
       </p>
-      <p style="text-align:center;margin:0 0 28px;">
+      <div style="background:#f8fafc;border-radius:12px;padding:18px 20px;margin:0 0 24px;text-align:center;">
+        <p style="margin:0 0 8px;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;">
+          Your referral code
+        </p>
+        <p style="margin:0;font-size:28px;font-weight:800;letter-spacing:0.2em;color:#1A1A2E;font-family:ui-monospace,monospace;">
+          ${referralCode}
+        </p>
+        <p style="margin:10px 0 0;font-size:13px;color:#666;line-height:1.5;">
+          Enter this code when you sign up — or redeem it from your profile — to earn <strong>5 engagement coins</strong>.
+        </p>
+      </div>
+      <p style="text-align:center;margin:0 0 16px;">
         <a href="${inviteUrl}"
           style="display:inline-block;background:#1A1A2E;color:#fff;
             text-decoration:none;border-radius:10px;padding:14px 36px;
@@ -145,13 +161,17 @@ export class MailService implements OnModuleInit {
           Accept Invitation
         </a>
       </p>
-      <p style="margin:0;font-size:13px;color:#999;text-align:center;">
+      <p style="margin:0;font-size:13px;color:#777;text-align:center;line-height:1.6;">
+        Or sign up at <a href="${signupUrl}/signup" style="color:#1A1A2E;">${signupUrl.replace(/^https?:\/\//, '')}/signup</a>
+        and enter your referral code.
+      </p>
+      <p style="margin:16px 0 0;font-size:13px;color:#999;text-align:center;">
         If you weren't expecting this invitation, you can safely ignore this email.
       </p>
     `);
 
     await this.send(to, `${inviterName} invited you to Ke Jitbe`, html, {
-      text: `${inviterName} has invited you to join Ke Jitbe.\n\nAccept your invitation:\n${inviteUrl}\n\nThis invitation expires in 7 days. If you weren't expecting this, ignore it.`,
+      text: `${inviterName} has invited you to join Ke Jitbe.\n\nYour referral code: ${referralCode}\n\nEnter it when you sign up (or redeem from your profile) to earn 5 engagement coins.\n\nAccept your invitation:\n${inviteUrl}\n\nOr sign up at ${signupUrl}/signup\n\nThis invitation expires in 7 days. If you weren't expecting this, ignore it.`,
     });
   }
 

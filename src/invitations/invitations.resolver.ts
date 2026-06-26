@@ -67,6 +67,18 @@ class InviteResultGql {
   message?: string;
 }
 
+@ObjectType()
+export class RedeemReferralResultGql {
+  @Field()
+  inviteeCoins: number;
+
+  @Field()
+  inviterCoins: number;
+
+  @Field()
+  balance: number;
+}
+
 @Resolver()
 export class InvitationsResolver {
   constructor(
@@ -128,6 +140,16 @@ export class InvitationsResolver {
       }
     }
     return results;
+  }
+
+  /** Redeem a referral code from profile (invitee only, one-time, email must match). */
+  @Mutation(() => RedeemReferralResultGql)
+  @UseGuards(GqlAuthGuard)
+  async redeemReferralCode(
+    @CurrentUser() user: ReqUser,
+    @Args('code') code: string,
+  ): Promise<RedeemReferralResultGql> {
+    return this.invitationsService.redeemReferralCode(code, user.id);
   }
 
   /** List all invitations — admin only. Optionally filter by status. */

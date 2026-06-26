@@ -90,14 +90,6 @@ type CampaignWinLeaderboardEntryGql {
   wins: Int!
 }
 
-type UserCampaignWinSummaryGql {
-  campaignId: ID
-  campaignName: String!
-  campaignSlug: String!
-  totalPrize: Int!
-  wins: Int!
-}
-
 type CampaignWinnerGql {
   campaignId: ID
   createdAt: DateTime!
@@ -551,6 +543,7 @@ type Mutation {
   publishAndroidUpdateNotice(body: String!, minVersionCode: Int!, title: String!): Int!
   reactMessage(emoji: String, messageId: ID!): MessageGql!
   reconcileFinishedMatchPosts: String!
+  redeemReferralCode(code: String!): RedeemReferralResultGql!
   register(input: RegisterInput!): AuthPayloadGql!
   registerPushToken(platform: String, token: String!): Boolean!
   rejectAdminPromotion(token: String!): Boolean!
@@ -593,7 +586,7 @@ type Mutation {
   updatePost(input: UpdatePostInput!, postId: ID!): PostGql!
   updateProfile(input: UpdateProfileInput!): UserGql!
   verifyBkashPayment(payload: String!): BkashVerificationGql!
-  verifyEmail(code: String!, email: String!): AuthPayloadGql!
+  verifyEmail(code: String!, email: String!, referralCode: String): AuthPayloadGql!
   votePost(anonymous: Boolean, postId: ID!, selectedOptionIndex: Int!): VoteResultGql!
 }
 
@@ -890,8 +883,8 @@ type Query {
   platformSettings: PlatformSettingsGql!
   previewInvites(emails: [String!]!): [InvitePreviewGql!]!
   publicCampaigns: [CampaignGql!]!
+  referralPoints(userId: ID!): Int!
   unreadNotificationCount: Int!
-  userCampaignWinSummary(userId: ID!): [UserCampaignWinSummaryGql!]!
   userCampaignWinSummary(userId: ID!): [UserCampaignWinSummaryGql!]!
   userFriends(userId: ID!): [UserGql!]!
   userVoteCount(userId: ID!): Int!
@@ -905,6 +898,12 @@ type Query {
 type ReadReceiptGql {
   readAt: DateTime!
   userId: ID!
+}
+
+type RedeemReferralResultGql {
+  balance: Float!
+  inviteeCoins: Float!
+  inviterCoins: Float!
 }
 
 input RegisterInput {

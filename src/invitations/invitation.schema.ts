@@ -28,6 +28,15 @@ export class Invitation {
   })
   status: InvitationStatus;
 
+  @Prop({ unique: true, sparse: true, uppercase: true, trim: true })
+  referralCode?: string;
+
+  @Prop({ type: Types.ObjectId, ref: 'User' })
+  redeemedByUserId?: Types.ObjectId;
+
+  @Prop()
+  redeemedAt?: Date;
+
   @Prop({ required: true })
   expiresAt: Date;
 }

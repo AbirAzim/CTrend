@@ -17,9 +17,26 @@ import { CoinsService } from '../coins/coins.service';
 import { CoinType } from '../coins/coins.constants';
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const REFERRAL_CODE_LEN = 8;
+const REFERRAL_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+
+export type RedeemReferralResult = {
+  inviteeCoins: number;
+  inviterCoins: number;
+  balance: number;
+};
 
 function sha256(value: string): string {
   return createHash('sha256').update(value).digest('hex');
+}
+
+function generateReferralCode(): string {
+  const bytes = randomBytes(REFERRAL_CODE_LEN);
+  let out = '';
+  for (let i = 0; i < REFERRAL_CODE_LEN; i++) {
+    out += REFERRAL_ALPHABET[bytes[i]! % REFERRAL_ALPHABET.length];
+  }
+  return out;
 }
 
 @Injectable()
@@ -32,6 +49,15 @@ export class InvitationsService {
     private config: ConfigService,
     private coinsService: CoinsService,
   ) {}
+
+  private async uniqueReferralCode(): Promise<string> {
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const code = generateReferralCode();
+      const exists = await this.invitationModel.exists({ referralCode: code });
+      if (!exists) return code;
+    }
+    throw new BadRequestException('Could not generate referral code — try again');
+  }
 
   async invite(
     inviterId: string,
@@ -61,8 +87,10 @@ export class InvitationsService {
     });
 
     const rawToken = randomBytes(32).toString('hex');
+    const referralCode = await this.uniqueReferralCode();
     await this.invitationModel.create({
       tokenHash: sha256(rawToken),
+      referralCode,
       email: normalized,
       invitedBy: new Types.ObjectId(inviterId),
       role: targetRole,
@@ -82,6 +110,7 @@ export class InvitationsService {
       normalized,
       inviteUrl,
       inviterName,
+      referralCode,
     );
 
     return true;
@@ -104,19 +133,108 @@ export class InvitationsService {
     });
   }
 
-  async markAccepted(invitationId: string): Promise<void> {
-    const invitation = await this.invitationModel.findByIdAndUpdate(
-      invitationId,
-      { status: InvitationStatus.ACCEPTED },
-    );
-    // Coins: reward the inviter once when their invite is accepted.
-    if (invitation?.invitedBy) {
-      await this.coinsService.award(
-        invitation.invitedBy.toHexString(),
-        CoinType.INVITE,
-        invitationId,
+  async findByReferralCode(rawCode: string): Promise<InvitationDocument | null> {
+    const code = rawCode.trim().toUpperCase();
+    if (!code) return null;
+    return this.invitationModel.findOne({
+      referralCode: code,
+      status: InvitationStatus.PENDING,
+      expiresAt: { $gt: new Date() },
+    });
+  }
+
+  /**
+   * Redeem a referral code for the authenticated user.
+   * Security: email must match invitation, one-time only, invitee cannot be inviter.
+   */
+  async redeemReferralCode(
+    rawCode: string,
+    userId: string,
+  ): Promise<RedeemReferralResult> {
+    const code = rawCode.trim().toUpperCase();
+    if (!code) {
+      throw new BadRequestException('Referral code is required');
+    }
+
+    const user = await this.usersService.findById(userId);
+    if (!user) throw new NotFoundException('User not found');
+    if (!user.emailVerified) {
+      throw new BadRequestException('Verify your email before redeeming a code');
+    }
+
+    const invitation = await this.findByReferralCode(code);
+    if (!invitation) {
+      throw new BadRequestException('Invalid or expired referral code');
+    }
+
+    const userEmail = user.email.trim().toLowerCase();
+    if (userEmail !== invitation.email) {
+      throw new ForbiddenException(
+        'This referral code was sent to a different email address',
       );
     }
+
+    if (invitation.invitedBy.toHexString() === userId) {
+      throw new BadRequestException('You cannot redeem your own invitation code');
+    }
+
+    return this.fulfillInvitation(invitation, userId);
+  }
+
+  /** Mark invitation accepted and award coins to invitee + inviter (idempotent ledger). */
+  async markAccepted(
+    invitationId: string,
+    inviteeUserId: string,
+  ): Promise<RedeemReferralResult> {
+    const invitation = await this.invitationModel.findById(invitationId).exec();
+    if (!invitation) {
+      return { inviteeCoins: 0, inviterCoins: 0, balance: 0 };
+    }
+    if (invitation.status === InvitationStatus.ACCEPTED) {
+      const balance = await this.coinsService.getBalance(inviteeUserId);
+      return { inviteeCoins: 0, inviterCoins: 0, balance };
+    }
+    return this.fulfillInvitation(invitation, inviteeUserId);
+  }
+
+  private async fulfillInvitation(
+    invitation: InvitationDocument,
+    inviteeUserId: string,
+  ): Promise<RedeemReferralResult> {
+    const invitationId = invitation._id.toHexString();
+    const updated = await this.invitationModel
+      .findOneAndUpdate(
+        { _id: invitation._id, status: InvitationStatus.PENDING },
+        {
+          status: InvitationStatus.ACCEPTED,
+          redeemedByUserId: new Types.ObjectId(inviteeUserId),
+          redeemedAt: new Date(),
+        },
+        { new: true },
+      )
+      .exec();
+
+    if (!updated) {
+      throw new BadRequestException('This invitation has already been redeemed');
+    }
+
+    const inviterId = invitation.invitedBy.toHexString();
+    const inviteeAward = await this.coinsService.award(
+      inviteeUserId,
+      CoinType.REFERRAL_INVITEE,
+      invitationId,
+    );
+    const inviterAward = await this.coinsService.award(
+      inviterId,
+      CoinType.INVITE,
+      invitationId,
+    );
+
+    return {
+      inviteeCoins: inviteeAward.awarded,
+      inviterCoins: inviterAward.awarded,
+      balance: inviteeAward.balance,
+    };
   }
 
   async listAll(status?: InvitationStatus): Promise<InvitationDocument[]> {
@@ -139,6 +257,9 @@ export class InvitationsService {
     const rawToken = randomBytes(32).toString('hex');
     invitation.tokenHash = sha256(rawToken);
     invitation.expiresAt = new Date(Date.now() + INVITE_TTL_MS);
+    if (!invitation.referralCode) {
+      invitation.referralCode = await this.uniqueReferralCode();
+    }
     await invitation.save();
 
     const inviter = await this.usersService.findById(
@@ -155,6 +276,7 @@ export class InvitationsService {
       invitation.email,
       inviteUrl,
       inviterName,
+      invitation.referralCode,
     );
   }
 }

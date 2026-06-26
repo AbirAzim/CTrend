@@ -93,7 +93,7 @@ export class AuthService {
     return true;
   }
 
-  async verifyEmail(email: string, code: string) {
+  async verifyEmail(email: string, code: string, referralCode?: string) {
     const normalized = normalizeEmail(email);
     const user = await this.usersService.findByEmail(normalized);
     if (!user) throw new BadRequestException('Invalid or expired code');
@@ -115,6 +115,18 @@ export class AuthService {
     user.emailVerificationCode = undefined;
     user.emailVerificationExpiry = undefined;
     await user.save();
+
+    if (referralCode?.trim()) {
+      try {
+        await this.invitationsService.redeemReferralCode(
+          referralCode,
+          user._id.toHexString(),
+        );
+      } catch {
+        // Verification still succeeds — user can redeem from profile later.
+      }
+    }
+
     return this.toAuthPayload(user);
   }
 
@@ -284,7 +296,10 @@ export class AuthService {
       emailVerified: true,
     });
 
-    await this.invitationsService.markAccepted(invitation._id.toHexString());
+    await this.invitationsService.markAccepted(
+      invitation._id.toHexString(),
+      user._id.toHexString(),
+    );
     return this.toAuthPayload(user);
   }
 

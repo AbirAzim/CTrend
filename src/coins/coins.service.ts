@@ -103,6 +103,21 @@ export class CoinsService {
     return u?.coins ?? 0;
   }
 
+  /** Lifetime referral / invite points (INVITE + REFERRAL_INVITEE ledger entries). */
+  async getReferralPoints(userId: string): Promise<number> {
+    if (!Types.ObjectId.isValid(userId)) return 0;
+    const rows = await this.ledgerModel.aggregate<{ total: number }>([
+      {
+        $match: {
+          userId: new Types.ObjectId(userId),
+          type: { $in: [CoinType.INVITE, CoinType.REFERRAL_INVITEE] },
+        },
+      },
+      { $group: { _id: null, total: { $sum: '$amount' } } },
+    ]);
+    return rows[0]?.total ?? 0;
+  }
+
   async getHistory(
     userId: string,
     skip = 0,

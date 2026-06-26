@@ -12,6 +12,7 @@ export const CoinType = {
   VOTE_WINNER: 'VOTE_WINNER', // you were drawn as a post vote winner
   DAILY_STREAK: 'DAILY_STREAK', // first activity of the day
   INVITE: 'INVITE', // an invited friend joined
+  REFERRAL_INVITEE: 'REFERRAL_INVITEE', // joined via a friend's referral code
 } as const;
 
 export type CoinTypeValue = (typeof CoinType)[keyof typeof CoinType];
@@ -29,5 +30,6 @@ export const COIN_AMOUNTS: Record<CoinTypeValue, number> = {
   CAMPAIGN_WINNER: 25,
   VOTE_WINNER: 15,
   DAILY_STREAK: 5,
-  INVITE: 50,
+  INVITE: 10,
+  REFERRAL_INVITEE: 5,
 };

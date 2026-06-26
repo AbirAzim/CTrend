@@ -43,8 +43,16 @@ export class AuthResolver {
   }
 
   @Mutation(() => AuthPayloadGql)
-  verifyEmail(@Args('email') email: string, @Args('code') code: string) {
-    return this.authService.verifyEmail(email, code);
+  verifyEmail(
+    @Args('email') email: string,
+    @Args('code') code: string,
+    @Args('referralCode', { nullable: true }) referralCode?: string,
+  ) {
+    return this.authService.verifyEmail(
+      email,
+      code,
+      referralCode ?? undefined,
+    );
   }
 
   @Mutation(() => Boolean)

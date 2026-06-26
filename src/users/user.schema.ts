@@ -98,6 +98,11 @@ export class User {
   /** Consecutive-day streak length. */
   @Prop({ default: 0 })
   streakDays?: number;
+
+  /** Mongoose `timestamps: true` — earlier accounts rank higher on coin ties. */
+  createdAt?: Date;
+
+  updatedAt?: Date;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

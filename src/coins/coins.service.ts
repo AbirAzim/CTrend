@@ -161,6 +161,19 @@ export class CoinsService {
       .exec();
   }
 
+  /** Count users ranked above this user (same tie-break as getLeaderboard). */
+  async getLeaderboardRank(userId: string): Promise<number | null> {
+    if (!Types.ObjectId.isValid(userId)) return null;
+    const user = await this.userModel.findById(userId).exec();
+    if (!user || (user.coins ?? 0) <= 0) return null;
+    const coins = user.coins ?? 0;
+    const createdAt = user.createdAt ?? new Date(0);
+    const ahead = await this.userModel.countDocuments({
+      $or: [{ coins: { $gt: coins } }, { coins, createdAt: { $lt: createdAt } }],
+    });
+    return ahead + 1;
+  }
+
   /** Top coin earners, all-time. */
   async getLeaderboard(take = 50): Promise<UserDocument[]> {
     return this.userModel

@@ -107,6 +107,18 @@ export class CoinsResolver {
     }));
   }
 
+  /** Leaderboard position for a user (null if no coins earned). */
+  @Query(() => Int, { nullable: true })
+  @UseGuards(OptionalJwtGqlGuard)
+  async coinLeaderboardRank(
+    @CurrentUser() viewer: ReqUser | undefined,
+    @Args('userId', { type: () => ID, nullable: true }) userId?: string | null,
+  ): Promise<number | null> {
+    const targetId = userId ?? viewer?.id;
+    if (!targetId) return null;
+    return this.coins.getLeaderboardRank(targetId);
+  }
+
   /** Claim the once-per-day streak bonus (called on app open / login). */
   @Mutation(() => DailyStreakGql)
   @UseGuards(GqlAuthGuard)

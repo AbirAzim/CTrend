@@ -82,6 +82,34 @@ export class MailService implements OnModuleInit {
     return `<img src="${this.logoDataUrl}" alt="Ke Jitbe" width="${width}" height="${width}" style="border-radius:12px;display:block;margin:0 auto ${marginBottom};">`;
   }
 
+  /** Code + Copy button row — works in webmail; mobile users can long-press the code. */
+  private copyableCodeBlock(code: string): string {
+    const safe = code.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+    return `
+      <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 12px;width:100%;max-width:440px;">
+        <tr>
+          <td style="vertical-align:middle;text-align:right;padding-right:10px;">
+            <span style="display:inline-block;background:#EEEEF6;border:1.5px solid #D0D0E0;
+              border-radius:10px;padding:14px 22px;font-size:28px;font-weight:800;
+              letter-spacing:0.2em;color:#1A1A2E;font-family:ui-monospace,monospace;
+              user-select:all;-webkit-user-select:all;">${code}</span>
+          </td>
+          <td style="vertical-align:middle;text-align:left;">
+            <button
+              type="button"
+              onclick="navigator.clipboard&&navigator.clipboard.writeText('${safe}');this.innerText='Copied!';"
+              style="display:inline-block;background:#1A1A2E;color:#fff;border-radius:10px;
+              padding:12px 20px;font-size:14px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;border:0;cursor:pointer;">
+              Copy code
+            </button>
+          </td>
+        </tr>
+      </table>
+      <p style="margin:0;font-size:12px;color:#999;text-align:center;line-height:1.5;">
+        Tap <strong>Copy code</strong>. If your email app blocks it, long-press the code to copy manually.
+      </p>`;
+  }
+
   async sendVerificationCode(to: string, code: string): Promise<void> {
     const html = this.baseTemplate(`
       <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1A1A2E;text-align:center;">
@@ -93,28 +121,7 @@ export class MailService implements OnModuleInit {
         It expires in <strong>15 minutes</strong>.
       </p>
 
-      <table cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 16px;width:100%;max-width:440px;">
-        <tr>
-          <td style="vertical-align:middle;text-align:right;padding-right:10px;">
-            <span id="verification-code" style="display:inline-block;background:#EEEEF6;border:1.5px solid #D0D0E0;
-              border-radius:10px;padding:14px 22px;font-size:28px;font-weight:800;
-              letter-spacing:0.25em;color:#1A1A2E;font-family:ui-monospace,monospace;
-              user-select:all;-webkit-user-select:all;">${code}</span>
-          </td>
-          <td style="vertical-align:middle;text-align:left;">
-            <button
-              type="button"
-              onclick="navigator.clipboard&&navigator.clipboard.writeText('${code}');this.innerText='Copied';"
-              style="display:inline-block;background:#1A1A2E;color:#fff;border-radius:10px;
-              padding:12px 20px;font-size:14px;font-weight:600;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;border:0;cursor:pointer;">
-              Copy
-            </button>
-          </td>
-        </tr>
-      </table>
-      <p style="margin:0;font-size:12px;color:#999;text-align:center;line-height:1.5;">
-        Tap <strong>Copy</strong>. If your email client blocks it, long-press the code to copy manually.
-      </p>
+      ${this.copyableCodeBlock(code)}
     `);
 
     await this.send(to, 'Your Ke Jitbe verification code', html, {
@@ -139,14 +146,12 @@ export class MailService implements OnModuleInit {
         This invitation expires in <strong>7 days</strong>.
       </p>
       <div style="background:#f8fafc;border-radius:12px;padding:18px 20px;margin:0 0 24px;text-align:center;">
-        <p style="margin:0 0 8px;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;">
+        <p style="margin:0 0 16px;font-size:12px;color:#888;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;">
           Your referral code
         </p>
-        <p style="margin:0;font-size:28px;font-weight:800;letter-spacing:0.2em;color:#1A1A2E;font-family:ui-monospace,monospace;">
-          ${referralCode}
-        </p>
-        <p style="margin:10px 0 0;font-size:13px;color:#666;line-height:1.5;">
-          Enter this code when you sign up — or redeem it from your profile — to earn <strong>5 engagement coins</strong>.
+        ${this.copyableCodeBlock(referralCode)}
+        <p style="margin:16px 0 0;font-size:13px;color:#666;line-height:1.5;">
+          Paste this code when you sign up — or redeem it from your profile — to earn <strong>5 referral points</strong>.
         </p>
       </div>
       <p style="text-align:center;margin:0 0 16px;">
@@ -166,7 +171,7 @@ export class MailService implements OnModuleInit {
     `);
 
     await this.send(to, `${inviterName} invited you to Ke Jitbe`, html, {
-      text: `${inviterName} has invited you to join Ke Jitbe.\n\nYour referral code: ${referralCode}\n\nSign up to earn 5 engagement coins:\n${inviteUrl}\n\nThis invitation expires in 7 days. If you weren't expecting this, ignore it.`,
+      text: `${inviterName} has invited you to join Ke Jitbe.\n\nYour referral code: ${referralCode}\n(Copy the code from the email, or use the sign-up link below.)\n\nSign up to earn 5 referral points:\n${inviteUrl}\n\nThis invitation expires in 7 days. If you weren't expecting this, ignore it.`,
     });
   }
 

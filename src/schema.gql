@@ -618,6 +618,7 @@ type NotificationGql {
   referenceType: String
   title: String!
   type: String!
+  updatedAt: DateTime!
 }
 
 type NotificationsPageGql {

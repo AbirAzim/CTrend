@@ -1,4 +1,5 @@
 export const VOTE_SOUND_IDS = [
+  'silent',
   'buzz-in',
   'crowd-pop',
   'soft-pop',
@@ -32,7 +33,7 @@ export type VoteSoundId = (typeof VOTE_SOUND_IDS)[number];
 export type NotificationSoundId = (typeof NOTIFICATION_SOUND_IDS)[number];
 export type MessageSoundId = (typeof MESSAGE_SOUND_IDS)[number];
 
-export const DEFAULT_VOTE_SOUND_ID: VoteSoundId = 'buzz-in';
+export const DEFAULT_VOTE_SOUND_ID: VoteSoundId = 'silent';
 export const DEFAULT_NOTIFICATION_SOUND_ID: NotificationSoundId =
   'ascending-chime';
 export const DEFAULT_MESSAGE_SOUND_ID: MessageSoundId = 'gentle-ping';

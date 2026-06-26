@@ -137,8 +137,7 @@ export class NotificationsService {
         existing.actorCount,
         params.verbPhrase,
       );
-      // Bump timestamp so it sorts to the top
-      (existing as any).createdAt = new Date();
+      existing.title = params.title;
       await existing.save();
       const gql = this.toGql(existing);
       await pubsub.publish(NEW_NOTIFICATION, {
@@ -559,7 +558,7 @@ export class NotificationsService {
     const [items, totalCount, unreadCount] = await Promise.all([
       this.notificationModel
         .find(filter)
-        .sort({ createdAt: -1 })
+        .sort({ updatedAt: -1, createdAt: -1 })
         .skip(skip)
         .limit(take)
         .exec(),
@@ -705,7 +704,8 @@ export class NotificationsService {
       latestActorName: doc.latestActorName,
       read: doc.read,
       archived: doc.archived ?? false,
-      createdAt: (doc as any).createdAt,
+      createdAt: doc.createdAt,
+      updatedAt: doc.updatedAt ?? doc.createdAt,
     };
   }
 }

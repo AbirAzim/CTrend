@@ -47,6 +47,10 @@ export class NotificationGql {
 
   @Field()
   createdAt: Date;
+
+  /** Bumped when a grouped notification is updated (e.g. more hypes). */
+  @Field()
+  updatedAt: Date;
 }
 
 @ObjectType()

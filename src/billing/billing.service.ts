@@ -11,6 +11,7 @@ import {
   SubscriptionPlan,
   SubscriptionStatus,
 } from '../common/enums';
+import { resolveFrontendUrl } from '../common/frontend-url';
 import { OrganizationsService } from '../organizations/organizations.service';
 
 // Stripe default export is callable; avoid brittle namespace typing here.
@@ -48,10 +49,7 @@ export class BillingService {
       };
     }
     await this.organizationsService.assertOrgOwnedBy(organizationId, userId);
-    const frontend = this.config.get<string>(
-      'FRONTEND_URL',
-      'http://localhost:3000',
-    );
+    const frontend = resolveFrontendUrl(this.config);
     if (!this.stripe) {
       return {
         url: undefined,

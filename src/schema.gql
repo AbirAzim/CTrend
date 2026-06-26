@@ -336,6 +336,12 @@ type InvitationGql {
   status: String!
 }
 
+type InvitationSignupInfoGql {
+  email: String!
+  referralCode: String!
+  role: String!
+}
+
 enum InvitationStatus {
   ACCEPTED
   PENDING
@@ -862,6 +868,7 @@ type Query {
   globalSearch(limit: Int = 20, query: String!): SearchResultGql!
   hypersByPost(postId: ID!, search: String, skip: Int, take: Int): [UserGql!]!
   incomingFriendRequests: [UserGql!]!
+  invitationSignupInfo(token: String!): InvitationSignupInfoGql!
   listInvitations(status: InvitationStatus): [InvitationGql!]!
   listUsers(role: String, search: String, searchBy: String, skip: Int! = 0, sortBy: String, sortOrder: String, status: String, take: Int! = 50): [UserGql!]!
   listUsersCount(role: String, search: String, searchBy: String, status: String): Int!

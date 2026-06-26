@@ -7,7 +7,7 @@ import {
   Query,
   Resolver,
 } from '@nestjs/graphql';
-import { ForbiddenException, UseGuards } from '@nestjs/common';
+import { ForbiddenException, UseGuards, BadRequestException } from '@nestjs/common';
 import { InvitationsService } from './invitations.service';
 import { GqlAuthGuard } from '../common/guards/gql-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -65,6 +65,18 @@ class InviteResultGql {
 
   @Field({ nullable: true })
   message?: string;
+}
+
+@ObjectType()
+class InvitationSignupInfoGql {
+  @Field()
+  email: string;
+
+  @Field()
+  referralCode: string;
+
+  @Field()
+  role: string;
 }
 
 @ObjectType()
@@ -140,6 +152,22 @@ export class InvitationsResolver {
       }
     }
     return results;
+  }
+
+  /** Public: resolve an invitation token for the signup screen (user invites only). */
+  @Query(() => InvitationSignupInfoGql)
+  async invitationSignupInfo(
+    @Args('token') token: string,
+  ): Promise<InvitationSignupInfoGql> {
+    const info = await this.invitationsService.signupInfoByRawToken(token);
+    if (!info) {
+      throw new BadRequestException('Invalid or expired invitation link');
+    }
+    return {
+      email: info.email,
+      referralCode: info.referralCode,
+      role: info.role,
+    };
   }
 
   /** Redeem a referral code from profile (invitee only, one-time, email must match). */

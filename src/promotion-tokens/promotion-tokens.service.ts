@@ -17,6 +17,7 @@ import {
   InvitationDocument,
 } from '../invitations/invitation.schema';
 import { InvitationStatus, UserRole } from '../common/enums';
+import { resolveFrontendUrl } from '../common/frontend-url';
 import { UsersService } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
 
@@ -82,10 +83,7 @@ export class PromotionTokensService {
 
     const promoterName =
       promoter?.displayName ?? promoter?.username ?? 'A CTrend admin';
-    const frontend = this.config.get<string>(
-      'FRONTEND_URL',
-      'http://localhost:5173',
-    );
+    const frontend = resolveFrontendUrl(this.config);
     const rejectUrl = `${frontend}/reject-promotion?token=${rawToken}`;
     await this.mailService.sendPromotionEmail(
       user.email,

@@ -13,6 +13,7 @@ import { createHash, randomBytes, randomInt } from 'crypto';
 import { UserDocument } from '../users/user.schema';
 import { UsersService, normalizeEmail } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
+import { resolveFrontendUrl } from '../common/frontend-url';
 import { InvitationsService } from '../invitations/invitations.service';
 import { UserRole } from '../common/enums';
 
@@ -150,10 +151,7 @@ export class AuthService {
     user.passwordResetExpiry = new Date(Date.now() + RESET_TTL_MS);
     await user.save();
 
-    const frontend = this.config.get<string>(
-      'FRONTEND_URL',
-      'http://localhost:3000',
-    );
+    const frontend = resolveFrontendUrl(this.config);
     const resetUrl = `${frontend}/reset-password?token=${token}`;
     await this.mailService.sendPasswordResetLink(normalized, resetUrl);
     return true;

@@ -128,10 +128,6 @@ export class MailService implements OnModuleInit {
     inviterName: string,
     referralCode: string,
   ): Promise<void> {
-    const signupUrl = this.config.get<string>(
-      'FRONTEND_URL',
-      'https://kejitbe.app',
-    );
     const html = this.baseTemplate(`
       <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1A1A2E;text-align:center;">
         You're invited to Ke Jitbe
@@ -158,12 +154,11 @@ export class MailService implements OnModuleInit {
           style="display:inline-block;background:#1A1A2E;color:#fff;
             text-decoration:none;border-radius:10px;padding:14px 36px;
             font-size:16px;font-weight:600;">
-          Accept Invitation
+          Create your account
         </a>
       </p>
       <p style="margin:0;font-size:13px;color:#777;text-align:center;line-height:1.6;">
-        Or sign up at <a href="${signupUrl}/signup" style="color:#1A1A2E;">${signupUrl.replace(/^https?:\/\//, '')}/signup</a>
-        and enter your referral code.
+        Your email and referral code will be filled in automatically on the sign-up page.
       </p>
       <p style="margin:16px 0 0;font-size:13px;color:#999;text-align:center;">
         If you weren't expecting this invitation, you can safely ignore this email.
@@ -171,7 +166,7 @@ export class MailService implements OnModuleInit {
     `);
 
     await this.send(to, `${inviterName} invited you to Ke Jitbe`, html, {
-      text: `${inviterName} has invited you to join Ke Jitbe.\n\nYour referral code: ${referralCode}\n\nEnter it when you sign up (or redeem from your profile) to earn 5 engagement coins.\n\nAccept your invitation:\n${inviteUrl}\n\nOr sign up at ${signupUrl}/signup\n\nThis invitation expires in 7 days. If you weren't expecting this, ignore it.`,
+      text: `${inviterName} has invited you to join Ke Jitbe.\n\nYour referral code: ${referralCode}\n\nSign up to earn 5 engagement coins:\n${inviteUrl}\n\nThis invitation expires in 7 days. If you weren't expecting this, ignore it.`,
     });
   }
 

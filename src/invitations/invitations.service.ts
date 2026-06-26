@@ -11,6 +11,7 @@ import { Model, Types } from 'mongoose';
 import { createHash, randomBytes } from 'crypto';
 import { Invitation, InvitationDocument } from './invitation.schema';
 import { InvitationStatus, UserRole } from '../common/enums';
+import { resolveFrontendUrl } from '../common/frontend-url';
 import { UsersService } from '../users/users.service';
 import { MailService } from '../mail/mail.service';
 import { CoinsService } from '../coins/coins.service';
@@ -101,11 +102,14 @@ export class InvitationsService {
     const inviter = await this.usersService.findById(inviterId);
     const inviterName =
       inviter?.displayName ?? inviter?.username ?? 'A CTrend user';
-    const frontend = this.config.get<string>(
-      'FRONTEND_URL',
-      'http://localhost:3000',
+    const frontend = resolveFrontendUrl(this.config);
+    const inviteUrl = this.buildInviteUrl(
+      frontend,
+      targetRole,
+      normalized,
+      referralCode,
+      rawToken,
     );
-    const inviteUrl = `${frontend}/accept-invitation?token=${rawToken}`;
     await this.mailService.sendInvitationEmail(
       normalized,
       inviteUrl,
@@ -267,16 +271,52 @@ export class InvitationsService {
     );
     const inviterName =
       inviter?.displayName ?? inviter?.username ?? 'A CTrend user';
-    const frontend = this.config.get<string>(
-      'FRONTEND_URL',
-      'http://localhost:5173',
+    const frontend = resolveFrontendUrl(this.config);
+    const inviteUrl = this.buildInviteUrl(
+      frontend,
+      invitation.role,
+      invitation.email,
+      invitation.referralCode,
+      rawToken,
     );
-    const inviteUrl = `${frontend}/accept-invitation?token=${rawToken}`;
     await this.mailService.sendInvitationEmail(
       invitation.email,
       inviteUrl,
       inviterName,
       invitation.referralCode,
     );
+  }
+
+  private buildInviteUrl(
+    frontend: string,
+    targetRole: UserRole,
+    email: string,
+    referralCode: string,
+    rawToken: string,
+  ): string {
+    if (targetRole === UserRole.ADMIN) {
+      return `${frontend}/accept-invitation?token=${rawToken}`;
+    }
+    const params = new URLSearchParams({
+      email,
+      referralCode,
+    });
+    return `${frontend}/signup?${params.toString()}`;
+  }
+
+  async signupInfoByRawToken(rawToken: string): Promise<{
+    email: string;
+    referralCode: string;
+    role: UserRole;
+  } | null> {
+    const invitation = await this.findByRawToken(rawToken);
+    if (!invitation) return null;
+    if (invitation.status !== InvitationStatus.PENDING) return null;
+    if (invitation.expiresAt <= new Date()) return null;
+    return {
+      email: invitation.email,
+      referralCode: invitation.referralCode ?? '',
+      role: invitation.role,
+    };
   }
 }

@@ -8,6 +8,7 @@ import {
   MatchPrediction,
   MatchPredictionSchema,
 } from '../match-predictions/match-prediction.schema';
+import { Campaign, CampaignSchema } from '../campaigns/campaign.schema';
 import { WorldCupCampaignService } from './world-cup-campaign.service';
 import { WinnerAnnouncementService } from './winner-announcement.service';
 import { WorldCupCampaignResolver } from './world-cup-campaign.resolver';
@@ -19,6 +20,7 @@ import { CoinsModule } from '../coins/coins.module';
   imports: [
     MongooseModule.forFeature([
       { name: CampaignWinner.name, schema: CampaignWinnerSchema },
+      { name: Campaign.name, schema: CampaignSchema },
       { name: Fixture.name, schema: FixtureSchema },
       { name: Vote.name, schema: VoteSchema },
       { name: Post.name, schema: PostSchema },

@@ -11,6 +11,7 @@ import {
   CampaignWinnerDocument,
 } from './campaign-winner.schema';
 import { Fixture, FixtureDocument } from '../fixtures/fixture.schema';
+import { Campaign, CampaignDocument } from '../campaigns/campaign.schema';
 import { Vote, VoteDocument } from '../votes/vote.schema';
 import { Post, PostDocument } from '../posts/post.schema';
 import {
@@ -23,6 +24,7 @@ import { NotificationType } from '../notifications/notification.schema';
 import {
   CampaignWinnerGql,
   CampaignWinLeaderboardEntryGql,
+  UserCampaignWinSummaryGql,
 } from './graphql/campaign-winner.types';
 import { CoinsService } from '../coins/coins.service';
 import { CoinType } from '../coins/coins.constants';
@@ -34,6 +36,7 @@ export class WorldCupCampaignService {
   constructor(
     @InjectModel(CampaignWinner.name)
     private campaignWinnerModel: Model<CampaignWinnerDocument>,
+    @InjectModel(Campaign.name) private campaignModel: Model<CampaignDocument>,
     @InjectModel(Fixture.name) private fixtureModel: Model<FixtureDocument>,
     @InjectModel(Vote.name) private voteModel: Model<VoteDocument>,
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
@@ -374,6 +377,51 @@ export class WorldCupCampaignService {
       }),
     );
     return entries;
+  }
+
+  /** Public profile — campaign wins grouped by campaign with names. */
+  async userCampaignWinSummary(
+    userId: string,
+  ): Promise<UserCampaignWinSummaryGql[]> {
+    if (!Types.ObjectId.isValid(userId)) return [];
+    const uid = new Types.ObjectId(userId);
+    const rows = await this.campaignWinnerModel.aggregate<{
+      _id: Types.ObjectId | null;
+      wins: number;
+      totalPrize: number;
+    }>([
+      { $match: { userId: uid } },
+      {
+        $group: {
+          _id: '$campaignId',
+          wins: { $sum: 1 },
+          totalPrize: { $sum: { $ifNull: ['$prize', 0] } },
+        },
+      },
+      { $sort: { wins: -1, totalPrize: -1 } },
+    ]);
+
+    const summaries: UserCampaignWinSummaryGql[] = [];
+    for (const row of rows) {
+      let campaignName = 'Campaign';
+      let campaignSlug = '';
+      const campaignId = row._id?.toHexString() ?? null;
+      if (row._id) {
+        const camp = await this.campaignModel.findById(row._id).exec();
+        if (camp) {
+          campaignName = camp.name;
+          campaignSlug = camp.slug;
+        }
+      }
+      summaries.push({
+        campaignId,
+        campaignName,
+        campaignSlug,
+        wins: row.wins,
+        totalPrize: row.totalPrize,
+      });
+    }
+    return summaries;
   }
 
   async markPaid(winnerId: string): Promise<CampaignWinnerGql> {

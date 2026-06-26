@@ -5,6 +5,7 @@ import { WorldCupCampaignService } from './world-cup-campaign.service';
 import {
   CampaignWinnerGql,
   CampaignWinLeaderboardEntryGql,
+  UserCampaignWinSummaryGql,
 } from './graphql/campaign-winner.types';
 import { GqlAuthGuard } from '../common/guards/gql-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';
@@ -36,6 +37,14 @@ export class WorldCupCampaignResolver {
     @Args('take', { type: () => Int, nullable: true }) take?: number,
   ): Promise<CampaignWinLeaderboardEntryGql[]> {
     return this.campaignService.winLeaderboard(campaignId, take ?? 50);
+  }
+
+  /** Public — per-campaign win totals for a user's profile. */
+  @Query(() => [UserCampaignWinSummaryGql])
+  async userCampaignWinSummary(
+    @Args('userId', { type: () => ID }) userId: string,
+  ): Promise<UserCampaignWinSummaryGql[]> {
+    return this.campaignService.userCampaignWinSummary(userId);
   }
 
   @Mutation(() => CampaignWinnerGql)

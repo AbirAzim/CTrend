@@ -51,3 +51,22 @@ export class CampaignWinLeaderboardEntryGql {
   @Field(() => UserGql, { nullable: true })
   user?: UserGql | null;
 }
+
+/** Per-campaign win totals for a user's public profile. */
+@ObjectType()
+export class UserCampaignWinSummaryGql {
+  @Field(() => ID, { nullable: true })
+  campaignId?: string | null;
+
+  @Field()
+  campaignName: string;
+
+  @Field()
+  campaignSlug: string;
+
+  @Field(() => Int)
+  wins: number;
+
+  @Field(() => Int)
+  totalPrize: number;
+}

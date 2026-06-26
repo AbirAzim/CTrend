@@ -90,6 +90,14 @@ type CampaignWinLeaderboardEntryGql {
   wins: Int!
 }
 
+type UserCampaignWinSummaryGql {
+  campaignId: ID
+  campaignName: String!
+  campaignSlug: String!
+  totalPrize: Int!
+  wins: Int!
+}
+
 type CampaignWinnerGql {
   campaignId: ID
   createdAt: DateTime!
@@ -883,6 +891,8 @@ type Query {
   previewInvites(emails: [String!]!): [InvitePreviewGql!]!
   publicCampaigns: [CampaignGql!]!
   unreadNotificationCount: Int!
+  userCampaignWinSummary(userId: ID!): [UserCampaignWinSummaryGql!]!
+  userCampaignWinSummary(userId: ID!): [UserCampaignWinSummaryGql!]!
   userFriends(userId: ID!): [UserGql!]!
   userVoteCount(userId: ID!): Int!
   votersByPost(optionIndex: Int, postId: ID!, search: String, skip: Int, take: Int): [PostVoterGql!]!
@@ -1008,6 +1018,14 @@ input UpdateProfileInput {
   notificationSoundId: String
   profileImageUrl: String
   voteSoundId: String
+}
+
+type UserCampaignWinSummaryGql {
+  campaignId: ID
+  campaignName: String!
+  campaignSlug: String!
+  totalPrize: Int!
+  wins: Int!
 }
 
 type UserGql {

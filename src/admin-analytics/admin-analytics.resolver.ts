@@ -6,6 +6,7 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../common/enums';
 import { AdminAnalyticsService } from './admin-analytics.service';
 import { AdminPlatformStatsGql } from './graphql/admin-analytics.types';
+import { UserGql } from '../users/graphql/user.types';
 
 @Resolver()
 export class AdminAnalyticsResolver {
@@ -16,5 +17,12 @@ export class AdminAnalyticsResolver {
   @Roles(UserRole.ADMIN)
   async adminPlatformStats(): Promise<AdminPlatformStatsGql> {
     return this.adminAnalyticsService.getPlatformStats();
+  }
+
+  @Query(() => [UserGql])
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  async adminOnlineUsers(): Promise<UserGql[]> {
+    return this.adminAnalyticsService.getOnlineUsers();
   }
 }

@@ -14,11 +14,13 @@ import {
   CampaignWinnerSchema,
 } from '../world-cup-campaign/campaign-winner.schema';
 import { PresenceModule } from '../presence/presence.module';
+import { UsersModule } from '../users/users.module';
 import { AdminAnalyticsService } from './admin-analytics.service';
 import { AdminAnalyticsResolver } from './admin-analytics.resolver';
 
 @Module({
   imports: [
+    UsersModule,
     MongooseModule.forFeature([
       { name: User.name, schema: UserSchema },
       { name: Post.name, schema: PostSchema },

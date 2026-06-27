@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
+import { Model, Types } from 'mongoose';
+import { UsersService } from '../users/users.service';
+import { UserGql } from '../users/graphql/user.types';
 import { User, UserDocument } from '../users/user.schema';
 import { Post, PostDocument } from '../posts/post.schema';
 import { Vote, VoteDocument } from '../votes/vote.schema';
@@ -72,7 +74,26 @@ export class AdminAnalyticsService {
     @InjectModel(CampaignWinner.name)
     private campaignWinnerModel: Model<CampaignWinnerDocument>,
     private presenceService: PresenceService,
+    private usersService: UsersService,
   ) {}
+
+  async getOnlineUsers(): Promise<UserGql[]> {
+    const ids = this.presenceService.onlineUserIds();
+    if (ids.length === 0) return [];
+
+    const objectIds = ids
+      .filter((id) => Types.ObjectId.isValid(id))
+      .map((id) => new Types.ObjectId(id));
+
+    if (objectIds.length === 0) return [];
+
+    const docs = await this.userModel
+      .find({ _id: { $in: objectIds } })
+      .sort({ displayName: 1, username: 1 })
+      .exec();
+
+    return docs.map((doc) => this.usersService.toGql(doc));
+  }
 
   private async countByDay(
     model: Model<{ createdAt?: Date }>,

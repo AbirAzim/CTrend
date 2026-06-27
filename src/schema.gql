@@ -873,6 +873,7 @@ type Query {
   adminModeratorMessagesCount(search: String): Int!
   adminModeratorThreadMessages(userId: ID!): [MessageGql!]!
   adminModeratorThreads(search: String, skip: Int! = 0, take: Int! = 50): [ModeratorThreadAdminGql!]!
+  adminOnlineUsers: [UserGql!]!
   adminPlatformPosts(query: AdminPlatformPostsQueryInput, skip: Int = 0, take: Int = 50): [PostGql!]!
   adminPlatformPostsCount(filter: AdminPlatformPostsFilterInput): Int!
   adminPlatformStats: AdminPlatformStatsGql!

@@ -29,6 +29,7 @@ export class FixturesAutoScheduleService implements OnModuleInit {
     // and reconcile any finished matches that were missed during downtime.
     await this.scheduleUpcoming();
     await this.fixturesService.reconcileFinishedPosts();
+    await this.fixturesService.reconcileIncompleteMatchEvents();
   }
 
   @Cron(CronExpression.EVERY_4_HOURS)

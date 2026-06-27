@@ -216,14 +216,25 @@ export class MailService implements OnModuleInit {
     });
   }
 
-  async sendPasswordResetLink(to: string, resetUrl: string): Promise<void> {
+  async sendPasswordResetLink(
+    to: string,
+    resetUrl: string,
+    appResetUrl?: string,
+  ): Promise<void> {
+    const appLinkBlock = appResetUrl
+      ? `<p style="margin:0 0 20px;font-size:14px;color:#555;line-height:1.6;text-align:center;">
+          Using the Ke Jitbe app?
+          <a href="${appResetUrl}" style="color:#1A1A2E;font-weight:600;">Open reset in app</a>
+        </p>`
+      : '';
     const html = this.baseTemplate(`
       <h2 style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1A1A2E;">
         Reset your password
       </h2>
       <p style="margin:0 0 28px;font-size:15px;color:#555;line-height:1.6;">
         We received a request to reset your Ke Jitbe password.<br>
-        This link expires in <strong>1 hour</strong>.
+        This link expires in <strong>1 hour</strong> and also verifies your email if you
+        haven&apos;t confirmed it yet.
       </p>
       <p style="text-align:center;margin:0 0 28px;">
         <a href="${resetUrl}"
@@ -233,13 +244,16 @@ export class MailService implements OnModuleInit {
           Reset Password
         </a>
       </p>
+      ${appLinkBlock}
       <p style="margin:0;font-size:13px;color:#999;text-align:center;">
+        If you signed up with Google, use <strong>Continue with Google</strong> instead.<br>
         If you didn't request this, you can safely ignore this email.
       </p>
     `);
 
+    const textApp = appResetUrl ? `\n\nApp link:\n${appResetUrl}` : '';
     await this.send(to, 'Reset your Ke Jitbe password', html, {
-      text: `Reset your Ke Jitbe password:\n\n${resetUrl}\n\nThis link expires in 1 hour. If you didn't request this, ignore this email.`,
+      text: `Reset your Ke Jitbe password:\n\n${resetUrl}${textApp}\n\nThis link expires in 1 hour. If you signed up with Google, use Continue with Google instead. If you didn't request this, ignore this email.`,
     });
   }
 

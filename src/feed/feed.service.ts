@@ -309,13 +309,9 @@ export class FeedService {
             ...campaignFilter,
           };
         case FeedPostFilter.PLATFORM:
-          // Admin SYSTEM posts with no campaign (pure platform posts)
+          // All admin SYSTEM posts — campaign-attached and non-campaign alike.
           return {
             type: PostType.SYSTEM,
-            $or: [
-              { campaignId: { $exists: false } },
-              { campaignId: null },
-            ],
             ...notScheduled,
           };
         case FeedPostFilter.COMMUNITY: {

@@ -58,6 +58,10 @@ export class User {
   @Prop({ default: false })
   emailVerified: boolean;
 
+  /** False for Google-only accounts — blocks forgot-password email flow. */
+  @Prop({ default: true })
+  passwordAuthEnabled?: boolean;
+
   @Prop()
   emailVerificationCode?: string;
 

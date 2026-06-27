@@ -57,6 +57,7 @@ export class UsersService {
     /** @deprecated use roles */
     role?: UserRole;
     emailVerified?: boolean;
+    passwordAuthEnabled?: boolean;
   }): Promise<UserDocument> {
     const roles = data.roles ?? (data.role ? [data.role] : [UserRole.USER]);
     const primaryRole = roles.includes(UserRole.ADMIN)

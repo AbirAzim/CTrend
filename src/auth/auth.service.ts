@@ -143,7 +143,7 @@ export class AuthService {
     const normalized = normalizeEmail(email);
     const user = await this.usersService.findByEmail(normalized);
     // Always return true to prevent email enumeration.
-    if (!user) return true;
+    if (!user || user.passwordAuthEnabled === false) return true;
 
     const token = randomBytes(32).toString('hex');
     // SHA-256 hash for deterministic DB lookup; bcrypt salts prevent direct match.
@@ -153,7 +153,12 @@ export class AuthService {
 
     const frontend = resolveFrontendUrl(this.config);
     const resetUrl = `${frontend}/reset-password?token=${token}`;
-    await this.mailService.sendPasswordResetLink(normalized, resetUrl);
+    const appResetUrl = `ctrend://auth/reset-password/${token}`;
+    await this.mailService.sendPasswordResetLink(
+      normalized,
+      resetUrl,
+      appResetUrl,
+    );
     return true;
   }
 
@@ -174,6 +179,10 @@ export class AuthService {
     user.password = await bcrypt.hash(newPassword, 10);
     user.passwordResetToken = undefined;
     user.passwordResetExpiry = undefined;
+    user.passwordAuthEnabled = true;
+    user.emailVerified = true;
+    user.emailVerificationCode = undefined;
+    user.emailVerificationExpiry = undefined;
     await user.save();
     return true;
   }
@@ -252,6 +261,7 @@ export class AuthService {
       displayName: payload.name?.trim() || undefined,
       profileImageUrl: payload.picture,
       emailVerified: true,
+      passwordAuthEnabled: false,
     });
     return this.toAuthPayload(created);
   }

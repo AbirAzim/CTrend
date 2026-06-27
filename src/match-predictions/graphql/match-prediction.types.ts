@@ -49,4 +49,20 @@ export class MatchPredictionStateGql {
   /** Match has finished — winners can be listed. */
   @Field()
   predictionsResolved: boolean;
+
+  /** World Cup round key from the linked fixture. */
+  @Field(() => String, { nullable: true })
+  fixtureStage?: string | null;
+
+  /** True while the 90+ET score is not yet final for prediction grading. */
+  @Field()
+  predictionsPendingResult: boolean;
+
+  /** Set when the match went to extra time (nullable until raw status is tracked). */
+  @Field(() => Boolean, { nullable: true })
+  wentToExtraTime?: boolean | null;
+
+  /** Set when the match was decided on penalties (nullable until raw status is tracked). */
+  @Field(() => Boolean, { nullable: true })
+  wentToPenalties?: boolean | null;
 }

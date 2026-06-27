@@ -173,6 +173,14 @@ export class Post {
   @Prop({ type: String, default: null })
   fixtureId?: string | null;
 
+  /** World Cup round: GROUP_STAGE, LAST_16, QUARTER_FINALS, etc. (matchType only). */
+  @Prop({ type: String, default: null })
+  fixtureStage?: string | null;
+
+  /** True when the poll includes a 3rd Draw option (group stage). */
+  @Prop({ default: false })
+  hasDrawOption: boolean;
+
   /** True once lineups have been synced for this match. Used to gate the "See Details" button. */
   @Prop({ default: false })
   lineupAvailable: boolean;

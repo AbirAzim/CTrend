@@ -185,6 +185,10 @@ export class MatchPredictionsService {
     count: number;
     predictionsOpen: boolean;
     predictionsResolved: boolean;
+    fixtureStage: string | null;
+    predictionsPendingResult: boolean;
+    wentToExtraTime: boolean | null;
+    wentToPenalties: boolean | null;
   }> {
     const { fixture } = await this.loadContext(postId);
     const pid = new Types.ObjectId(postId);
@@ -196,11 +200,17 @@ export class MatchPredictionsService {
             .exec()
         : Promise.resolve(null),
     ]);
+    const predictionsOpen = this.isOpen(fixture);
+    const predictionsResolved = this.isResolved(fixture);
     return {
       myPrediction: mine ? await this.toGql(mine, fixture) : null,
       count,
-      predictionsOpen: this.isOpen(fixture),
-      predictionsResolved: this.isResolved(fixture),
+      predictionsOpen,
+      predictionsResolved,
+      fixtureStage: fixture.stage ?? null,
+      predictionsPendingResult: !predictionsResolved && !predictionsOpen,
+      wentToExtraTime: null,
+      wentToPenalties: null,
     };
   }
 

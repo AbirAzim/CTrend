@@ -1636,6 +1636,10 @@ export class PostsService implements OnModuleInit {
           : null,
       fixtureWinnerAt: post.fixtureWinnerAt ?? null,
       fixtureId: post.fixtureId ?? null,
+      fixtureStage: post.fixtureStage ?? null,
+      hasDrawOption: post.matchType
+        ? (post.hasDrawOption ?? post.options.length >= 3)
+        : false,
       lineupAvailable: post.lineupAvailable ?? false,
       pinned: Boolean(post.pinnedAt),
     };

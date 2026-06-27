@@ -248,6 +248,14 @@ export class PostGql {
   @Field(() => String, { nullable: true })
   fixtureId?: string | null;
 
+  /** World Cup round label key (matchType posts only). */
+  @Field(() => String, { nullable: true })
+  fixtureStage?: string | null;
+
+  /** True when this match post includes a Draw vote option (group stage). */
+  @Field()
+  hasDrawOption: boolean;
+
   /** True once lineups are synced — gates the "See Details → Lineups" button. */
   @Field()
   lineupAvailable: boolean;

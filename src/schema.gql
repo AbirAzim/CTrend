@@ -441,9 +441,13 @@ type MatchPredictionGql {
 
 type MatchPredictionStateGql {
   count: Int!
+  fixtureStage: String
   myPrediction: MatchPredictionGql
   predictionsOpen: Boolean!
+  predictionsPendingResult: Boolean!
   predictionsResolved: Boolean!
+  wentToExtraTime: Boolean
+  wentToPenalties: Boolean
 }
 
 type MatchScoreGql {
@@ -775,8 +779,10 @@ type PostGql {
   editedBy: [UserGql!]
   endingSoonLeadMinutes: Int!
   fixtureId: String
+  fixtureStage: String
   fixtureWinnerAt: DateTime
   format: PostFormat!
+  hasDrawOption: Boolean!
   hypeCount: Int!
   id: ID!
   imageUrl: String

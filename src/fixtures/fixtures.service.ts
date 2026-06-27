@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -238,7 +239,7 @@ function normalizeWinner(winner?: string | null): string | null {
 }
 
 @Injectable()
-export class FixturesService {
+export class FixturesService implements OnModuleInit {
   private readonly logger = new Logger(FixturesService.name);
   private readonly apiKey: string;
   private readonly rapidApiKey: string;
@@ -270,6 +271,39 @@ export class FixturesService {
     this.logger.log(
       `API-Football provider: ${this.useRapidApi ? 'RapidAPI' : 'api-sports.io (direct)'}`,
     );
+  }
+
+  /** One-time denormalisation for posts created before fixtureStage/hasDrawOption existed. */
+  onModuleInit(): void {
+    void this.backfillPostFixtureMeta().catch((err) =>
+      this.logger.warn(
+        `Post fixture meta backfill skipped: ${err instanceof Error ? err.message : String(err)}`,
+      ),
+    );
+  }
+
+  private async backfillPostFixtureMeta(): Promise<void> {
+    const fixtures = await this.fixtureModel
+      .find({ campaignPostId: { $exists: true, $ne: null } })
+      .select({ campaignPostId: 1, stage: 1, hasDrawOption: 1 })
+      .exec();
+    if (fixtures.length === 0) return;
+    await Promise.all(
+      fixtures.map((fixture) =>
+        this.postModel.updateOne(
+          { _id: fixture.campaignPostId },
+          {
+            $set: {
+              fixtureStage: fixture.stage,
+              hasDrawOption:
+                fixture.hasDrawOption ?? fixture.stage === 'GROUP_STAGE',
+              fixtureId: (fixture._id as Types.ObjectId).toHexString(),
+            },
+          },
+        ),
+      ),
+    );
+    this.logger.log(`Backfilled fixtureStage/hasDrawOption on ${fixtures.length} match posts`);
   }
 
   private async apiFetch<T>(path: string): Promise<T> {
@@ -608,7 +642,7 @@ export class FixturesService {
 
         await this.postModel.updateOne(
           { _id: fixture.campaignPostId },
-          { $set: { lineupAvailable: true, fixtureId: fixtureIdStr } },
+          { $set: { lineupAvailable: true, fixtureId: fixtureIdStr, fixtureStage: fixture.stage, hasDrawOption: fixture.hasDrawOption ?? fixture.stage === 'GROUP_STAGE' } },
         );
 
         void this.notificationsService.notifyLineupAvailable({
@@ -623,7 +657,13 @@ export class FixturesService {
         const fixtureIdStr = (fixture._id as Types.ObjectId).toHexString();
         await this.postModel.updateOne(
           { _id: fixture.campaignPostId },
-          { $set: { fixtureId: fixtureIdStr } },
+          {
+            $set: {
+              fixtureId: fixtureIdStr,
+              fixtureStage: fixture.stage,
+              hasDrawOption: fixture.hasDrawOption ?? fixture.stage === 'GROUP_STAGE',
+            },
+          },
         );
       }
 
@@ -837,6 +877,8 @@ export class FixturesService {
                 fixtureScore: { home, away },
                 fixtureStatus: newStatus,
                 fixtureMinute: newMinute,
+                fixtureStage: existing.stage,
+                hasDrawOption: existing.hasDrawOption ?? existing.stage === 'GROUP_STAGE',
               },
             },
           );
@@ -983,6 +1025,8 @@ export class FixturesService {
             fixtureScore: { home, away },
             fixtureStatus: newStatus,
             fixtureMinute: null,
+            fixtureStage: ghost.stage,
+            hasDrawOption: ghost.hasDrawOption ?? ghost.stage === 'GROUP_STAGE',
           };
 
           // For FINISHED: compute winner reveal time and include it in the same
@@ -1196,6 +1240,8 @@ export class FixturesService {
               fixtureStatus: 'FINISHED',
               fixtureMinute: null,
               fixtureWinnerAt: winnerScheduledAt,
+              fixtureStage: fixture.stage,
+              hasDrawOption: fixture.hasDrawOption ?? fixture.stage === 'GROUP_STAGE',
             },
           },
         );
@@ -1390,6 +1436,8 @@ export class FixturesService {
       // before the first details sync (which previously was the only place this
       // got set).
       fixtureId: (fixture._id as Types.ObjectId).toHexString(),
+      fixtureStage: fixture.stage,
+      hasDrawOption: isGroupStage,
     });
 
     fixture.campaignPostId = post._id as Types.ObjectId;

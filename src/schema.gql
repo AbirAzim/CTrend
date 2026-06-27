@@ -2,6 +2,14 @@
 # THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
 # ------------------------------------------------------
 
+type AdminDailyStatGql {
+  comments: Int!
+  date: String!
+  posts: Int!
+  signups: Int!
+  votes: Int!
+}
+
 type AdminModeratorUserMessageGql {
   conversationId: ID!
   lastMessageAt: DateTime
@@ -31,6 +39,24 @@ input AdminPlatformPostsQueryInput {
   status: PostStatus
   take: Int = 50
   votingFilter: String
+}
+
+type AdminPlatformStatsGql {
+  activeVotersLast7Days: Int!
+  campaignWinners: Int!
+  dailyActivity: [AdminDailyStatGql!]!
+  newUsersLast7Days: Int!
+  onlineUsers: Int!
+  pendingInvitations: Int!
+  postsLast7Days: Int!
+  reportedPosts: Int!
+  totalAdmins: Int!
+  totalComments: Int!
+  totalPosts: Int!
+  totalUsers: Int!
+  totalVotes: Int!
+  verifiedUsers: Int!
+  votesLast7Days: Int!
 }
 
 input AdminReportedPostsFilterInput {
@@ -849,6 +875,7 @@ type Query {
   adminModeratorThreads(search: String, skip: Int! = 0, take: Int! = 50): [ModeratorThreadAdminGql!]!
   adminPlatformPosts(query: AdminPlatformPostsQueryInput, skip: Int = 0, take: Int = 50): [PostGql!]!
   adminPlatformPostsCount(filter: AdminPlatformPostsFilterInput): Int!
+  adminPlatformStats: AdminPlatformStatsGql!
   adminReportedPosts(query: AdminReportedPostsQueryInput, skip: Int = 0, take: Int = 50): [PostGql!]!
   adminReportedPostsCount(filter: AdminReportedPostsFilterInput): Int!
   campaign(slug: String!): CampaignGql

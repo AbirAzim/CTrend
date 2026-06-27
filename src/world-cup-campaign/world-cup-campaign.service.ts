@@ -28,6 +28,12 @@ import {
 } from './graphql/campaign-winner.types';
 import { CoinsService } from '../coins/coins.service';
 import { CoinType } from '../coins/coins.constants';
+import {
+  CAMPAIGN_WINNER_COOLDOWN_MATCHES,
+  CAMPAIGN_WINNER_FIRST_TIME_WEIGHT,
+  CAMPAIGN_WINNER_REPEAT_MULTI_WEIGHT,
+  CAMPAIGN_WINNER_REPEAT_ONCE_WEIGHT,
+} from './world-cup-campaign.constants';
 
 @Injectable()
 export class WorldCupCampaignService {
@@ -58,6 +64,14 @@ export class WorldCupCampaignService {
    *   DRAW, hasDrawOption=true  → draw from option-2 voters
    *   DRAW, hasDrawOption=false → draw from all voters (legacy 2-option posts)
    *   null / unknown  → record "no winner" without a userId
+   *
+   * Cooldown: after winning, a user sits out the next
+   *   CAMPAIGN_WINNER_COOLDOWN_MATCHES processed match draws unless they
+   *   predicted the exact final score.
+   * Draw tiers (after cooldown filter):
+   *   1. Exact score predictors (never-won preferred within that tier).
+   *   2. No exact score → only voters who have never won before.
+   *   3. No never-won left → weighted draw among past winners.
    */
   async processMatchResult(
     fixtureId: string,
@@ -169,36 +183,64 @@ export class WorldCupCampaignService {
       return this.toGql(record);
     }
 
-    // ── Priority tier ──────────────────────────────────────────────────────
-    // Users who BOTH voted for the correct winner AND predicted the exact final
-    // score win first. Only fall back to the full correct-winner pool if nobody
-    // nailed the exact score (preserves the existing random-draw behaviour).
-    let wonViaExactScore = false;
-    let pool = eligibleVotes;
     const finalHome = fixture.score?.home;
     const finalAway = fixture.score?.away;
-    if (finalHome != null && finalAway != null) {
-      const exactPredictorIds = await this.matchPredictionModel
-        .find({
-          fixtureId: fixture._id,
-          homeScore: finalHome,
-          awayScore: finalAway,
-        })
-        .distinct('userId')
-        .exec();
-      if (exactPredictorIds.length) {
-        const exactSet = new Set(exactPredictorIds.map((id) => id.toString()));
-        const priority = eligibleVotes.filter((v) =>
-          exactSet.has(v.userId.toString()),
-        );
-        if (priority.length) {
-          pool = priority;
-          wonViaExactScore = true;
-        }
-      }
+    const exactPredictorIds =
+      finalHome != null && finalAway != null
+        ? await this.getExactPredictorUserIds(
+            fixture._id,
+            finalHome,
+            finalAway,
+          )
+        : new Set<string>();
+
+    const cooldownUserIds = await this.getCooldownUserIdSet(
+      eligibleVotes.map((v) => v.userId),
+      fixture._id,
+    );
+
+    const poolAfterCooldown = eligibleVotes.filter((v) => {
+      const uid = v.userId.toString();
+      if (!cooldownUserIds.has(uid)) return true;
+      return exactPredictorIds.has(uid);
+    });
+
+    if (!poolAfterCooldown.length) {
+      const record = await this.campaignWinnerModel.create({
+        campaignId: campaignObjId,
+        fixtureId: fixture._id,
+        postId,
+        prize: 100,
+        winningOption: winningOptionIndex,
+        paid: false,
+        note: `All eligible voters are on a ${CAMPAIGN_WINNER_COOLDOWN_MATCHES}-match winner cooldown — exact score required to win again`,
+      });
+      void this.notifyMatchResult(
+        postId.toHexString(),
+        fixture.homeTeam.name,
+        fixture.awayTeam.name,
+        null,
+      );
+      return this.toGql(record);
     }
 
-    const drawn = pool[Math.floor(Math.random() * pool.length)];
+    // ── Draw pool tiers ────────────────────────────────────────────────────
+    // 1. Exact score → draw among exact scorers (never-won first if any).
+    // 2. No exact score → draw only from never-won correct-side voters.
+    // 3. If no never-won left → weighted draw among past winners (fallback).
+    const pastWinCountByUser = await this.getPastWinCountByUser(
+      poolAfterCooldown.map((v) => v.userId),
+    );
+    const { pool, wonViaExactScore, drawnFromNewWinnerPool, useWeightedDraw } =
+      this.buildCampaignDrawPool(
+        poolAfterCooldown,
+        exactPredictorIds,
+        pastWinCountByUser,
+      );
+
+    const drawn = useWeightedDraw
+      ? this.drawWeightedCampaignWinner(pool, pastWinCountByUser)
+      : this.drawUniformCampaignWinner(pool);
     const pickedAt = new Date();
     const record = await this.campaignWinnerModel.create({
       campaignId: campaignObjId,
@@ -210,7 +252,9 @@ export class WorldCupCampaignService {
       paid: false,
       ...(wonViaExactScore
         ? { note: 'Won via exact score prediction 🎯' }
-        : {}),
+        : drawnFromNewWinnerPool
+          ? { note: 'Drawn from first-time winner pool' }
+          : {}),
     });
     // Stamp the post so claimPostVotePrize can verify winner eligibility
     await this.postModel.updateOne(
@@ -309,6 +353,174 @@ export class WorldCupCampaignService {
         `Match result notification failed for post ${postId}: ${err instanceof Error ? err.message : String(err)}`,
       );
     }
+  }
+
+  /** User IDs with an exact-score prediction for the final result. */
+  private async getExactPredictorUserIds(
+    fixtureId: Types.ObjectId,
+    finalHome: number,
+    finalAway: number,
+  ): Promise<Set<string>> {
+    const ids = await this.matchPredictionModel
+      .find({
+        fixtureId,
+        homeScore: finalHome,
+        awayScore: finalAway,
+      })
+      .distinct('userId')
+      .exec();
+    return new Set(ids.map((id) => id.toString()));
+  }
+
+  /**
+   * Users who won a recent match post and are still in the cooldown window
+   * (next N processed matches after their last win).
+   */
+  private async getCooldownUserIdSet(
+    voterUserIds: Types.ObjectId[],
+    currentFixtureId: Types.ObjectId,
+  ): Promise<Set<string>> {
+    const voterSet = new Set(voterUserIds.map((id) => id.toString()));
+    if (voterSet.size === 0) return new Set();
+
+    const timeline = await this.campaignWinnerModel
+      .find({
+        userId: { $ne: null },
+        fixtureId: { $ne: currentFixtureId },
+      })
+      .sort({ createdAt: 1 })
+      .select('userId createdAt')
+      .lean()
+      .exec();
+
+    const lastWinIndexByUser = new Map<string, number>();
+    timeline.forEach((row, idx) => {
+      const uid = row.userId?.toString();
+      if (uid) lastWinIndexByUser.set(uid, idx);
+    });
+
+    const cooldown = new Set<string>();
+    for (const uid of voterSet) {
+      const lastIdx = lastWinIndexByUser.get(uid);
+      if (lastIdx === undefined) continue;
+      const matchesSince = timeline.length - lastIdx - 1;
+      if (matchesSince < CAMPAIGN_WINNER_COOLDOWN_MATCHES) {
+        cooldown.add(uid);
+      }
+    }
+    return cooldown;
+  }
+
+  /** Total campaign wins per user (all time, excluding current fixture). */
+  private async getPastWinCountByUser(
+    userIds: Types.ObjectId[],
+  ): Promise<Map<string, number>> {
+    const unique = [
+      ...new Set(userIds.map((id) => id.toString()).filter(Boolean)),
+    ];
+    if (!unique.length) return new Map();
+
+    const rows = await this.campaignWinnerModel.aggregate<{
+      _id: Types.ObjectId;
+      wins: number;
+    }>([
+      {
+        $match: {
+          userId: {
+            $in: unique.map((id) => new Types.ObjectId(id)),
+          },
+        },
+      },
+      { $group: { _id: '$userId', wins: { $sum: 1 } } },
+    ]);
+
+    const map = new Map<string, number>();
+    for (const row of rows) {
+      map.set(row._id.toString(), row.wins);
+    }
+    return map;
+  }
+
+  private campaignWinnerDrawWeight(pastWins: number): number {
+    if (pastWins <= 0) return CAMPAIGN_WINNER_FIRST_TIME_WEIGHT;
+    if (pastWins === 1) return CAMPAIGN_WINNER_REPEAT_ONCE_WEIGHT;
+    return CAMPAIGN_WINNER_REPEAT_MULTI_WEIGHT;
+  }
+
+  private buildCampaignDrawPool<T extends { userId: Types.ObjectId }>(
+    poolAfterCooldown: T[],
+    exactPredictorIds: Set<string>,
+    pastWinCountByUser: Map<string, number>,
+  ): {
+    pool: T[];
+    wonViaExactScore: boolean;
+    drawnFromNewWinnerPool: boolean;
+    useWeightedDraw: boolean;
+  } {
+    const isNeverWon = (entry: T) =>
+      (pastWinCountByUser.get(entry.userId.toString()) ?? 0) === 0;
+    const neverWon = poolAfterCooldown.filter(isNeverWon);
+    const exactInPool = poolAfterCooldown.filter((entry) =>
+      exactPredictorIds.has(entry.userId.toString()),
+    );
+
+    if (exactInPool.length) {
+      const exactNeverWon = exactInPool.filter(isNeverWon);
+      const pool = exactNeverWon.length ? exactNeverWon : exactInPool;
+      return {
+        pool,
+        wonViaExactScore: true,
+        drawnFromNewWinnerPool: exactNeverWon.length > 0,
+        useWeightedDraw: exactNeverWon.length === 0,
+      };
+    }
+
+    if (neverWon.length) {
+      return {
+        pool: neverWon,
+        wonViaExactScore: false,
+        drawnFromNewWinnerPool: true,
+        useWeightedDraw: false,
+      };
+    }
+
+    const pastWinners = poolAfterCooldown.filter((entry) => !isNeverWon(entry));
+    return {
+      pool: pastWinners.length ? pastWinners : poolAfterCooldown,
+      wonViaExactScore: false,
+      drawnFromNewWinnerPool: false,
+      useWeightedDraw: true,
+    };
+  }
+
+  private drawUniformCampaignWinner<T>(pool: T[]): T {
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
+  /** Weighted random pick — used only when no first-time winners remain. */
+  private drawWeightedCampaignWinner<
+    T extends { userId: Types.ObjectId },
+  >(pool: T[], pastWinCountByUser: Map<string, number>): T {
+    if (pool.length === 1) return pool[0];
+
+    let total = 0;
+    const weights = pool.map((entry) => {
+      const pastWins = pastWinCountByUser.get(entry.userId.toString()) ?? 0;
+      const w = this.campaignWinnerDrawWeight(pastWins);
+      total += w;
+      return w;
+    });
+
+    if (total <= 0) {
+      return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    let roll = Math.random() * total;
+    for (let i = 0; i < pool.length; i++) {
+      roll -= weights[i];
+      if (roll <= 0) return pool[i];
+    }
+    return pool[pool.length - 1];
   }
 
   async findByPostId(postId: string): Promise<CampaignWinnerGql | null> {

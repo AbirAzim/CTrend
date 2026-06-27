@@ -1632,6 +1632,33 @@ export class PostsService implements OnModuleInit {
               away: post.fixtureScore.away ?? null,
               status: post.fixtureStatus ?? null,
               minute: post.fixtureMinute ?? null,
+              phase: post.fixtureScore.phase ?? null,
+              fullTime:
+                post.fixtureScore.fullTimeHome != null &&
+                post.fixtureScore.fullTimeAway != null
+                  ? {
+                      home: post.fixtureScore.fullTimeHome,
+                      away: post.fixtureScore.fullTimeAway,
+                    }
+                  : null,
+              extraTime:
+                post.fixtureScore.extraTimeHome != null &&
+                post.fixtureScore.extraTimeAway != null
+                  ? {
+                      home: post.fixtureScore.extraTimeHome,
+                      away: post.fixtureScore.extraTimeAway,
+                    }
+                  : null,
+              penalty:
+                post.fixtureScore.penaltyHome != null &&
+                post.fixtureScore.penaltyAway != null
+                  ? {
+                      home: post.fixtureScore.penaltyHome,
+                      away: post.fixtureScore.penaltyAway,
+                    }
+                  : null,
+              wentToExtraTime: post.fixtureScore.wentToExtraTime ?? null,
+              wentToPenalties: post.fixtureScore.wentToPenalties ?? null,
             }
           : null,
       fixtureWinnerAt: post.fixtureWinnerAt ?? null,

@@ -13,6 +13,16 @@ import { PostCampaignSummaryGql } from './post-campaign-summary.types';
 import { PostVoteWinnerGql } from './post-vote-winner.types';
 import { CampaignWinnerGql } from '../../world-cup-campaign/graphql/campaign-winner.types';
 
+/** Pair of home/away integers (score line). */
+@ObjectType()
+export class ScorePairGql {
+  @Field(() => Int, { nullable: true })
+  home?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  away?: number | null;
+}
+
 /** Live/final score for match-type campaign posts. */
 @ObjectType()
 export class MatchScoreGql {
@@ -29,6 +39,25 @@ export class MatchScoreGql {
   /** Elapsed match minute (IN_PLAY / PAUSED only; null otherwise). */
   @Field(() => Int, { nullable: true })
   minute: number | null;
+
+  /** Raw API phase: ET, P, AET, PEN, 1H, etc. */
+  @Field(() => String, { nullable: true })
+  phase?: string | null;
+
+  @Field(() => ScorePairGql, { nullable: true })
+  fullTime?: ScorePairGql | null;
+
+  @Field(() => ScorePairGql, { nullable: true })
+  extraTime?: ScorePairGql | null;
+
+  @Field(() => ScorePairGql, { nullable: true })
+  penalty?: ScorePairGql | null;
+
+  @Field(() => Boolean, { nullable: true })
+  wentToExtraTime?: boolean | null;
+
+  @Field(() => Boolean, { nullable: true })
+  wentToPenalties?: boolean | null;
 }
 
 @ObjectType()

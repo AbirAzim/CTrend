@@ -313,6 +313,8 @@ type FixtureGql {
   detailsSyncedAt: DateTime
   events: [MatchEventGql!]!
   externalId: Int!
+  extraTime: ScorePhaseGql
+  fullTime: ScorePhaseGql
   group: String
   hasDrawOption: Boolean!
   homeTeam: FixtureTeamGql!
@@ -322,13 +324,17 @@ type FixtureGql {
   matchEndedAt: DateTime
   matchday: Int
   minute: Int
+  penalty: ScorePhaseGql
   playerMatchStats: [PlayerMatchStatGql!]!
   playerRatings: [PlayerRatingGql!]!
+  rawStatus: String
   score: FixtureScoreGql!
   stage: String!
   stats: [MatchStatGql!]!
   status: String!
   venue: FixtureVenueGql
+  wentToExtraTime: Boolean
+  wentToPenalties: Boolean
   winnerScheduledAt: DateTime
 }
 
@@ -452,9 +458,15 @@ type MatchPredictionStateGql {
 
 type MatchScoreGql {
   away: Int
+  extraTime: ScorePairGql
+  fullTime: ScorePairGql
   home: Int
   minute: Int
+  penalty: ScorePairGql
+  phase: String
   status: String
+  wentToExtraTime: Boolean
+  wentToPenalties: Boolean
 }
 
 type MatchStatGql {
@@ -967,6 +979,16 @@ input ReportContentInput {
   reasonId: ContentReportReasonId!
   targetId: ID!
   targetType: ContentReportTargetType!
+}
+
+type ScorePairGql {
+  away: Int
+  home: Int
+}
+
+type ScorePhaseGql {
+  away: Int
+  home: Int
 }
 
 type SearchResultGql {

@@ -263,6 +263,15 @@ export class FixtureVenueGql {
 }
 
 @ObjectType()
+export class ScorePhaseGql {
+  @Field(() => Int, { nullable: true })
+  home?: number | null;
+
+  @Field(() => Int, { nullable: true })
+  away?: number | null;
+}
+
+@ObjectType()
 export class FixtureGql {
   @Field(() => ID)
   id: string;
@@ -282,6 +291,9 @@ export class FixtureGql {
   @Field()
   status: string;
 
+  @Field(() => String, { nullable: true })
+  rawStatus?: string | null;
+
   @Field(() => Int, { nullable: true })
   minute?: number | null;
 
@@ -296,6 +308,21 @@ export class FixtureGql {
 
   @Field(() => FixtureScoreGql)
   score: FixtureScoreGql;
+
+  @Field(() => ScorePhaseGql, { nullable: true })
+  fullTime?: ScorePhaseGql | null;
+
+  @Field(() => ScorePhaseGql, { nullable: true })
+  extraTime?: ScorePhaseGql | null;
+
+  @Field(() => ScorePhaseGql, { nullable: true })
+  penalty?: ScorePhaseGql | null;
+
+  @Field(() => Boolean, { nullable: true })
+  wentToExtraTime?: boolean | null;
+
+  @Field(() => Boolean, { nullable: true })
+  wentToPenalties?: boolean | null;
 
   @Field(() => FixtureVenueGql, { nullable: true })
   venue?: FixtureVenueGql;

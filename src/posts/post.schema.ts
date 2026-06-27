@@ -152,10 +152,31 @@ export class Post {
     type: {
       home: { type: Number, default: null },
       away: { type: Number, default: null },
+      phase: { type: String, default: null },
+      fullTimeHome: { type: Number, default: null },
+      fullTimeAway: { type: Number, default: null },
+      extraTimeHome: { type: Number, default: null },
+      extraTimeAway: { type: Number, default: null },
+      penaltyHome: { type: Number, default: null },
+      penaltyAway: { type: Number, default: null },
+      wentToExtraTime: { type: Boolean, default: false },
+      wentToPenalties: { type: Boolean, default: false },
     },
     default: null,
   })
-  fixtureScore?: { home: number | null; away: number | null } | null;
+  fixtureScore?: {
+    home: number | null;
+    away: number | null;
+    phase?: string | null;
+    fullTimeHome?: number | null;
+    fullTimeAway?: number | null;
+    extraTimeHome?: number | null;
+    extraTimeAway?: number | null;
+    penaltyHome?: number | null;
+    penaltyAway?: number | null;
+    wentToExtraTime?: boolean;
+    wentToPenalties?: boolean;
+  } | null;
 
   /** Normalized match status: TIMED | IN_PLAY | PAUSED | FINISHED */
   @Prop({ type: String, default: null })

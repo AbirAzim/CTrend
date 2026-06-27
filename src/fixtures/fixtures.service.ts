@@ -24,6 +24,11 @@ import {
   pubsub,
 } from '../pubsub';
 import { MatchPredictionsService } from '../match-predictions/match-predictions.service';
+import {
+  buildFixtureScoreSet,
+  buildPostFixtureScoreSet,
+  parseFixtureScores,
+} from './fixture-score.util';
 
 // ── API-Football ──────────────────────────────────────────────────────────
 // Supports both direct api-sports.io and RapidAPI hosting.
@@ -65,6 +70,7 @@ interface AfTeam {
   id: number;
   name: string;
   logo: string;
+  winner?: boolean | null;
 }
 interface AfFixtureItem {
   fixture: {
@@ -76,6 +82,11 @@ interface AfFixtureItem {
   league: { id: number; round: string };
   teams: { home: AfTeam; away: AfTeam };
   goals: { home: number | null; away: number | null };
+  score?: {
+    fulltime?: { home: number | null; away: number | null } | null;
+    extratime?: { home: number | null; away: number | null } | null;
+    penalty?: { home: number | null; away: number | null } | null;
+  };
 }
 interface AfStandingRow {
   team: { id: number; name: string };
@@ -708,8 +719,7 @@ export class FixturesService implements OnModuleInit {
 
   private mapItem(item: AfFixtureItem, groupMap: Map<number, string>) {
     const status = normalizeStatus(item.fixture.status.short);
-    const home = item.goals.home;
-    const away = item.goals.away;
+    const parsed = parseFixtureScores(item, status);
     const venue = item.fixture.venue;
     // API-Football has no shortName/tla — keep the full name (frontend truncates).
     return {
@@ -735,10 +745,25 @@ export class FixturesService implements OnModuleInit {
       stage: mapStage(item.league.round),
       group: groupMap.get(item.teams.home.id) ?? null,
       matchday: parseMatchday(item.league.round),
-      score: { home, away, winner: deriveWinner(home, away, status) },
+      ...buildFixtureScoreSet(parsed),
       ...(venue?.name
         ? { venue: { name: venue.name, city: venue.city ?? '' } }
         : {}),
+    };
+  }
+
+  private buildPostScoreUpdate(
+    parsed: ReturnType<typeof parseFixtureScores>,
+    fixture: Pick<FixtureDocument, 'stage' | 'hasDrawOption'>,
+    status: string,
+    minute: number | null,
+  ) {
+    return {
+      ...buildPostFixtureScoreSet(parsed),
+      fixtureStatus: status,
+      fixtureMinute: minute,
+      fixtureStage: fixture.stage,
+      hasDrawOption: fixture.hasDrawOption ?? fixture.stage === 'GROUP_STAGE',
     };
   }
 
@@ -795,8 +820,8 @@ export class FixturesService implements OnModuleInit {
 
     for (const item of items) {
       const newStatus = normalizeStatus(item.fixture.status.short);
-      const home = item.goals.home;
-      const away = item.goals.away;
+      const parsed = parseFixtureScores(item, newStatus);
+      const { home, away } = parsed;
       const newKickoff = new Date(item.fixture.date);
 
       // Fetch the current stored fixture to detect transitions
@@ -826,17 +851,13 @@ export class FixturesService implements OnModuleInit {
         { externalId: item.fixture.id },
         {
           $set: {
-            status: newStatus,
             kickoff: newKickoff,
             minute: newMinute,
             // Ensure team external IDs are always set (needed for event home/away assignment)
             homeTeamExternalId: item.teams.home.id,
             awayTeamExternalId: item.teams.away.id,
-            score: {
-              home,
-              away,
-              winner: deriveWinner(home, away, newStatus),
-            },
+            ...buildFixtureScoreSet(parsed),
+            status: newStatus,
           },
         },
       );
@@ -846,13 +867,12 @@ export class FixturesService implements OnModuleInit {
         !wasFinished &&
         newStatus === 'FINISHED' &&
         existing.campaignPostId &&
-        home != null &&
-        away != null
+        parsed.predictionScore
       ) {
         await this.matchPredictionsService.awardWinners(
           existing.campaignPostId.toHexString(),
-          home,
-          away,
+          parsed.predictionScore.home,
+          parsed.predictionScore.away,
         );
       }
 
@@ -862,24 +882,20 @@ export class FixturesService implements OnModuleInit {
         const prevAway = existing.score?.away ?? null;
         const prevStatus = existing.status;
         const prevMinute = existing.minute ?? null;
+        const prevPhase = existing.rawStatus ?? null;
 
         const scoreChanged =
           prevHome !== home ||
           prevAway !== away ||
           prevStatus !== newStatus ||
-          prevMinute !== newMinute;
+          prevMinute !== newMinute ||
+          prevPhase !== parsed.rawStatus;
 
         if (scoreChanged) {
           await this.postModel.updateOne(
             { _id: existing.campaignPostId },
             {
-              $set: {
-                fixtureScore: { home, away },
-                fixtureStatus: newStatus,
-                fixtureMinute: newMinute,
-                fixtureStage: existing.stage,
-                hasDrawOption: existing.hasDrawOption ?? existing.stage === 'GROUP_STAGE',
-              },
+              $set: this.buildPostScoreUpdate(parsed, existing, newStatus, newMinute),
             },
           );
           // Only push real-time update while the match is actively progressing
@@ -1004,8 +1020,8 @@ export class FixturesService implements OnModuleInit {
         if (!res.length) continue;
         const item = res[0];
         const newStatus = normalizeStatus(item.fixture.status.short);
-        const home = item.goals.home;
-        const away = item.goals.away;
+        const parsed = parseFixtureScores(item, newStatus);
+        const { home, away } = parsed;
         this.logger.log(
           `Ghost IN_PLAY fixture ${ghost.externalId} (${ghost.homeTeam.name} vs ${ghost.awayTeam.name}): now ${newStatus} ${home}-${away}`,
         );
@@ -1013,21 +1029,20 @@ export class FixturesService implements OnModuleInit {
           { _id: ghost._id },
           {
             $set: {
-              status: newStatus,
               minute: null,
-              score: { home, away, winner: deriveWinner(home, away, newStatus) },
+              ...buildFixtureScoreSet(parsed),
+              status: newStatus,
             },
           },
         );
         if (ghost.campaignPostId) {
           const postId = ghost.campaignPostId.toHexString();
-          const postUpdate: Record<string, unknown> = {
-            fixtureScore: { home, away },
-            fixtureStatus: newStatus,
-            fixtureMinute: null,
-            fixtureStage: ghost.stage,
-            hasDrawOption: ghost.hasDrawOption ?? ghost.stage === 'GROUP_STAGE',
-          };
+          const postUpdate: Record<string, unknown> = this.buildPostScoreUpdate(
+            parsed,
+            ghost,
+            newStatus,
+            null,
+          );
 
           // For FINISHED: compute winner reveal time and include it in the same
           // DB write so the pubsub publish always reads the complete final state.
@@ -1041,6 +1056,13 @@ export class FixturesService implements OnModuleInit {
               { $set: { matchEndedAt, winnerScheduledAt } },
             );
             postUpdate.fixtureWinnerAt = winnerScheduledAt;
+            if (parsed.predictionScore) {
+              await this.matchPredictionsService.awardWinners(
+                postId,
+                parsed.predictionScore.home,
+                parsed.predictionScore.away,
+              );
+            }
             this.logger.log(
               `Match finished (ghost cleanup): ${ghost.homeTeam.name} vs ${ghost.awayTeam.name}. Winner reveal at ${winnerScheduledAt.toISOString()}`,
             );
@@ -1229,19 +1251,41 @@ export class FixturesService implements OnModuleInit {
           { $set: { matchEndedAt, winnerScheduledAt } },
         );
 
+        const parsedForReconcile = {
+          rawStatus: fixture.rawStatus ?? 'FT',
+          home: fixture.score?.home ?? null,
+          away: fixture.score?.away ?? null,
+          fullTime:
+            fixture.scoreFullTimeHome != null && fixture.scoreFullTimeAway != null
+              ? { home: fixture.scoreFullTimeHome, away: fixture.scoreFullTimeAway }
+              : null,
+          extraTime:
+            fixture.scoreExtraTimeHome != null && fixture.scoreExtraTimeAway != null
+              ? { home: fixture.scoreExtraTimeHome, away: fixture.scoreExtraTimeAway }
+              : null,
+          penalty:
+            fixture.scorePenaltyHome != null && fixture.scorePenaltyAway != null
+              ? { home: fixture.scorePenaltyHome, away: fixture.scorePenaltyAway }
+              : null,
+          wentToExtraTime: fixture.wentToExtraTime ?? false,
+          wentToPenalties: fixture.wentToPenalties ?? false,
+          predictionScore:
+            fixture.scoreExtraTimeHome != null && fixture.scoreExtraTimeAway != null
+              ? { home: fixture.scoreExtraTimeHome, away: fixture.scoreExtraTimeAway }
+              : fixture.scoreFullTimeHome != null && fixture.scoreFullTimeAway != null
+                ? { home: fixture.scoreFullTimeHome, away: fixture.scoreFullTimeAway }
+                : fixture.score?.home != null && fixture.score?.away != null
+                  ? { home: fixture.score.home, away: fixture.score.away }
+                  : null,
+          winner: fixture.score?.winner ?? null,
+        };
+
         await this.postModel.updateOne(
           { _id: fixture.campaignPostId },
           {
             $set: {
-              fixtureScore: {
-                home: fixture.score?.home ?? null,
-                away: fixture.score?.away ?? null,
-              },
-              fixtureStatus: 'FINISHED',
-              fixtureMinute: null,
+              ...this.buildPostScoreUpdate(parsedForReconcile, fixture, 'FINISHED', null),
               fixtureWinnerAt: winnerScheduledAt,
-              fixtureStage: fixture.stage,
-              hasDrawOption: fixture.hasDrawOption ?? fixture.stage === 'GROUP_STAGE',
             },
           },
         );
@@ -1566,6 +1610,7 @@ export class FixturesService implements OnModuleInit {
       },
       kickoff: fixture.kickoff,
       status: fixture.status,
+      rawStatus: fixture.rawStatus ?? null,
       minute: fixture.minute ?? null,
       stage: fixture.stage,
       group: fixture.group,
@@ -1578,6 +1623,20 @@ export class FixturesService implements OnModuleInit {
         // 'HOME_TEAM'/'AWAY_TEAM'/'DRAW'. Clients expect the latter.
         winner: normalizeWinner(fixture.score?.winner),
       },
+      fullTime:
+        fixture.scoreFullTimeHome != null && fixture.scoreFullTimeAway != null
+          ? { home: fixture.scoreFullTimeHome, away: fixture.scoreFullTimeAway }
+          : null,
+      extraTime:
+        fixture.scoreExtraTimeHome != null && fixture.scoreExtraTimeAway != null
+          ? { home: fixture.scoreExtraTimeHome, away: fixture.scoreExtraTimeAway }
+          : null,
+      penalty:
+        fixture.scorePenaltyHome != null && fixture.scorePenaltyAway != null
+          ? { home: fixture.scorePenaltyHome, away: fixture.scorePenaltyAway }
+          : null,
+      wentToExtraTime: fixture.wentToExtraTime ?? false,
+      wentToPenalties: fixture.wentToPenalties ?? false,
       venue: fixture.venue
         ? { name: fixture.venue.name, city: fixture.venue.city }
         : undefined,

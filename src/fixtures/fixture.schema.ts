@@ -133,6 +133,10 @@ export class Fixture {
   @Prop({ type: String, required: true })
   status: string;
 
+  /** Raw API-Football status: ET, P, AET, PEN, 1H, etc. */
+  @Prop({ type: String, default: null })
+  rawStatus?: string | null;
+
   /** Live match minute (elapsed) while IN_PLAY/PAUSED; null otherwise. */
   @Prop({ type: Number, default: null })
   minute?: number | null;
@@ -155,6 +159,30 @@ export class Fixture {
     default: () => ({ home: null, away: null, winner: null }),
   })
   score: FixtureScore;
+
+  /** 90-minute score (API score.fulltime). */
+  @Prop({ type: Number, default: null })
+  scoreFullTimeHome?: number | null;
+  @Prop({ type: Number, default: null })
+  scoreFullTimeAway?: number | null;
+
+  /** Score after extra time, before penalties (API score.extratime). */
+  @Prop({ type: Number, default: null })
+  scoreExtraTimeHome?: number | null;
+  @Prop({ type: Number, default: null })
+  scoreExtraTimeAway?: number | null;
+
+  /** Penalty shootout tally (API score.penalty). */
+  @Prop({ type: Number, default: null })
+  scorePenaltyHome?: number | null;
+  @Prop({ type: Number, default: null })
+  scorePenaltyAway?: number | null;
+
+  @Prop({ default: false })
+  wentToExtraTime: boolean;
+
+  @Prop({ default: false })
+  wentToPenalties: boolean;
 
   @Prop({ type: { name: String, city: String } })
   venue?: FixtureVenue;

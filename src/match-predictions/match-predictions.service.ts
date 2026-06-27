@@ -16,6 +16,10 @@ import { MatchPredictionGql } from './graphql/match-prediction.types';
 import { pubsub, MATCH_PREDICTION_UPDATED } from '../pubsub';
 import { CoinsService } from '../coins/coins.service';
 import { CoinType } from '../coins/coins.constants';
+import {
+  isLiveExtraTimePhase,
+  isLivePenaltyPhase,
+} from '../fixtures/fixture-score.util';
 
 type MatchContext = { post: PostDocument; fixture: FixtureDocument };
 
@@ -63,9 +67,36 @@ export class MatchPredictionsService {
   private isResolved(fixture: FixtureDocument): boolean {
     return (
       fixture.status === 'FINISHED' &&
-      fixture.score?.home != null &&
-      fixture.score?.away != null
+      this.getPredictionScore(fixture) != null
     );
+  }
+
+  /** Pre-penalty score used for exact-score predictions. */
+  private getPredictionScore(
+    fixture: FixtureDocument,
+  ): { home: number; away: number } | null {
+    if (
+      fixture.scoreExtraTimeHome != null &&
+      fixture.scoreExtraTimeAway != null
+    ) {
+      return {
+        home: fixture.scoreExtraTimeHome,
+        away: fixture.scoreExtraTimeAway,
+      };
+    }
+    if (
+      fixture.scoreFullTimeHome != null &&
+      fixture.scoreFullTimeAway != null
+    ) {
+      return {
+        home: fixture.scoreFullTimeHome,
+        away: fixture.scoreFullTimeAway,
+      };
+    }
+    if (fixture.score?.home != null && fixture.score?.away != null) {
+      return { home: fixture.score.home, away: fixture.score.away };
+    }
+    return null;
   }
 
   private isWinningScore(
@@ -73,11 +104,9 @@ export class MatchPredictionsService {
     homeScore: number,
     awayScore: number,
   ): boolean {
-    if (!this.isResolved(fixture)) return false;
-    // Pre-penalty score (fixture.score is set from API goals incl. extra time).
-    return (
-      fixture.score.home === homeScore && fixture.score.away === awayScore
-    );
+    const target = this.getPredictionScore(fixture);
+    if (!target || !this.isResolved(fixture)) return false;
+    return target.home === homeScore && target.away === awayScore;
   }
 
   private async toGql(
@@ -165,12 +194,13 @@ export class MatchPredictionsService {
 
   async listWinners(postId: string): Promise<MatchPredictionGql[]> {
     const { fixture } = await this.loadContext(postId);
-    if (!this.isResolved(fixture)) return [];
+    const target = this.getPredictionScore(fixture);
+    if (!this.isResolved(fixture) || !target) return [];
     const rows = await this.predictionModel
       .find({
         postId: new Types.ObjectId(postId),
-        homeScore: fixture.score.home,
-        awayScore: fixture.score.away,
+        homeScore: target.home,
+        awayScore: target.away,
       })
       .sort({ createdAt: 1 })
       .exec();
@@ -202,15 +232,22 @@ export class MatchPredictionsService {
     ]);
     const predictionsOpen = this.isOpen(fixture);
     const predictionsResolved = this.isResolved(fixture);
+    const pendingEt = isLiveExtraTimePhase(fixture.rawStatus);
+    const pendingPens = isLivePenaltyPhase(fixture.rawStatus);
+    const knockout = fixture.stage !== 'GROUP_STAGE';
     return {
       myPrediction: mine ? await this.toGql(mine, fixture) : null,
       count,
       predictionsOpen,
       predictionsResolved,
       fixtureStage: fixture.stage ?? null,
-      predictionsPendingResult: !predictionsResolved && !predictionsOpen,
-      wentToExtraTime: null,
-      wentToPenalties: null,
+      predictionsPendingResult:
+        knockout &&
+        !predictionsResolved &&
+        !predictionsOpen &&
+        (pendingEt || pendingPens),
+      wentToExtraTime: fixture.wentToExtraTime ?? false,
+      wentToPenalties: fixture.wentToPenalties ?? false,
     };
   }
 

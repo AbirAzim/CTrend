@@ -38,15 +38,23 @@ export class WinnerAnnouncementService {
 
     if (!ready.length) return;
 
-    // Filter out ones that already have a winner recorded
+    // Filter out fixtures that already have a resolved winner record
     const fixtureIds = ready.map((f) => f._id);
-    const alreadyDone = await this.campaignWinnerModel
+    const existingRecords = await this.campaignWinnerModel
       .find({ fixtureId: { $in: fixtureIds } })
-      .distinct('fixtureId')
+      .select('fixtureId userId note')
+      .lean()
       .exec();
 
-    const doneSet = new Set(alreadyDone.map((id) => id.toString()));
-    const pending = ready.filter((f) => !doneSet.has(f._id.toString()));
+    const resolvedSet = new Set(
+      existingRecords
+        .filter(
+          (r) =>
+            r.userId != null || Boolean(r.note?.trim()),
+        )
+        .map((r) => r.fixtureId.toString()),
+    );
+    const pending = ready.filter((f) => !resolvedSet.has(f._id.toString()));
 
     for (const fixture of pending) {
       try {

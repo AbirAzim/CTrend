@@ -7,7 +7,7 @@ import {
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { ConfigService } from '@nestjs/config';
-import { Fixture, FixtureDocument } from './fixture.schema';
+import { Fixture, FixtureDocument, MatchEvent } from './fixture.schema';
 import { Post, PostDocument } from '../posts/post.schema';
 import { Category, CategoryDocument } from '../categories/category.schema';
 import { FixtureFilterInput, FixtureGql, TopAssistantGql, TopScorerGql } from './graphql/fixture.types';
@@ -339,6 +339,79 @@ export class FixturesService {
     return this.apiFetch<AfPlayerStatTeam[]>(
       `/fixtures/players?fixture=${externalId}`,
     );
+  }
+
+  /** Count scored goals from stored events (handles own goals). */
+  private countGoalsFromEvents(events: MatchEvent[] | undefined | null): {
+    home: number;
+    away: number;
+  } {
+    let home = 0;
+    let away = 0;
+    for (const e of events ?? []) {
+      if (e.type !== 'Goal') continue;
+      const d = (e.detail ?? '').toLowerCase();
+      if (
+        d.includes('disallow') ||
+        d.includes('missed') ||
+        d.includes('shootout')
+      ) {
+        continue;
+      }
+      if (d.includes('own goal')) {
+        if (e.team === 'home') away++;
+        else home++;
+      } else if (e.team === 'home') {
+        home++;
+      } else {
+        away++;
+      }
+    }
+    return { home, away };
+  }
+
+  /** True when API score has more goals than our stored events (stale sync). */
+  private eventsMismatchScore(fixture: FixtureDocument): boolean {
+    const scoreHome = fixture.score?.home;
+    const scoreAway = fixture.score?.away;
+    if (scoreHome == null || scoreAway == null) return false;
+    const { home, away } = this.countGoalsFromEvents(fixture.events);
+    return home !== scoreHome || away !== scoreAway;
+  }
+
+  /**
+   * Re-fetch events/stats for FINISHED fixtures whose event count doesn't
+   * match the final score (e.g. stoppage-time goals added after first sync).
+   */
+  async reconcileIncompleteMatchEvents(): Promise<number> {
+    const fixtures = await this.fixtureModel
+      .find({
+        status: 'FINISHED',
+        'score.home': { $ne: null },
+        'score.away': { $ne: null },
+      })
+      .exec();
+
+    let synced = 0;
+    for (const fixture of fixtures) {
+      if (!this.eventsMismatchScore(fixture)) continue;
+      try {
+        this.logger.log(
+          `Re-syncing stale events for ${fixture.homeTeam.name} vs ${fixture.awayTeam.name} (score ${fixture.score?.home}-${fixture.score?.away}, events=${fixture.events?.length ?? 0})`,
+        );
+        await this.syncMatchDetails(fixture, false);
+        synced++;
+        await new Promise((r) => setTimeout(r, 600));
+      } catch (err) {
+        this.logger.error(
+          `reconcileIncompleteMatchEvents: failed for ${fixture.externalId}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+    if (synced > 0) {
+      this.logger.log(`Re-synced events for ${synced} finished fixture(s)`);
+    }
+    return synced;
   }
 
   async syncMatchDetails(
@@ -807,12 +880,20 @@ export class FixturesService {
       }
 
       // ── Sync match details (events/stats, lineups on first pass) ──────────
-      // Throttled: run at most once per DETAIL_SYNC_INTERVAL per fixture while
-      // live, or immediately on FINISHED transition (to capture final events).
+      // Throttled while live; on FINISHED transition; and for ~6 h after full
+      // time so late-added stoppage goals get picked up from the API.
+      const matchEndedAt =
+        existing.matchEndedAt ??
+        (!wasFinished && newStatus === 'FINISHED' ? new Date() : null);
+      const recentlyFinished =
+        newStatus === 'FINISHED' &&
+        matchEndedAt != null &&
+        Date.now() - matchEndedAt.getTime() < 6 * 60 * 60 * 1000;
       const needsDetailSync =
         newStatus === 'IN_PLAY' ||
         newStatus === 'PAUSED' ||
-        (!wasFinished && newStatus === 'FINISHED');
+        (!wasFinished && newStatus === 'FINISHED') ||
+        (newStatus === 'FINISHED' && recentlyFinished);
       if (needsDetailSync && this.apiKey) {
         const exId = item.fixture.id;
         const lastSync = this.lastDetailSync.get(exId) ?? 0;
@@ -1155,12 +1236,15 @@ export class FixturesService {
     let errors = 0;
 
     for (const fixture of fixtures) {
-      // Skip only if all three data sets are already populated
-      if (
-        Array.isArray(fixture.events) && fixture.events.length > 0 &&
-        Array.isArray(fixture.stats) && fixture.stats.length > 0 &&
-        Array.isArray(fixture.playerRatings) && fixture.playerRatings.length > 0
-      ) {
+      // Skip only when all data sets exist AND event goals match final score
+      const hasCompleteData =
+        Array.isArray(fixture.events) &&
+        fixture.events.length > 0 &&
+        Array.isArray(fixture.stats) &&
+        fixture.stats.length > 0 &&
+        Array.isArray(fixture.playerRatings) &&
+        fixture.playerRatings.length > 0;
+      if (hasCompleteData && !this.eventsMismatchScore(fixture)) {
         skipped++;
         continue;
       }

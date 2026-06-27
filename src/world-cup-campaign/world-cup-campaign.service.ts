@@ -57,7 +57,9 @@ export class WorldCupCampaignService implements OnModuleInit {
 
   async onModuleInit(): Promise<void> {
     try {
+      await this.repairUnresolvedCampaignWinners();
       await this.ensureCampaignWinnerHistorySynced();
+      await this.processPendingCampaignWinners();
     } catch (err) {
       this.logger.warn(
         `Campaign winner history sync on startup failed: ${
@@ -65,6 +67,82 @@ export class WorldCupCampaignService implements OnModuleInit {
         }`,
       );
     }
+  }
+
+  /** True once a draw ran or a definitive no-winner note was recorded. */
+  private isResolvedCampaignWinner(doc: {
+    userId?: Types.ObjectId | null;
+    note?: string | null;
+  }): boolean {
+    if (doc.userId) return true;
+    return Boolean(doc.note?.trim());
+  }
+
+  /**
+   * Remove placeholder rows created by an older history sync that blocked the
+   * announce cron from ever calling processMatchResult.
+   */
+  private async repairUnresolvedCampaignWinners(): Promise<number> {
+    const stubs = await this.campaignWinnerModel
+      .find({
+        $and: [
+          { $or: [{ userId: null }, { userId: { $exists: false } }] },
+          {
+            $or: [
+              { note: null },
+              { note: '' },
+              { note: { $exists: false } },
+            ],
+          },
+        ],
+      })
+      .exec();
+
+    if (!stubs.length) return 0;
+
+    await this.campaignWinnerModel.deleteMany({
+      _id: { $in: stubs.map((s) => s._id) },
+    });
+    this.logger.warn(
+      `Removed ${stubs.length} unresolved campaign-winner stub(s) — will re-draw on next cron tick`,
+    );
+    return stubs.length;
+  }
+
+  /** Process finished matches whose reveal time passed but never got a winner. */
+  private async processPendingCampaignWinners(): Promise<number> {
+    const now = new Date();
+    const ready = await this.fixtureModel
+      .find({
+        status: 'FINISHED',
+        winnerScheduledAt: { $lte: now },
+        matchEndedAt: { $ne: null },
+        campaignPostId: { $exists: true, $ne: null },
+      })
+      .exec();
+
+    let processed = 0;
+    for (const fixture of ready) {
+      const existing = await this.campaignWinnerModel
+        .findOne({ fixtureId: fixture._id })
+        .exec();
+      if (existing && this.isResolvedCampaignWinner(existing)) continue;
+
+      try {
+        await this.processMatchResult(fixture._id.toHexString());
+        processed++;
+      } catch (err) {
+        this.logger.error(
+          `processPendingCampaignWinners: ${fixture.homeTeam.name} vs ${fixture.awayTeam.name}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
+    if (processed) {
+      this.logger.log(`Processed ${processed} pending campaign winner(s) on startup`);
+    }
+    return processed;
   }
 
   /**
@@ -110,11 +188,16 @@ export class WorldCupCampaignService implements OnModuleInit {
       );
     }
 
-    // Idempotency guard
+    // Idempotency guard — re-run if a prior sync left an empty stub row
     const existing = await this.campaignWinnerModel
       .findOne({ fixtureId: fixture._id })
       .exec();
-    if (existing) return this.toGql(existing);
+    if (existing && this.isResolvedCampaignWinner(existing)) {
+      return this.toGql(existing);
+    }
+    if (existing) {
+      await this.campaignWinnerModel.deleteOne({ _id: existing._id });
+    }
 
     const postId = fixture.campaignPostId;
 
@@ -134,7 +217,7 @@ export class WorldCupCampaignService implements OnModuleInit {
         campaignObjId = campaignPost.campaignId as Types.ObjectId;
       }
     }
-    const scoreWinner = fixture.score?.winner ?? null; // HOME_TEAM | AWAY_TEAM | DRAW | null
+    const scoreWinner = this.normalizeScoreWinner(fixture.score?.winner ?? null); // HOME_TEAM | AWAY_TEAM | DRAW | null
 
     // Unknown result — record without a winner userId
     if (!scoreWinner) {
@@ -294,8 +377,23 @@ export class WorldCupCampaignService implements OnModuleInit {
     return this.toGql(record);
   }
 
+  private normalizeScoreWinner(winner?: string | null): string | null {
+    if (!winner) return null;
+    switch (winner.toUpperCase()) {
+      case 'HOME':
+      case 'HOME_TEAM':
+        return 'HOME_TEAM';
+      case 'AWAY':
+      case 'AWAY_TEAM':
+        return 'AWAY_TEAM';
+      case 'DRAW':
+        return 'DRAW';
+      default:
+        return winner;
+    }
+  }
+
   /**
-   * Fan-out notifications after a match result is processed.
    * Winner gets VOTE_WINNER; all other non-anonymous voters get VOTE_ENDED.
    * Idempotent — guarded by voteEndedNotifiedAt on the post.
    */
@@ -397,6 +495,10 @@ export class WorldCupCampaignService implements OnModuleInit {
         .lean()
         .exec();
       if (!post) continue;
+
+      // Only backfill when the post already stores a completed draw — never
+      // create empty stubs that block processMatchResult / the announce cron.
+      if (!post.voteWinnerUserId || !post.voteWinnerPickedAt) continue;
 
       const pickedAt =
         post.voteWinnerPickedAt ??

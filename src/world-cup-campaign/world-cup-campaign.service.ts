@@ -3,6 +3,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
@@ -36,8 +37,9 @@ import {
 } from './world-cup-campaign.constants';
 
 @Injectable()
-export class WorldCupCampaignService {
+export class WorldCupCampaignService implements OnModuleInit {
   private readonly logger = new Logger(WorldCupCampaignService.name);
+  private historySynced = false;
 
   constructor(
     @InjectModel(CampaignWinner.name)
@@ -52,6 +54,18 @@ export class WorldCupCampaignService {
     private notificationsService: NotificationsService,
     private coinsService: CoinsService,
   ) {}
+
+  async onModuleInit(): Promise<void> {
+    try {
+      await this.ensureCampaignWinnerHistorySynced();
+    } catch (err) {
+      this.logger.warn(
+        `Campaign winner history sync on startup failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
+    }
+  }
 
   /**
    * Determines and records the campaign winner for a finished match.
@@ -77,6 +91,8 @@ export class WorldCupCampaignService {
     fixtureId: string,
     campaignId?: string,
   ): Promise<CampaignWinnerGql> {
+    await this.ensureCampaignWinnerHistorySynced();
+
     if (!Types.ObjectId.isValid(fixtureId)) {
       throw new NotFoundException('Fixture not found');
     }
@@ -231,7 +247,7 @@ export class WorldCupCampaignService {
     const pastWinCountByUser = await this.getPastWinCountByUser(
       poolAfterCooldown.map((v) => v.userId),
     );
-    const { pool, wonViaExactScore, drawnFromNewWinnerPool, useWeightedDraw } =
+    const { pool, wonViaExactScore, useWeightedDraw } =
       this.buildCampaignDrawPool(
         poolAfterCooldown,
         exactPredictorIds,
@@ -250,11 +266,7 @@ export class WorldCupCampaignService {
       prize: 100,
       winningOption: winningOptionIndex,
       paid: false,
-      ...(wonViaExactScore
-        ? { note: 'Won via exact score prediction 🎯' }
-        : drawnFromNewWinnerPool
-          ? { note: 'Drawn from first-time winner pool' }
-          : {}),
+      ...(wonViaExactScore ? { note: 'Won via exact score prediction 🎯' } : {}),
     });
     // Stamp the post so claimPostVotePrize can verify winner eligibility
     await this.postModel.updateOne(
@@ -355,6 +367,97 @@ export class WorldCupCampaignService {
     }
   }
 
+  /**
+   * Backfill CampaignWinner rows from finished fixtures / match posts so cooldown
+   * and never-won tiers apply to history that predates this deploy.
+   */
+  private async syncHistoricalCampaignWinners(): Promise<number> {
+    let backfilled = 0;
+
+    const fixtures = await this.fixtureModel
+      .find({
+        campaignPostId: { $exists: true, $ne: null },
+        status: 'FINISHED',
+      })
+      .select('_id campaignPostId matchEndedAt winnerScheduledAt')
+      .lean()
+      .exec();
+
+    for (const fixture of fixtures) {
+      const exists = await this.campaignWinnerModel
+        .exists({ fixtureId: fixture._id })
+        .exec();
+      if (exists) continue;
+
+      const post = await this.postModel
+        .findById(fixture.campaignPostId)
+        .select(
+          'campaignId voteWinnerUserId voteWinnerOptionIndex voteWinnerPickedAt',
+        )
+        .lean()
+        .exec();
+      if (!post) continue;
+
+      const pickedAt =
+        post.voteWinnerPickedAt ??
+        fixture.matchEndedAt ??
+        fixture.winnerScheduledAt ??
+        new Date();
+
+      await this.campaignWinnerModel.create({
+        campaignId: post.campaignId,
+        fixtureId: fixture._id,
+        postId: fixture.campaignPostId,
+        userId: post.voteWinnerUserId ?? undefined,
+        prize: 100,
+        winningOption: post.voteWinnerOptionIndex,
+        paid: false,
+        createdAt: pickedAt,
+        updatedAt: pickedAt,
+      });
+      backfilled++;
+    }
+
+    const missingUser = await this.campaignWinnerModel
+      .find({
+        $or: [{ userId: null }, { userId: { $exists: false } }],
+      })
+      .select('_id postId winningOption')
+      .lean()
+      .exec();
+
+    for (const row of missingUser) {
+      const post = await this.postModel
+        .findById(row.postId)
+        .select('voteWinnerUserId voteWinnerOptionIndex')
+        .lean()
+        .exec();
+      if (!post?.voteWinnerUserId) continue;
+      await this.campaignWinnerModel.updateOne(
+        { _id: row._id, userId: null },
+        {
+          $set: {
+            userId: post.voteWinnerUserId,
+            winningOption: post.voteWinnerOptionIndex ?? row.winningOption,
+          },
+        },
+      );
+    }
+
+    if (backfilled) {
+      this.logger.log(
+        `Synced ${backfilled} historical campaign winner record(s) from past match posts`,
+      );
+    }
+    return backfilled;
+  }
+
+  private async ensureCampaignWinnerHistorySynced(): Promise<void> {
+    if (this.historySynced) return;
+    await this.syncHistoricalCampaignWinners();
+    this.historySynced = true;
+  }
+
   /** User IDs with an exact-score prediction for the final result. */
   private async getExactPredictorUserIds(
     fixtureId: Types.ObjectId,
@@ -383,11 +486,9 @@ export class WorldCupCampaignService {
     const voterSet = new Set(voterUserIds.map((id) => id.toString()));
     if (voterSet.size === 0) return new Set();
 
+    // Every processed match (winner or not) advances the cooldown window.
     const timeline = await this.campaignWinnerModel
-      .find({
-        userId: { $ne: null },
-        fixtureId: { $ne: currentFixtureId },
-      })
+      .find({ fixtureId: { $ne: currentFixtureId } })
       .sort({ createdAt: 1 })
       .select('userId createdAt')
       .lean()
@@ -454,7 +555,6 @@ export class WorldCupCampaignService {
   ): {
     pool: T[];
     wonViaExactScore: boolean;
-    drawnFromNewWinnerPool: boolean;
     useWeightedDraw: boolean;
   } {
     const isNeverWon = (entry: T) =>
@@ -470,7 +570,6 @@ export class WorldCupCampaignService {
       return {
         pool,
         wonViaExactScore: true,
-        drawnFromNewWinnerPool: exactNeverWon.length > 0,
         useWeightedDraw: exactNeverWon.length === 0,
       };
     }
@@ -479,7 +578,6 @@ export class WorldCupCampaignService {
       return {
         pool: neverWon,
         wonViaExactScore: false,
-        drawnFromNewWinnerPool: true,
         useWeightedDraw: false,
       };
     }
@@ -488,7 +586,6 @@ export class WorldCupCampaignService {
     return {
       pool: pastWinners.length ? pastWinners : poolAfterCooldown,
       wonViaExactScore: false,
-      drawnFromNewWinnerPool: false,
       useWeightedDraw: true,
     };
   }

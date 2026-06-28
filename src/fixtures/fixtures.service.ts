@@ -191,10 +191,16 @@ function normalizeStatus(short: string): string {
   }
 }
 
-/** "Group Stage - 2" → 2; knockout rounds → null. */
+/** "Group Stage - 2" → 2; knockout rounds → null unless a match index is present. */
 function parseMatchday(round: string): number | null {
-  const m = /(\d+)\s*$/.exec(round ?? '');
-  return m ? Number(m[1]) : null;
+  const r = (round ?? '').trim();
+  const groupM = /group\s+stage\s*-\s*(\d+)/i.exec(r);
+  if (groupM) return Number(groupM[1]);
+  // "Round of 32" / "Round of 16" must NOT become 32/16 — only explicit indexes count.
+  if (/^round\s+of\s+\d+\s*$/i.test(r)) return null;
+  const dashM = /-\s*(\d+)\s*$/.exec(r);
+  if (dashM) return Number(dashM[1]);
+  return null;
 }
 
 /** API-Football round string → the app's stage vocabulary. */

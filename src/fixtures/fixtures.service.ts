@@ -1225,6 +1225,105 @@ export class FixturesService implements OnModuleInit {
   }
 
   /**
+   * Copy live fixture scores/status onto campaign posts when denormalized fields
+   * lag behind the fixture collection (e.g. syncLiveScores missed a tick).
+   * Pure DB work — runs every cron tick so existing mobile apps get IN_PLAY
+   * matchScore via feed reads and POST_VOTE_UPDATED pushes.
+   */
+  async reconcileLivePosts(): Promise<number> {
+    const liveFixtures = await this.fixtureModel
+      .find({
+        status: { $in: ['IN_PLAY', 'PAUSED'] },
+        campaignPostId: { $exists: true, $ne: null },
+      })
+      .exec();
+
+    let updated = 0;
+    for (const fixture of liveFixtures) {
+      try {
+        const postId = fixture.campaignPostId as Types.ObjectId;
+        const post = await this.postModel.findById(postId).exec();
+        if (!post) continue;
+
+        const status = fixture.status;
+        const minute =
+          status === 'IN_PLAY' || status === 'PAUSED'
+            ? (fixture.minute ?? null)
+            : null;
+        const home = fixture.score?.home ?? null;
+        const away = fixture.score?.away ?? null;
+
+        const stale =
+          post.fixtureStatus !== status ||
+          (post.fixtureMinute ?? null) !== minute ||
+          (post.fixtureScore?.home ?? null) !== home ||
+          (post.fixtureScore?.away ?? null) !== away;
+
+        if (!stale) continue;
+
+        const parsedForReconcile = {
+          rawStatus: fixture.rawStatus ?? status,
+          home,
+          away,
+          fullTime:
+            fixture.scoreFullTimeHome != null && fixture.scoreFullTimeAway != null
+              ? { home: fixture.scoreFullTimeHome, away: fixture.scoreFullTimeAway }
+              : null,
+          extraTime:
+            fixture.scoreExtraTimeHome != null && fixture.scoreExtraTimeAway != null
+              ? { home: fixture.scoreExtraTimeHome, away: fixture.scoreExtraTimeAway }
+              : null,
+          penalty:
+            fixture.scorePenaltyHome != null && fixture.scorePenaltyAway != null
+              ? { home: fixture.scorePenaltyHome, away: fixture.scorePenaltyAway }
+              : null,
+          wentToExtraTime: fixture.wentToExtraTime ?? false,
+          wentToPenalties: fixture.wentToPenalties ?? false,
+          predictionScore:
+            fixture.scoreExtraTimeHome != null && fixture.scoreExtraTimeAway != null
+              ? { home: fixture.scoreExtraTimeHome, away: fixture.scoreExtraTimeAway }
+              : fixture.scoreFullTimeHome != null && fixture.scoreFullTimeAway != null
+                ? { home: fixture.scoreFullTimeHome, away: fixture.scoreFullTimeAway }
+                : home != null && away != null
+                  ? { home, away }
+                  : null,
+          winner: fixture.score?.winner ?? null,
+        };
+
+        await this.postModel.updateOne(
+          { _id: postId },
+          {
+            $set: this.buildPostScoreUpdate(
+              parsedForReconcile,
+              fixture,
+              status,
+              minute,
+            ),
+          },
+        );
+
+        const postIdStr = postId.toHexString();
+        await pubsub.publish(POST_VOTE_UPDATED, {
+          postVoteUpdated: { postId: postIdStr },
+        });
+        await pubsub.publish(POST_UPDATED, {
+          postUpdated: { postId: postIdStr },
+        });
+
+        updated += 1;
+        this.logger.log(
+          `Reconciled live fixture → post: ${fixture.homeTeam.name} vs ${fixture.awayTeam.name} (${home ?? 0}-${away ?? 0}, ${status}${minute != null ? ` ${minute}'` : ''})`,
+        );
+      } catch (err) {
+        this.logger.error(
+          `reconcileLivePosts: failed for fixture ${fixture._id}: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
+    return updated;
+  }
+
+  /**
    * Reconcile posts for fixtures that are FINISHED in the DB but whose campaign
    * posts still have stale fixtureStatus. This catches matches that ended while
    * the live-only endpoint was not returning them (e.g. finished just before a

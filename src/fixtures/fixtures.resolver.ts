@@ -94,6 +94,14 @@ export class FixturesResolver {
   @Mutation(() => String)
   @UseGuards(GqlAuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
+  async reconcileLiveMatchPosts(): Promise<string> {
+    const count = await this.fixturesService.reconcileLivePosts();
+    return `Live post reconcile complete — ${count} post(s) refreshed`;
+  }
+
+  @Mutation(() => String)
+  @UseGuards(GqlAuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   async reconcileFinishedMatchPosts(): Promise<string> {
     await this.fixturesService.reconcileFinishedPosts();
     return 'Reconciliation complete — check winner announcement cron in ~60s';

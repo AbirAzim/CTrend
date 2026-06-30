@@ -593,6 +593,7 @@ type Mutation {
   publishAndroidUpdateNotice(body: String!, minVersionCode: Int!, title: String!): Int!
   reactMessage(emoji: String, messageId: ID!): MessageGql!
   reconcileFinishedMatchPosts: String!
+  reconcileLiveMatchPosts: String!
   redeemReferralCode(code: String!): RedeemReferralResultGql!
   register(input: RegisterInput!): AuthPayloadGql!
   registerPushToken(platform: String, token: String!): Boolean!

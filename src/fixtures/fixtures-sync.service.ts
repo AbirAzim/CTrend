@@ -35,8 +35,12 @@ export class FixturesSyncService {
       if (count !== null) {
         this.logger.log(`Live fixture sync ran — ${count} fixtures refreshed`);
       }
-      // Always reconcile finished posts — catches matches that ended while the
-      // live-only endpoint wasn't returning them (no API calls, pure DB work).
+      // Always reconcile live + finished posts — catches denormalization drift
+      // without extra API calls (existing mobile apps rely on post.matchScore).
+      const liveReconciled = await this.fixturesService.reconcileLivePosts();
+      if (liveReconciled > 0) {
+        this.logger.log(`Live post reconcile — ${liveReconciled} post(s) refreshed`);
+      }
       await this.fixturesService.reconcileFinishedPosts();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

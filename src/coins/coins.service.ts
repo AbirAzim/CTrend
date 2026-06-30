@@ -11,7 +11,7 @@ export type AwardResult = { awarded: number; balance: number };
 /** Users with admin in `roles[]` or legacy `role` are excluded from public leaderboards. */
 const NON_ADMIN_LEADERBOARD_FILTER = {
   $nor: [{ roles: UserRole.ADMIN }, { role: UserRole.ADMIN }],
-} as const;
+};
 
 function userHoldsAdminRole(user: Pick<User, 'role' | 'roles'>): boolean {
   return (

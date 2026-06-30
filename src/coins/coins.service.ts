@@ -4,8 +4,20 @@ import { Model, Types } from 'mongoose';
 import { CoinLedger, CoinLedgerDocument } from './coin-ledger.schema';
 import { User, UserDocument } from '../users/user.schema';
 import { CoinType, CoinTypeValue, COIN_AMOUNTS } from './coins.constants';
+import { UserRole } from '../common/enums';
 
 export type AwardResult = { awarded: number; balance: number };
+
+/** Users with admin in `roles[]` or legacy `role` are excluded from public leaderboards. */
+const NON_ADMIN_LEADERBOARD_FILTER = {
+  $nor: [{ roles: UserRole.ADMIN }, { role: UserRole.ADMIN }],
+} as const;
+
+function userHoldsAdminRole(user: Pick<User, 'role' | 'roles'>): boolean {
+  return (
+    user.roles?.includes(UserRole.ADMIN) || user.role === UserRole.ADMIN
+  );
+}
 
 @Injectable()
 export class CoinsService {
@@ -161,23 +173,24 @@ export class CoinsService {
       .exec();
   }
 
-  /** Count users ranked above this user (same tie-break as getLeaderboard). */
+  /** Count non-admin users ranked above this user (same tie-break as getLeaderboard). */
   async getLeaderboardRank(userId: string): Promise<number | null> {
     if (!Types.ObjectId.isValid(userId)) return null;
     const user = await this.userModel.findById(userId).exec();
-    if (!user || (user.coins ?? 0) <= 0) return null;
+    if (!user || (user.coins ?? 0) <= 0 || userHoldsAdminRole(user)) return null;
     const coins = user.coins ?? 0;
     const createdAt = user.createdAt ?? new Date(0);
     const ahead = await this.userModel.countDocuments({
+      ...NON_ADMIN_LEADERBOARD_FILTER,
       $or: [{ coins: { $gt: coins } }, { coins, createdAt: { $lt: createdAt } }],
     });
     return ahead + 1;
   }
 
-  /** Top coin earners, all-time. */
+  /** Top coin earners, all-time (admins excluded). */
   async getLeaderboard(take = 50): Promise<UserDocument[]> {
     return this.userModel
-      .find({ coins: { $gt: 0 } })
+      .find({ coins: { $gt: 0 }, ...NON_ADMIN_LEADERBOARD_FILTER })
       .sort({ coins: -1, createdAt: 1 })
       .limit(Math.min(Math.max(1, take), 100))
       .exec();

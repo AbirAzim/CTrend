@@ -71,26 +71,17 @@ export class MatchPredictionsService {
     );
   }
 
-  /** Pre-penalty score used for exact-score predictions. */
+  /** Pre-penalty score used for exact-score predictions (90' + ET goals). */
   private getPredictionScore(
     fixture: FixtureDocument,
   ): { home: number; away: number } | null {
-    if (
-      fixture.scoreExtraTimeHome != null &&
-      fixture.scoreExtraTimeAway != null
-    ) {
-      return {
-        home: fixture.scoreExtraTimeHome,
-        away: fixture.scoreExtraTimeAway,
-      };
-    }
     if (
       fixture.scoreFullTimeHome != null &&
       fixture.scoreFullTimeAway != null
     ) {
       return {
-        home: fixture.scoreFullTimeHome,
-        away: fixture.scoreFullTimeAway,
+        home: fixture.scoreFullTimeHome + (fixture.scoreExtraTimeHome ?? 0),
+        away: fixture.scoreFullTimeAway + (fixture.scoreExtraTimeAway ?? 0),
       };
     }
     if (fixture.score?.home != null && fixture.score?.away != null) {

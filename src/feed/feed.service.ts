@@ -93,7 +93,8 @@ export class FeedService {
     // falls out of both the live and upcoming tiers during that gap and sinks
     // to the regular-post tier. Treat "just past kickoff, not yet synced live,
     // not finished" the same as confirmed-live so it never drops out.
-    const tenMinutesAgo = new Date(now.getTime() - 10 * 60 * 1000);
+    // Full match window (90' + ET) — fixtureStatus can lag behind the live API.
+    const liveGraceStart = new Date(now.getTime() - 150 * 60 * 1000);
     // Year 3000 in ms — live matches float here (unreachable by any real createdAt)
     // 1 quadrillion ms — admin-pinned posts float above every other tier
     // (well clear of the live-match range ~30.75T).
@@ -138,7 +139,7 @@ export class FeedService {
                             {
                               $and: [
                                 { $lte: ['$votingEndsAt', now] },
-                                { $gt: ['$votingEndsAt', tenMinutesAgo] },
+                                { $gt: ['$votingEndsAt', liveGraceStart] },
                                 {
                                   $not: [
                                     { $eq: ['$fixtureStatus', 'FINISHED'] },

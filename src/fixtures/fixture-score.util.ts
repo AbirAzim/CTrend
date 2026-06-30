@@ -24,6 +24,19 @@ export function readScorePair(pair: ApiScorePair): ScorePair | null {
   return { home: pair.home, away: pair.away };
 }
 
+/** 90-minute score plus goals scored only in extra time (API extratime is a delta). */
+export function scoreAfterExtraTime(
+  fullTime: ScorePair | null,
+  extraTime: ScorePair | null,
+): ScorePair | null {
+  if (!fullTime) return extraTime;
+  if (!extraTime) return fullTime;
+  return {
+    home: fullTime.home + extraTime.home,
+    away: fullTime.away + extraTime.away,
+  };
+}
+
 type ApiFixtureItem = {
   fixture: { status: { short: string } };
   teams: { home: { winner?: boolean | null }; away: { winner?: boolean | null } };
@@ -45,16 +58,14 @@ export function parseFixtureScores(
   const penalty = readScorePair(item.score?.penalty);
   const wentToExtraTime = extraTime != null;
   const wentToPenalties = penalty != null;
-  const predictionScore = extraTime ?? fullTime ?? readScorePair(item.goals);
+  const afterExtraTime = scoreAfterExtraTime(fullTime, extraTime);
+  const predictionScore = afterExtraTime ?? fullTime ?? readScorePair(item.goals);
 
   let home = item.goals.home;
   let away = item.goals.away;
-  if (wentToPenalties && extraTime) {
-    home = extraTime.home;
-    away = extraTime.away;
-  } else if (!wentToPenalties && extraTime) {
-    home = extraTime.home;
-    away = extraTime.away;
+  if (afterExtraTime) {
+    home = afterExtraTime.home;
+    away = afterExtraTime.away;
   } else if (fullTime) {
     home = fullTime.home;
     away = fullTime.away;

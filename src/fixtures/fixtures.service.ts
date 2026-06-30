@@ -783,37 +783,78 @@ export class FixturesService implements OnModuleInit {
     fixture: FixtureDocument,
     opts: { publish?: boolean } = {},
   ): Promise<boolean> {
-    if (!fixture.campaignPostId) return false;
-    const postId = fixture.campaignPostId as Types.ObjectId;
-    const post = await this.postModel.findById(postId).exec();
-    if (!post) return false;
-
+    const fixtureIdStr = (fixture._id as Types.ObjectId).toHexString();
     const fields = denormalizedPostFieldsFromFixture(fixture);
-    const fs = fields.fixtureScore;
-    const stale =
-      post.fixtureStatus !== fields.fixtureStatus ||
-      (post.fixtureMinute ?? null) !== fields.fixtureMinute ||
-      (post.fixtureScore?.home ?? null) !== fs.home ||
-      (post.fixtureScore?.away ?? null) !== fs.away ||
-      (post.fixtureScore?.phase ?? null) !== fs.phase;
 
-    if (!stale) return false;
-
-    await this.postModel.updateOne({ _id: postId }, { $set: fields });
-
-    const shouldPublish = opts.publish !== false;
-    const status = fixture.status;
-    if (
-      shouldPublish &&
-      (status === 'IN_PLAY' || status === 'PAUSED' || status === 'FINISHED')
-    ) {
-      const postIdStr = postId.toHexString();
-      await pubsub.publish(POST_VOTE_UPDATED, {
-        postVoteUpdated: { postId: postIdStr },
-      });
-      await pubsub.publish(POST_UPDATED, { postUpdated: { postId: postIdStr } });
+    // Resolve every campaign post tied to this fixture. The canonical link is
+    // fixture.campaignPostId, but after a post recreate/migrate the feed post
+    // may only have post.fixtureId set while campaignPostId still points at a
+    // deleted row — then live minute/score never reaches the visible card.
+    const targetIds = new Set<string>();
+    if (fixture.campaignPostId) {
+      targetIds.add((fixture.campaignPostId as Types.ObjectId).toHexString());
     }
-    return true;
+    const postsByFixture = await this.postModel
+      .find({ matchType: true, fixtureId: fixtureIdStr })
+      .select('_id')
+      .exec();
+    for (const row of postsByFixture) {
+      targetIds.add((row._id as Types.ObjectId).toHexString());
+    }
+
+    let anyUpdated = false;
+    let canonicalPostId: Types.ObjectId | null = null;
+
+    for (const postIdStr of targetIds) {
+      const postId = new Types.ObjectId(postIdStr);
+      const post = await this.postModel.findById(postId).exec();
+      if (!post) continue;
+      canonicalPostId = postId;
+
+      const fs = fields.fixtureScore;
+      const stale =
+        post.fixtureStatus !== fields.fixtureStatus ||
+        (post.fixtureMinute ?? null) !== fields.fixtureMinute ||
+        (post.fixtureScore?.home ?? null) !== fs.home ||
+        (post.fixtureScore?.away ?? null) !== fs.away ||
+        (post.fixtureScore?.phase ?? null) !== fs.phase;
+
+      if (!stale) continue;
+
+      await this.postModel.updateOne({ _id: postId }, { $set: fields });
+      anyUpdated = true;
+
+      const shouldPublish = opts.publish !== false;
+      const status = fixture.status;
+      if (
+        shouldPublish &&
+        (status === 'IN_PLAY' || status === 'PAUSED' || status === 'FINISHED')
+      ) {
+        await pubsub.publish(POST_VOTE_UPDATED, {
+          postVoteUpdated: { postId: postIdStr },
+        });
+        await pubsub.publish(POST_UPDATED, { postUpdated: { postId: postIdStr } });
+      }
+    }
+
+    // Repair stale fixture.campaignPostId when it references a missing post.
+    if (canonicalPostId) {
+      const current = fixture.campaignPostId as Types.ObjectId | undefined;
+      const currentMissing =
+        !current ||
+        !(await this.postModel.exists({ _id: current }).exec());
+      if (currentMissing || current!.toHexString() !== canonicalPostId.toHexString()) {
+        await this.fixtureModel.updateOne(
+          { _id: fixture._id },
+          { $set: { campaignPostId: canonicalPostId } },
+        );
+        this.logger.warn(
+          `Repaired fixture.campaignPostId for ${fixture.homeTeam.name} vs ${fixture.awayTeam.name} → ${canonicalPostId.toHexString()}`,
+        );
+      }
+    }
+
+    return anyUpdated;
   }
 
   /**
@@ -1245,11 +1286,31 @@ export class FixturesService implements OnModuleInit {
    */
   async reconcileLivePosts(): Promise<number> {
     const liveFixtures = await this.fixtureModel
-      .find({
-        status: { $in: ['IN_PLAY', 'PAUSED'] },
-        campaignPostId: { $exists: true, $ne: null },
+      .find({ status: { $in: ['IN_PLAY', 'PAUSED'] } })
+      .exec();
+
+    const seen = new Set(liveFixtures.map((f) => f._id.toHexString()));
+    const livePostFixtureIds = await this.postModel
+      .distinct('fixtureId', {
+        matchType: true,
+        fixtureId: { $exists: true, $ne: null },
+        fixtureStatus: { $in: ['IN_PLAY', 'PAUSED'] },
       })
       .exec();
+    const extraFixtureIds = livePostFixtureIds
+      .filter((id): id is string => typeof id === 'string' && Types.ObjectId.isValid(id))
+      .map((id) => new Types.ObjectId(id));
+    if (extraFixtureIds.length > 0) {
+      const extras = await this.fixtureModel
+        .find({
+          _id: { $in: extraFixtureIds },
+          status: { $in: ['IN_PLAY', 'PAUSED'] },
+        })
+        .exec();
+      for (const f of extras) {
+        if (!seen.has(f._id.toHexString())) liveFixtures.push(f);
+      }
+    }
 
     let updated = 0;
     for (const fixture of liveFixtures) {

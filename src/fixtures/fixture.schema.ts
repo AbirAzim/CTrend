@@ -166,7 +166,7 @@ export class Fixture {
   @Prop({ type: Number, default: null })
   scoreFullTimeAway?: number | null;
 
-  /** Score after extra time, before penalties (API score.extratime). */
+  /** Goals scored in extra time only (ET delta derived from API score.extratime). */
   @Prop({ type: Number, default: null })
   scoreExtraTimeHome?: number | null;
   @Prop({ type: Number, default: null })

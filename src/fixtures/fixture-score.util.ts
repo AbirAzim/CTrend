@@ -24,7 +24,7 @@ export function readScorePair(pair: ApiScorePair): ScorePair | null {
   return { home: pair.home, away: pair.away };
 }
 
-/** 90-minute score plus goals scored only in extra time (API extratime is a delta). */
+/** 90-minute score plus goals scored only in extra time. */
 export function scoreAfterExtraTime(
   fullTime: ScorePair | null,
   extraTime: ScorePair | null,
@@ -35,6 +35,42 @@ export function scoreAfterExtraTime(
     home: fullTime.home + extraTime.home,
     away: fullTime.away + extraTime.away,
   };
+}
+
+function isLiveFixtureStatus(normalizedStatus: string): boolean {
+  return normalizedStatus === 'IN_PLAY' || normalizedStatus === 'PAUSED';
+}
+
+/**
+ * API-Football `score.extratime` is usually ET-only goals, but during live ET it
+ * can briefly mirror the cumulative board (same as `goals`). Adding that to
+ * fulltime double-counts (e.g. 1-1 FT + 1-1 "extratime" → false 2-2).
+ */
+export function normalizeExtraTimeScore(
+  fullTime: ScorePair | null,
+  apiExtra: ScorePair | null,
+  currentGoals: ScorePair | null,
+): ScorePair | null {
+  if (!apiExtra) return null;
+  if (!fullTime || !currentGoals) return apiExtra;
+
+  const summed = scoreAfterExtraTime(fullTime, apiExtra);
+  if (!summed) return apiExtra;
+
+  const matchesBoard =
+    apiExtra.home === currentGoals.home &&
+    apiExtra.away === currentGoals.away;
+  const overshootsBoard =
+    summed.home > currentGoals.home || summed.away > currentGoals.away;
+
+  if (matchesBoard || overshootsBoard) {
+    return {
+      home: Math.max(0, currentGoals.home - fullTime.home),
+      away: Math.max(0, currentGoals.away - fullTime.away),
+    };
+  }
+
+  return apiExtra;
 }
 
 type ApiFixtureItem = {
@@ -54,21 +90,33 @@ export function parseFixtureScores(
 ): ParsedFixtureScores {
   const rawStatus = item.fixture.status.short;
   const fullTime = readScorePair(item.score?.fulltime);
-  const extraTime = readScorePair(item.score?.extratime);
+  const currentGoals = readScorePair(item.goals);
+  const extraTime = normalizeExtraTimeScore(
+    fullTime,
+    readScorePair(item.score?.extratime),
+    currentGoals,
+  );
   const penalty = readScorePair(item.score?.penalty);
-  const wentToExtraTime = extraTime != null;
+  const wentToExtraTime =
+    extraTime != null ||
+    isLiveExtraTimePhase(rawStatus) ||
+    rawStatus === 'AET';
   const wentToPenalties = penalty != null;
   const afterExtraTime = scoreAfterExtraTime(fullTime, extraTime);
-  const predictionScore = afterExtraTime ?? fullTime ?? readScorePair(item.goals);
+  const predictionScore = afterExtraTime ?? fullTime ?? currentGoals;
 
+  const isLive = isLiveFixtureStatus(normalizedStatus);
+  // Live board score: `goals` is authoritative (API-Football current total).
   let home = item.goals.home;
   let away = item.goals.away;
-  if (afterExtraTime) {
-    home = afterExtraTime.home;
-    away = afterExtraTime.away;
-  } else if (fullTime) {
-    home = fullTime.home;
-    away = fullTime.away;
+  if (!isLive) {
+    if (afterExtraTime) {
+      home = afterExtraTime.home;
+      away = afterExtraTime.away;
+    } else if (fullTime) {
+      home = fullTime.home;
+      away = fullTime.away;
+    }
   }
 
   let winner: string | null = null;

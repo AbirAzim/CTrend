@@ -11,7 +11,12 @@ import { ConfigService } from '@nestjs/config';
 import { Fixture, FixtureDocument, MatchEvent } from './fixture.schema';
 import { Post, PostDocument } from '../posts/post.schema';
 import { Category, CategoryDocument } from '../categories/category.schema';
-import { FixtureFilterInput, FixtureGql, TopAssistantGql, TopScorerGql } from './graphql/fixture.types';
+import {
+  FixtureFilterInput,
+  FixtureGql,
+  TopAssistantGql,
+  TopScorerGql,
+} from './graphql/fixture.types';
 import { PostFormat, PostStatus, PostType, Visibility } from '../common/enums';
 import { PostsService } from '../posts/posts.service';
 import { CampaignsService } from '../campaigns/campaigns.service';
@@ -54,10 +59,17 @@ const COACH_NAME_OVERRIDES: Record<number, string> = {
  */
 function resolveLineupCoach(
   teamExternalId: number | undefined | null,
-  coach: { id?: number | null; name?: string | null; photo?: string | null } | null | undefined,
+  coach:
+    | { id?: number | null; name?: string | null; photo?: string | null }
+    | null
+    | undefined,
 ): { id: number | null; name: string; photo: string | null } | null {
   if (coach && coach.name) {
-    return { id: coach.id ?? null, name: coach.name, photo: coach.photo ?? null };
+    return {
+      id: coach.id ?? null,
+      name: coach.name,
+      photo: coach.photo ?? null,
+    };
   }
   const override =
     teamExternalId != null ? COACH_NAME_OVERRIDES[teamExternalId] : undefined;
@@ -142,10 +154,22 @@ interface AfPlayerStatLine {
     assists?: number | null;
     saves?: number | null;
   } | null;
-  passes?: { total?: number | null; key?: number | null; accuracy?: number | string | null } | null;
-  tackles?: { total?: number | null; blocks?: number | null; interceptions?: number | null } | null;
+  passes?: {
+    total?: number | null;
+    key?: number | null;
+    accuracy?: number | string | null;
+  } | null;
+  tackles?: {
+    total?: number | null;
+    blocks?: number | null;
+    interceptions?: number | null;
+  } | null;
   duels?: { total?: number | null; won?: number | null } | null;
-  dribbles?: { attempts?: number | null; success?: number | null; past?: number | null } | null;
+  dribbles?: {
+    attempts?: number | null;
+    success?: number | null;
+    past?: number | null;
+  } | null;
   fouls?: { drawn?: number | null; committed?: number | null } | null;
   cards?: { yellow?: number | null; red?: number | null } | null;
   penalty?: {
@@ -280,8 +304,11 @@ export class FixturesService implements OnModuleInit {
     private matchPredictionsService: MatchPredictionsService,
   ) {
     this.apiKey = this.configService.get<string>('API_FOOTBALL_KEY') ?? '';
-    this.rapidApiKey = this.configService.get<string>('RAPID_API_FOOTBALL_KEY') ?? '';
-    this.useRapidApi = !!this.rapidApiKey || this.configService.get<string>('API_FOOTBALL_PROVIDER') === 'rapidapi';
+    this.rapidApiKey =
+      this.configService.get<string>('RAPID_API_FOOTBALL_KEY') ?? '';
+    this.useRapidApi =
+      !!this.rapidApiKey ||
+      this.configService.get<string>('API_FOOTBALL_PROVIDER') === 'rapidapi';
     this.league =
       this.configService.get<string>('API_FOOTBALL_WC_LEAGUE') ?? '1';
     this.season =
@@ -321,7 +348,9 @@ export class FixturesService implements OnModuleInit {
         ),
       ),
     );
-    this.logger.log(`Backfilled fixtureStage/hasDrawOption on ${fixtures.length} match posts`);
+    this.logger.log(
+      `Backfilled fixtureStage/hasDrawOption on ${fixtures.length} match posts`,
+    );
   }
 
   private async apiFetch<T>(path: string): Promise<T> {
@@ -334,7 +363,9 @@ export class FixturesService implements OnModuleInit {
           'X-RapidAPI-Host': 'api-football-v1.p.rapidapi.com',
         }
       : { 'x-apisports-key': key };
-    this.logger.debug(`API-Football → ${url} (key: ${key ? key.slice(0, 6) + '…' : 'MISSING'})`);
+    this.logger.debug(
+      `API-Football → ${url} (key: ${key ? key.slice(0, 6) + '…' : 'MISSING'})`,
+    );
     const res = await fetch(url, { headers });
     if (!res.ok) {
       throw new BadRequestException(
@@ -469,32 +500,64 @@ export class FixturesService implements OnModuleInit {
   async syncMatchDetails(
     fixture: FixtureDocument,
     includeLineups = true,
-  ): Promise<{ events: number; stats: number; lineups: number; error?: string }> {
+  ): Promise<{
+    events: number;
+    stats: number;
+    lineups: number;
+    error?: string;
+  }> {
     const externalId = fixture.externalId;
-    this.logger.log(`Syncing match details for fixture ${externalId} (${fixture.homeTeam.name} vs ${fixture.awayTeam.name})`);
+    this.logger.log(
+      `Syncing match details for fixture ${externalId} (${fixture.homeTeam.name} vs ${fixture.awayTeam.name})`,
+    );
     try {
-      const [eventsResult, statsResult, lineupsResult, ratingsResult] = await Promise.allSettled([
-        this.fetchMatchEvents(externalId),
-        this.fetchMatchStats(externalId),
-        includeLineups ? this.fetchMatchLineups(externalId) : Promise.resolve(null),
-        this.fetchPlayerRatings(externalId),
-      ]);
+      const [eventsResult, statsResult, lineupsResult, ratingsResult] =
+        await Promise.allSettled([
+          this.fetchMatchEvents(externalId),
+          this.fetchMatchStats(externalId),
+          includeLineups
+            ? this.fetchMatchLineups(externalId)
+            : Promise.resolve(null),
+          this.fetchPlayerRatings(externalId),
+        ]);
 
-      if (eventsResult.status === 'rejected') this.logger.error(`Events fetch failed: ${String(eventsResult.reason)}`);
-      if (statsResult.status === 'rejected') this.logger.error(`Stats fetch failed: ${String(statsResult.reason)}`);
-      if (lineupsResult.status === 'rejected') this.logger.error(`Lineups fetch failed: ${String(lineupsResult.reason)}`);
-      if (ratingsResult.status === 'rejected') this.logger.error(`Ratings fetch failed: ${String(ratingsResult.reason)}`);
+      if (eventsResult.status === 'rejected')
+        this.logger.error(
+          `Events fetch failed: ${String(eventsResult.reason)}`,
+        );
+      if (statsResult.status === 'rejected')
+        this.logger.error(`Stats fetch failed: ${String(statsResult.reason)}`);
+      if (lineupsResult.status === 'rejected')
+        this.logger.error(
+          `Lineups fetch failed: ${String(lineupsResult.reason)}`,
+        );
+      if (ratingsResult.status === 'rejected')
+        this.logger.error(
+          `Ratings fetch failed: ${String(ratingsResult.reason)}`,
+        );
 
-      const eventsRaw = eventsResult.status === 'fulfilled' ? eventsResult.value : [];
-      const statsRaw = statsResult.status === 'fulfilled' ? statsResult.value : null;
-      const lineupsRaw = lineupsResult.status === 'fulfilled' ? lineupsResult.value : null;
-      const ratingsRaw = ratingsResult.status === 'fulfilled' ? ratingsResult.value : null;
+      const eventsRaw =
+        eventsResult.status === 'fulfilled' ? eventsResult.value : [];
+      const statsRaw =
+        statsResult.status === 'fulfilled' ? statsResult.value : null;
+      const lineupsRaw =
+        lineupsResult.status === 'fulfilled' ? lineupsResult.value : null;
+      const ratingsRaw =
+        ratingsResult.status === 'fulfilled' ? ratingsResult.value : null;
 
       const anyError =
-        (eventsResult.status === 'rejected' ? String(eventsResult.reason) : null) ??
-        (statsResult.status === 'rejected' ? String(statsResult.reason) : null) ??
-        (lineupsResult.status === 'rejected' ? String(lineupsResult.reason) : null) ??
-        (ratingsResult.status === 'rejected' ? String(ratingsResult.reason) : null);
+        (eventsResult.status === 'rejected'
+          ? String(eventsResult.reason)
+          : null) ??
+        (statsResult.status === 'rejected'
+          ? String(statsResult.reason)
+          : null) ??
+        (lineupsResult.status === 'rejected'
+          ? String(lineupsResult.reason)
+          : null) ??
+        (ratingsResult.status === 'rejected'
+          ? String(ratingsResult.reason)
+          : null);
 
       const homeId = fixture.homeTeamExternalId;
       const awayId = fixture.awayTeamExternalId;
@@ -533,7 +596,8 @@ export class FixturesService implements OnModuleInit {
       }));
 
       const teamSideOf = (teamData: AfPlayerStatTeam) =>
-        teamData.team.id === homeId || teamData.team.name === fixture.homeTeam.name
+        teamData.team.id === homeId ||
+        teamData.team.name === fixture.homeTeam.name
           ? 'home'
           : 'away';
 
@@ -546,8 +610,9 @@ export class FixturesService implements OnModuleInit {
             name: p.player.name,
             team: teamSide,
             rating: p.statistics[0].games?.rating ?? null,
-            photo: p.player.photo
-              ?? `https://media.api-sports.io/football/players/${p.player.id}.png`,
+            photo:
+              p.player.photo ??
+              `https://media.api-sports.io/football/players/${p.player.id}.png`,
           }));
       });
 
@@ -566,8 +631,9 @@ export class FixturesService implements OnModuleInit {
             playerId: p.player.id,
             name: p.player.name,
             team: teamSide,
-            photo: p.player.photo
-              ?? `https://media.api-sports.io/football/players/${p.player.id}.png`,
+            photo:
+              p.player.photo ??
+              `https://media.api-sports.io/football/players/${p.player.id}.png`,
             number: s.games?.number ?? null,
             position: s.games?.position ?? null,
             minutes: s.games?.minutes ?? null,
@@ -615,12 +681,16 @@ export class FixturesService implements OnModuleInit {
         detailsSyncedAt: new Date(),
       };
 
-      const hadLineups = Array.isArray(fixture.lineups) && fixture.lineups.length > 0;
+      const hadLineups =
+        Array.isArray(fixture.lineups) && fixture.lineups.length > 0;
       let newLineupsCount = 0;
 
       if (lineupsRaw != null && lineupsRaw.length > 0) {
         const lineups = lineupsRaw.map((l) => ({
-          team: l.team.id === homeId || l.team.name === fixture.homeTeam.name ? 'home' : 'away',
+          team:
+            l.team.id === homeId || l.team.name === fixture.homeTeam.name
+              ? 'home'
+              : 'away',
           formation: l.formation,
           startXI: l.startXI.map((p) => ({
             id: p.player.id ?? null,
@@ -628,8 +698,11 @@ export class FixturesService implements OnModuleInit {
             number: p.player.number,
             pos: p.player.pos ?? null,
             grid: p.player.grid ?? null,
-            photo: p.player.photo
-              ?? (p.player.id ? `https://media.api-sports.io/football/players/${p.player.id}.png` : null),
+            photo:
+              p.player.photo ??
+              (p.player.id
+                ? `https://media.api-sports.io/football/players/${p.player.id}.png`
+                : null),
           })),
           substitutes: l.substitutes.map((p) => ({
             id: p.player.id ?? null,
@@ -637,8 +710,11 @@ export class FixturesService implements OnModuleInit {
             number: p.player.number,
             pos: p.player.pos ?? null,
             grid: p.player.grid ?? null,
-            photo: p.player.photo
-              ?? (p.player.id ? `https://media.api-sports.io/football/players/${p.player.id}.png` : null),
+            photo:
+              p.player.photo ??
+              (p.player.id
+                ? `https://media.api-sports.io/football/players/${p.player.id}.png`
+                : null),
           })),
           coach: resolveLineupCoach(l.team?.id, l.coach),
         }));
@@ -646,10 +722,7 @@ export class FixturesService implements OnModuleInit {
         newLineupsCount = lineups.length;
       }
 
-      await this.fixtureModel.updateOne(
-        { _id: fixture._id },
-        { $set: update },
-      );
+      await this.fixtureModel.updateOne({ _id: fixture._id }, { $set: update });
 
       // When lineups are newly available, update the linked post and notify all users
       const lineupsJustArrived = !hadLineups && newLineupsCount > 0;
@@ -660,14 +733,24 @@ export class FixturesService implements OnModuleInit {
 
         await this.postModel.updateOne(
           { _id: fixture.campaignPostId },
-          { $set: { lineupAvailable: true, fixtureId: fixtureIdStr, fixtureStage: fixture.stage, hasDrawOption: fixture.hasDrawOption ?? fixture.stage === 'GROUP_STAGE' } },
+          {
+            $set: {
+              lineupAvailable: true,
+              fixtureId: fixtureIdStr,
+              fixtureStage: fixture.stage,
+              hasDrawOption:
+                fixture.hasDrawOption ?? fixture.stage === 'GROUP_STAGE',
+            },
+          },
         );
 
-        void this.notificationsService.notifyLineupAvailable({
-          fixtureId: fixtureIdStr,
-          matchLabel,
-          postId: postIdStr,
-        }).catch((err) => this.logger.error('Lineup notify failed', err));
+        void this.notificationsService
+          .notifyLineupAvailable({
+            fixtureId: fixtureIdStr,
+            matchLabel,
+            postId: postIdStr,
+          })
+          .catch((err) => this.logger.error('Lineup notify failed', err));
       }
 
       // Stamp fixtureId on the post (idempotent)
@@ -679,7 +762,8 @@ export class FixturesService implements OnModuleInit {
             $set: {
               fixtureId: fixtureIdStr,
               fixtureStage: fixture.stage,
-              hasDrawOption: fixture.hasDrawOption ?? fixture.stage === 'GROUP_STAGE',
+              hasDrawOption:
+                fixture.hasDrawOption ?? fixture.stage === 'GROUP_STAGE',
             },
           },
         );
@@ -697,7 +781,9 @@ export class FixturesService implements OnModuleInit {
       return result;
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      this.logger.error(`Match details sync FAILED for fixture ${externalId}: ${message}`);
+      this.logger.error(
+        `Match details sync FAILED for fixture ${externalId}: ${message}`,
+      );
       return { events: 0, stats: 0, lineups: 0, error: message };
     }
   }
@@ -833,7 +919,9 @@ export class FixturesService implements OnModuleInit {
         await pubsub.publish(POST_VOTE_UPDATED, {
           postVoteUpdated: { postId: postIdStr },
         });
-        await pubsub.publish(POST_UPDATED, { postUpdated: { postId: postIdStr } });
+        await pubsub.publish(POST_UPDATED, {
+          postUpdated: { postId: postIdStr },
+        });
       }
     }
 
@@ -841,9 +929,11 @@ export class FixturesService implements OnModuleInit {
     if (canonicalPostId) {
       const current = fixture.campaignPostId as Types.ObjectId | undefined;
       const currentMissing =
-        !current ||
-        !(await this.postModel.exists({ _id: current }).exec());
-      if (currentMissing || current!.toHexString() !== canonicalPostId.toHexString()) {
+        !current || !(await this.postModel.exists({ _id: current }).exec());
+      if (
+        currentMissing ||
+        current!.toHexString() !== canonicalPostId.toHexString()
+      ) {
         await this.fixtureModel.updateOne(
           { _id: fixture._id },
           { $set: { campaignPostId: canonicalPostId } },
@@ -900,7 +990,9 @@ export class FixturesService implements OnModuleInit {
    */
   async syncLiveScores(): Promise<number> {
     const items = await this.fetchLiveFixtures();
-    this.logger.log(`syncLiveScores: API returned ${items.length} live fixture(s)`);
+    this.logger.log(
+      `syncLiveScores: API returned ${items.length} live fixture(s)`,
+    );
     for (const item of items) {
       this.logger.log(
         `  → fixture ${item.fixture.id}: ${item.teams.home.name} vs ${item.teams.away.name} | status=${item.fixture.status.short} elapsed=${item.fixture.status.elapsed} | score=${item.goals.home}-${item.goals.away}`,
@@ -1016,11 +1108,15 @@ export class FixturesService implements OnModuleInit {
         const exId = item.fixture.id;
         const lastSync = this.lastDetailSync.get(exId) ?? 0;
         const isFinishedNow = !wasFinished && newStatus === 'FINISHED';
-        const due = isFinishedNow || (Date.now() - lastSync >= FixturesService.DETAIL_SYNC_INTERVAL);
+        const due =
+          isFinishedNow ||
+          Date.now() - lastSync >= FixturesService.DETAIL_SYNC_INTERVAL;
         if (due) {
           this.lastDetailSync.set(exId, Date.now());
           const needsLineups = (existing.lineups?.length ?? 0) === 0;
-          const fresh = await this.fixtureModel.findOne({ externalId: exId }).exec();
+          const fresh = await this.fixtureModel
+            .findOne({ externalId: exId })
+            .exec();
           if (fresh) void this.syncMatchDetails(fresh, needsLineups);
         }
       }
@@ -1108,9 +1204,13 @@ export class FixturesService implements OnModuleInit {
           // DB write so the pubsub publish always reads the complete final state.
           if (newStatus === 'FINISHED') {
             const matchEndedAt = new Date();
-            const postDoc = await this.postModel.findById(ghost.campaignPostId).exec();
+            const postDoc = await this.postModel
+              .findById(ghost.campaignPostId)
+              .exec();
             const leadMin = postDoc?.endingSoonLeadMinutes ?? 5;
-            const winnerScheduledAt = new Date(matchEndedAt.getTime() + leadMin * 60 * 1000);
+            const winnerScheduledAt = new Date(
+              matchEndedAt.getTime() + leadMin * 60 * 1000,
+            );
             await this.fixtureModel.updateOne(
               { _id: ghost._id },
               { $set: { matchEndedAt, winnerScheduledAt } },
@@ -1128,11 +1228,16 @@ export class FixturesService implements OnModuleInit {
             );
           }
 
-          await this.postModel.updateOne({ _id: ghost.campaignPostId }, { $set: postUpdate });
+          await this.postModel.updateOne(
+            { _id: ghost.campaignPostId },
+            { $set: postUpdate },
+          );
           // Publish after all DB writes are done so the subscription resolver
           // reads the complete final state (including fixtureWinnerAt).
           await pubsub.publish(POST_UPDATED, { postUpdated: { postId } });
-          await pubsub.publish(POST_VOTE_UPDATED, { postVoteUpdated: { postId } });
+          await pubsub.publish(POST_VOTE_UPDATED, {
+            postVoteUpdated: { postId },
+          });
           if (newStatus === 'FINISHED') {
             // Refresh score-prediction winners immediately at full-time.
             await pubsub.publish(MATCH_PREDICTION_UPDATED, {
@@ -1197,9 +1302,12 @@ export class FixturesService implements OnModuleInit {
     for (const fixture of fixtures) {
       const exId = fixture.externalId;
       const lastSync = this.lastDetailSync.get(exId) ?? 0;
-      if (Date.now() - lastSync < FixturesService.DETAIL_SYNC_INTERVAL) continue;
+      if (Date.now() - lastSync < FixturesService.DETAIL_SYNC_INTERVAL)
+        continue;
       this.lastDetailSync.set(exId, Date.now());
-      const minsToKickoff = Math.round((fixture.kickoff.getTime() - Date.now()) / 60000);
+      const minsToKickoff = Math.round(
+        (fixture.kickoff.getTime() - Date.now()) / 60000,
+      );
       this.logger.log(
         `Pre-match lineup check for fixture ${exId} (${fixture.homeTeam.name} vs ${fixture.awayTeam.name}, kickoff in ${minsToKickoff} min)`,
       );
@@ -1242,7 +1350,10 @@ export class FixturesService implements OnModuleInit {
           })),
           coach: resolveLineupCoach(l.team?.id, l.coach),
         }));
-        await this.fixtureModel.updateOne({ _id: fixture._id }, { $set: { lineups } });
+        await this.fixtureModel.updateOne(
+          { _id: fixture._id },
+          { $set: { lineups } },
+        );
         this.logger.log(
           `Pre-match lineups saved for fixture ${exId}: ${lineups.length} team(s)`,
         );
@@ -1255,7 +1366,11 @@ export class FixturesService implements OnModuleInit {
             { $set: { lineupAvailable: true, fixtureId: fixtureIdStr } },
           );
           void this.notificationsService
-            .notifyLineupAvailable({ fixtureId: fixtureIdStr, matchLabel, postId: postIdStr })
+            .notifyLineupAvailable({
+              fixtureId: fixtureIdStr,
+              matchLabel,
+              postId: postIdStr,
+            })
             .catch((err) => this.logger.error('Lineup notify failed', err));
         }
       } catch (err) {
@@ -1298,7 +1413,10 @@ export class FixturesService implements OnModuleInit {
       })
       .exec();
     const extraFixtureIds = livePostFixtureIds
-      .filter((id): id is string => typeof id === 'string' && Types.ObjectId.isValid(id))
+      .filter(
+        (id): id is string =>
+          typeof id === 'string' && Types.ObjectId.isValid(id),
+      )
       .map((id) => new Types.ObjectId(id));
     if (extraFixtureIds.length > 0) {
       const extras = await this.fixtureModel
@@ -1355,7 +1473,9 @@ export class FixturesService implements OnModuleInit {
       try {
         const now = new Date();
         const matchEndedAt = fixture.matchEndedAt ?? now;
-        const post = await this.postModel.findById(fixture.campaignPostId).exec();
+        const post = await this.postModel
+          .findById(fixture.campaignPostId)
+          .exec();
         const leadMin = post?.endingSoonLeadMinutes ?? 5;
         // Schedule winner reveal immediately for already-past matches
         const winnerScheduledAt = new Date(
@@ -1372,24 +1492,43 @@ export class FixturesService implements OnModuleInit {
           home: fixture.score?.home ?? null,
           away: fixture.score?.away ?? null,
           fullTime:
-            fixture.scoreFullTimeHome != null && fixture.scoreFullTimeAway != null
-              ? { home: fixture.scoreFullTimeHome, away: fixture.scoreFullTimeAway }
+            fixture.scoreFullTimeHome != null &&
+            fixture.scoreFullTimeAway != null
+              ? {
+                  home: fixture.scoreFullTimeHome,
+                  away: fixture.scoreFullTimeAway,
+                }
               : null,
           extraTime:
-            fixture.scoreExtraTimeHome != null && fixture.scoreExtraTimeAway != null
-              ? { home: fixture.scoreExtraTimeHome, away: fixture.scoreExtraTimeAway }
+            fixture.scoreExtraTimeHome != null &&
+            fixture.scoreExtraTimeAway != null
+              ? {
+                  home: fixture.scoreExtraTimeHome,
+                  away: fixture.scoreExtraTimeAway,
+                }
               : null,
           penalty:
             fixture.scorePenaltyHome != null && fixture.scorePenaltyAway != null
-              ? { home: fixture.scorePenaltyHome, away: fixture.scorePenaltyAway }
+              ? {
+                  home: fixture.scorePenaltyHome,
+                  away: fixture.scorePenaltyAway,
+                }
               : null,
           wentToExtraTime: fixture.wentToExtraTime ?? false,
           wentToPenalties: fixture.wentToPenalties ?? false,
           predictionScore:
-            fixture.scoreExtraTimeHome != null && fixture.scoreExtraTimeAway != null
-              ? { home: fixture.scoreExtraTimeHome, away: fixture.scoreExtraTimeAway }
-              : fixture.scoreFullTimeHome != null && fixture.scoreFullTimeAway != null
-                ? { home: fixture.scoreFullTimeHome, away: fixture.scoreFullTimeAway }
+            fixture.scoreExtraTimeHome != null &&
+            fixture.scoreExtraTimeAway != null
+              ? {
+                  home: fixture.scoreExtraTimeHome,
+                  away: fixture.scoreExtraTimeAway,
+                }
+              : fixture.scoreFullTimeHome != null &&
+                  fixture.scoreFullTimeAway != null
+                ? {
+                    home: fixture.scoreFullTimeHome,
+                    away: fixture.scoreFullTimeAway,
+                  }
                 : fixture.score?.home != null && fixture.score?.away != null
                   ? { home: fixture.score.home, away: fixture.score.away }
                   : null,
@@ -1400,14 +1539,21 @@ export class FixturesService implements OnModuleInit {
           { _id: fixture.campaignPostId },
           {
             $set: {
-              ...this.buildPostScoreUpdate(parsedForReconcile, fixture, 'FINISHED', null),
+              ...this.buildPostScoreUpdate(
+                parsedForReconcile,
+                fixture,
+                'FINISHED',
+                null,
+              ),
               fixtureWinnerAt: winnerScheduledAt,
             },
           },
         );
 
         await pubsub.publish(POST_UPDATED, {
-          postUpdated: { postId: (fixture.campaignPostId as Types.ObjectId).toHexString() },
+          postUpdated: {
+            postId: (fixture.campaignPostId as Types.ObjectId).toHexString(),
+          },
         });
 
         this.logger.log(
@@ -1421,7 +1567,11 @@ export class FixturesService implements OnModuleInit {
     }
   }
 
-  async syncAllFinishedFixtures(): Promise<{ synced: number; skipped: number; errors: number }> {
+  async syncAllFinishedFixtures(): Promise<{
+    synced: number;
+    skipped: number;
+    errors: number;
+  }> {
     const fixtures = await this.fixtureModel
       .find({ status: 'FINISHED' })
       .exec();
@@ -1430,7 +1580,8 @@ export class FixturesService implements OnModuleInit {
     for (const fixture of fixtures) {
       if (!fixture.campaignPostId) continue;
       const fixtureIdStr = (fixture._id as Types.ObjectId).toHexString();
-      const hasLineups = Array.isArray(fixture.lineups) && fixture.lineups.length > 0;
+      const hasLineups =
+        Array.isArray(fixture.lineups) && fixture.lineups.length > 0;
       await this.postModel.updateOne(
         { _id: fixture.campaignPostId },
         { $set: { fixtureId: fixtureIdStr, lineupAvailable: hasLineups } },
@@ -1464,12 +1615,16 @@ export class FixturesService implements OnModuleInit {
         // Small delay between calls to respect rate limits
         await new Promise((r) => setTimeout(r, 600));
       } catch (e) {
-        this.logger.error(`Failed to sync fixture ${fixture.externalId}: ${String(e)}`);
+        this.logger.error(
+          `Failed to sync fixture ${fixture.externalId}: ${String(e)}`,
+        );
         errors++;
       }
     }
 
-    this.logger.log(`Bulk sync complete: ${synced} synced, ${skipped} skipped (already had data), ${errors} errors`);
+    this.logger.log(
+      `Bulk sync complete: ${synced} synced, ${skipped} skipped (already had data), ${errors} errors`,
+    );
     return { synced, skipped, errors };
   }
 
@@ -1478,17 +1633,22 @@ export class FixturesService implements OnModuleInit {
    * whether lineups "just arrived" this tick. Use from admin mutation when the
    * automatic notification was missed (e.g. cron window was too narrow).
    */
-  async sendLineupNotification(fixtureId: string): Promise<{ sent: number; error?: string }> {
+  async sendLineupNotification(
+    fixtureId: string,
+  ): Promise<{ sent: number; error?: string }> {
     const fixture = await this.findById(fixtureId);
     if (!fixture) return { sent: 0, error: 'Fixture not found' };
 
-    const hasLineups = Array.isArray(fixture.lineups) && fixture.lineups.length > 0;
+    const hasLineups =
+      Array.isArray(fixture.lineups) && fixture.lineups.length > 0;
     if (!hasLineups) {
       // No lineups in DB yet — attempt a live sync first, then re-check
       await this.syncMatchDetails(fixture, true).catch(() => {});
       const refreshed = await this.findById(fixtureId);
-      const stillNone = !Array.isArray(refreshed?.lineups) || !refreshed!.lineups.length;
-      if (stillNone) return { sent: 0, error: 'Lineups not yet available from the API' };
+      const stillNone =
+        !Array.isArray(refreshed?.lineups) || !refreshed!.lineups.length;
+      if (stillNone)
+        return { sent: 0, error: 'Lineups not yet available from the API' };
     }
 
     const fixtureIdStr = (fixture._id as Types.ObjectId).toHexString();
@@ -1524,9 +1684,21 @@ export class FixturesService implements OnModuleInit {
     if (!fixture) throw new NotFoundException('Fixture not found');
 
     if (fixture.campaignPostId) {
-      throw new BadRequestException(
-        'Campaign post already exists for this fixture',
+      const existing = await this.postModel
+        .findById(fixture.campaignPostId)
+        .select('_id')
+        .exec();
+      if (existing) {
+        throw new BadRequestException(
+          'Campaign post already exists for this fixture',
+        );
+      }
+      // campaignPostId pointed at a deleted post — clear and recreate.
+      await this.fixtureModel.updateOne(
+        { _id: fixture._id },
+        { $unset: { campaignPostId: '' } },
       );
+      fixture.campaignPostId = undefined;
     }
 
     const sportsCategory = await this.categoryModel
@@ -1651,7 +1823,12 @@ export class FixturesService implements OnModuleInit {
     const map = new Map<string, TopScorerGql>();
     for (const f of fixtures) {
       for (const ev of f.events ?? []) {
-        if (ev.type !== 'Goal' || !this.isCountedGoal(ev.detail) || !ev.player?.name) continue;
+        if (
+          ev.type !== 'Goal' ||
+          !this.isCountedGoal(ev.detail) ||
+          !ev.player?.name
+        )
+          continue;
         // Group by player id when available (name varies across matches, e.g.
         // "Erling Haaland" vs "E. Haaland", and home/away side flips) — only
         // fall back to name when there's no id.
@@ -1667,7 +1844,8 @@ export class FixturesService implements OnModuleInit {
             team: teamDoc.name,
             teamCrest: teamDoc.crest ?? null,
             goals: 0,
-            matchesPlayed: ev.player.id != null ? (apps.get(ev.player.id) ?? 0) : 0,
+            matchesPlayed:
+              ev.player.id != null ? (apps.get(ev.player.id) ?? 0) : 0,
           });
         }
         map.get(key)!.goals++;
@@ -1684,7 +1862,12 @@ export class FixturesService implements OnModuleInit {
     const map = new Map<string, TopAssistantGql>();
     for (const f of fixtures) {
       for (const ev of f.events ?? []) {
-        if (ev.type !== 'Goal' || !this.isCountedGoal(ev.detail) || !ev.assist?.name) continue;
+        if (
+          ev.type !== 'Goal' ||
+          !this.isCountedGoal(ev.detail) ||
+          !ev.assist?.name
+        )
+          continue;
         // Group by player id when available (name/side vary across matches).
         const key =
           ev.assist.id != null
@@ -1698,7 +1881,8 @@ export class FixturesService implements OnModuleInit {
             team: teamDoc.name,
             teamCrest: teamDoc.crest ?? null,
             assists: 0,
-            matchesPlayed: ev.assist.id != null ? (apps.get(ev.assist.id) ?? 0) : 0,
+            matchesPlayed:
+              ev.assist.id != null ? (apps.get(ev.assist.id) ?? 0) : 0,
           });
         }
         map.get(key)!.assists++;
@@ -1744,7 +1928,10 @@ export class FixturesService implements OnModuleInit {
           : null,
       extraTime:
         fixture.scoreExtraTimeHome != null && fixture.scoreExtraTimeAway != null
-          ? { home: fixture.scoreExtraTimeHome, away: fixture.scoreExtraTimeAway }
+          ? {
+              home: fixture.scoreExtraTimeHome,
+              away: fixture.scoreExtraTimeAway,
+            }
           : null,
       penalty:
         fixture.scorePenaltyHome != null && fixture.scorePenaltyAway != null

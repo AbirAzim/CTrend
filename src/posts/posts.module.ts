@@ -20,6 +20,7 @@ import { PlatformSettingsModule } from '../platform-settings/platform-settings.m
 import { ContentReportsModule } from '../content-reports/content-reports.module';
 import { WorldCupCampaignModule } from '../world-cup-campaign/world-cup-campaign.module';
 import { CoinsModule } from '../coins/coins.module';
+import { Fixture, FixtureSchema } from '../fixtures/fixture.schema';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { CoinsModule } from '../coins/coins.module';
       { name: PostReaction.name, schema: PostReactionSchema },
       { name: SavedPost.name, schema: SavedPostSchema },
       { name: Comment.name, schema: CommentSchema },
+      { name: Fixture.name, schema: FixtureSchema },
     ]),
     CategoriesModule,
     OrganizationsModule,

@@ -60,6 +60,7 @@ import { ContentReportsService } from '../content-reports/content-reports.servic
 import { WorldCupCampaignService } from '../world-cup-campaign/world-cup-campaign.service';
 import { CoinsService } from '../coins/coins.service';
 import { CoinType } from '../coins/coins.constants';
+import { Fixture, FixtureDocument } from '../fixtures/fixture.schema';
 
 const PREMIUM_GLOBAL_MONTHLY = 20;
 const DEFAULT_ENDING_SOON_LEAD_MINUTES = 5;
@@ -107,6 +108,8 @@ export class PostsService implements OnModuleInit {
     private savedPostModel: Model<SavedPostDocument>,
     @InjectModel(Comment.name)
     private commentModel: Model<CommentDocument>,
+    @InjectModel(Fixture.name)
+    private fixtureModel: Model<FixtureDocument>,
     private categoriesService: CategoriesService,
     private organizationsService: OrganizationsService,
     private usersService: UsersService,
@@ -937,6 +940,11 @@ export class PostsService implements OnModuleInit {
       this.postReactionModel.deleteMany({ postId: pid }),
       this.commentModel.deleteMany({ postId: pid }),
       this.contentReportsService.deleteReportsForPost(pid.toHexString()),
+      // Drop stale fixture → campaign post links so live sync can reattach.
+      this.fixtureModel.updateMany(
+        { campaignPostId: pid },
+        { $unset: { campaignPostId: '' } },
+      ),
     ]);
     // Notify all connected feed clients so the post disappears in real time.
     await this.safePubsubPublish(POST_DELETED, {

@@ -1429,6 +1429,33 @@ export class PostsService implements OnModuleInit {
     return post;
   }
 
+  /** GraphQL matchScore — always present for matchType posts (even pre-kickoff). */
+  private buildMatchScoreGql(post: PostDocument): PostGql['matchScore'] {
+    if (!post.matchType) return null;
+    const fs = post.fixtureScore;
+    return {
+      home: fs?.home ?? null,
+      away: fs?.away ?? null,
+      status: post.fixtureStatus ?? 'TIMED',
+      minute: post.fixtureMinute ?? null,
+      phase: fs?.phase ?? null,
+      fullTime:
+        fs?.fullTimeHome != null && fs?.fullTimeAway != null
+          ? { home: fs.fullTimeHome, away: fs.fullTimeAway }
+          : null,
+      extraTime:
+        fs?.extraTimeHome != null && fs?.extraTimeAway != null
+          ? { home: fs.extraTimeHome, away: fs.extraTimeAway }
+          : null,
+      penalty:
+        fs?.penaltyHome != null && fs?.penaltyAway != null
+          ? { home: fs.penaltyHome, away: fs.penaltyAway }
+          : null,
+      wentToExtraTime: fs?.wentToExtraTime ?? null,
+      wentToPenalties: fs?.wentToPenalties ?? null,
+    };
+  }
+
   async toGql(post: PostDocument, viewerId?: string): Promise<PostGql> {
     const [category, author, commentCount, likeCount, hypeCount, saveCount] =
       await Promise.all([
@@ -1625,42 +1652,7 @@ export class PostsService implements OnModuleInit {
       reportCount: post.reportCount ?? 0,
       campaignWinner,
       matchType: post.matchType ?? false,
-      matchScore:
-        post.matchType && post.fixtureScore != null
-          ? {
-              home: post.fixtureScore.home ?? null,
-              away: post.fixtureScore.away ?? null,
-              status: post.fixtureStatus ?? null,
-              minute: post.fixtureMinute ?? null,
-              phase: post.fixtureScore.phase ?? null,
-              fullTime:
-                post.fixtureScore.fullTimeHome != null &&
-                post.fixtureScore.fullTimeAway != null
-                  ? {
-                      home: post.fixtureScore.fullTimeHome,
-                      away: post.fixtureScore.fullTimeAway,
-                    }
-                  : null,
-              extraTime:
-                post.fixtureScore.extraTimeHome != null &&
-                post.fixtureScore.extraTimeAway != null
-                  ? {
-                      home: post.fixtureScore.extraTimeHome,
-                      away: post.fixtureScore.extraTimeAway,
-                    }
-                  : null,
-              penalty:
-                post.fixtureScore.penaltyHome != null &&
-                post.fixtureScore.penaltyAway != null
-                  ? {
-                      home: post.fixtureScore.penaltyHome,
-                      away: post.fixtureScore.penaltyAway,
-                    }
-                  : null,
-              wentToExtraTime: post.fixtureScore.wentToExtraTime ?? null,
-              wentToPenalties: post.fixtureScore.wentToPenalties ?? null,
-            }
-          : null,
+      matchScore: this.buildMatchScoreGql(post),
       fixtureWinnerAt: post.fixtureWinnerAt ?? null,
       fixtureId: post.fixtureId ?? null,
       fixtureStage: post.fixtureStage ?? null,

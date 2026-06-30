@@ -27,6 +27,7 @@ import { MatchPredictionsService } from '../match-predictions/match-predictions.
 import {
   buildFixtureScoreSet,
   buildPostFixtureScoreSet,
+  denormalizedPostFieldsFromFixture,
   parseFixtureScores,
 } from './fixture-score.util';
 
@@ -774,6 +775,48 @@ export class FixturesService implements OnModuleInit {
   }
 
   /**
+   * Copy fixture live fields onto the linked campaign post when they diverge.
+   * Compares the post document to the fixture row (not a prior fixture snapshot),
+   * so minute ticks still propagate when the fixture collection updated first.
+   */
+  private async syncCampaignPostFromFixture(
+    fixture: FixtureDocument,
+    opts: { publish?: boolean } = {},
+  ): Promise<boolean> {
+    if (!fixture.campaignPostId) return false;
+    const postId = fixture.campaignPostId as Types.ObjectId;
+    const post = await this.postModel.findById(postId).exec();
+    if (!post) return false;
+
+    const fields = denormalizedPostFieldsFromFixture(fixture);
+    const fs = fields.fixtureScore;
+    const stale =
+      post.fixtureStatus !== fields.fixtureStatus ||
+      (post.fixtureMinute ?? null) !== fields.fixtureMinute ||
+      (post.fixtureScore?.home ?? null) !== fs.home ||
+      (post.fixtureScore?.away ?? null) !== fs.away ||
+      (post.fixtureScore?.phase ?? null) !== fs.phase;
+
+    if (!stale) return false;
+
+    await this.postModel.updateOne({ _id: postId }, { $set: fields });
+
+    const shouldPublish = opts.publish !== false;
+    const status = fixture.status;
+    if (
+      shouldPublish &&
+      (status === 'IN_PLAY' || status === 'PAUSED' || status === 'FINISHED')
+    ) {
+      const postIdStr = postId.toHexString();
+      await pubsub.publish(POST_VOTE_UPDATED, {
+        postVoteUpdated: { postId: postIdStr },
+      });
+      await pubsub.publish(POST_UPDATED, { postUpdated: { postId: postIdStr } });
+    }
+    return true;
+  }
+
+  /**
    * Full sync — every WC fixture + group mapping. Upserts all, then removes
    * fixtures no longer in the feed (e.g. the old football-data.org rows) unless
    * they're tied to a campaign post. Used by the admin `syncWorldCupFixtures`
@@ -882,42 +925,12 @@ export class FixturesService implements OnModuleInit {
         );
       }
 
-      // ── Live score changed: update denormalized fields on the campaign post ─
-      if (existing.campaignPostId) {
-        const prevHome = existing.score?.home ?? null;
-        const prevAway = existing.score?.away ?? null;
-        const prevStatus = existing.status;
-        const prevMinute = existing.minute ?? null;
-        const prevPhase = existing.rawStatus ?? null;
-
-        const scoreChanged =
-          prevHome !== home ||
-          prevAway !== away ||
-          prevStatus !== newStatus ||
-          prevMinute !== newMinute ||
-          prevPhase !== parsed.rawStatus;
-
-        if (scoreChanged) {
-          await this.postModel.updateOne(
-            { _id: existing.campaignPostId },
-            {
-              $set: this.buildPostScoreUpdate(parsed, existing, newStatus, newMinute),
-            },
-          );
-          // Only push real-time update while the match is actively progressing
-          // (not for every TIMED→TIMED no-op tick before kickoff).
-          if (
-            newStatus === 'IN_PLAY' ||
-            newStatus === 'PAUSED' ||
-            (prevStatus !== 'FINISHED' && newStatus === 'FINISHED')
-          ) {
-            const postId = existing.campaignPostId.toHexString();
-            await pubsub.publish(POST_UPDATED, { postUpdated: { postId } });
-            // Also publish on the vote channel so feed cards (which subscribe to
-            // POST_VOTE_UPDATED) receive live minute/score updates in real time.
-            await pubsub.publish(POST_VOTE_UPDATED, { postVoteUpdated: { postId } });
-          }
-        }
+      // ── Live score changed: mirror fixture row onto the campaign post ─────
+      const refreshed = await this.fixtureModel
+        .findOne({ externalId: item.fixture.id })
+        .exec();
+      if (refreshed) {
+        await this.syncCampaignPostFromFixture(refreshed);
       }
 
       // ── Kickoff postponed: update the associated campaign post dates ──────
@@ -1241,78 +1254,15 @@ export class FixturesService implements OnModuleInit {
     let updated = 0;
     for (const fixture of liveFixtures) {
       try {
-        const postId = fixture.campaignPostId as Types.ObjectId;
-        const post = await this.postModel.findById(postId).exec();
-        if (!post) continue;
-
-        const status = fixture.status;
+        const synced = await this.syncCampaignPostFromFixture(fixture);
+        if (!synced) continue;
+        updated += 1;
         const minute =
-          status === 'IN_PLAY' || status === 'PAUSED'
+          fixture.status === 'IN_PLAY' || fixture.status === 'PAUSED'
             ? (fixture.minute ?? null)
             : null;
-        const home = fixture.score?.home ?? null;
-        const away = fixture.score?.away ?? null;
-
-        const stale =
-          post.fixtureStatus !== status ||
-          (post.fixtureMinute ?? null) !== minute ||
-          (post.fixtureScore?.home ?? null) !== home ||
-          (post.fixtureScore?.away ?? null) !== away;
-
-        if (!stale) continue;
-
-        const parsedForReconcile = {
-          rawStatus: fixture.rawStatus ?? status,
-          home,
-          away,
-          fullTime:
-            fixture.scoreFullTimeHome != null && fixture.scoreFullTimeAway != null
-              ? { home: fixture.scoreFullTimeHome, away: fixture.scoreFullTimeAway }
-              : null,
-          extraTime:
-            fixture.scoreExtraTimeHome != null && fixture.scoreExtraTimeAway != null
-              ? { home: fixture.scoreExtraTimeHome, away: fixture.scoreExtraTimeAway }
-              : null,
-          penalty:
-            fixture.scorePenaltyHome != null && fixture.scorePenaltyAway != null
-              ? { home: fixture.scorePenaltyHome, away: fixture.scorePenaltyAway }
-              : null,
-          wentToExtraTime: fixture.wentToExtraTime ?? false,
-          wentToPenalties: fixture.wentToPenalties ?? false,
-          predictionScore:
-            fixture.scoreExtraTimeHome != null && fixture.scoreExtraTimeAway != null
-              ? { home: fixture.scoreExtraTimeHome, away: fixture.scoreExtraTimeAway }
-              : fixture.scoreFullTimeHome != null && fixture.scoreFullTimeAway != null
-                ? { home: fixture.scoreFullTimeHome, away: fixture.scoreFullTimeAway }
-                : home != null && away != null
-                  ? { home, away }
-                  : null,
-          winner: fixture.score?.winner ?? null,
-        };
-
-        await this.postModel.updateOne(
-          { _id: postId },
-          {
-            $set: this.buildPostScoreUpdate(
-              parsedForReconcile,
-              fixture,
-              status,
-              minute,
-            ),
-          },
-        );
-
-        const postIdStr = postId.toHexString();
-        await pubsub.publish(POST_VOTE_UPDATED, {
-          postVoteUpdated: { postId: postIdStr },
-        });
-        await pubsub.publish(POST_UPDATED, {
-          postUpdated: { postId: postIdStr },
-        });
-
-        updated += 1;
         this.logger.log(
-          `Reconciled live fixture → post: ${fixture.homeTeam.name} vs ${fixture.awayTeam.name} (${home ?? 0}-${away ?? 0}, ${status}${minute != null ? ` ${minute}'` : ''})`,
+          `Reconciled live fixture → post: ${fixture.homeTeam.name} vs ${fixture.awayTeam.name} (${fixture.score?.home ?? 0}-${fixture.score?.away ?? 0}, ${fixture.status}${minute != null ? ` ${minute}'` : ''})`,
         );
       } catch (err) {
         this.logger.error(
@@ -1585,8 +1535,7 @@ export class FixturesService implements OnModuleInit {
       // before the first details sync (which previously was the only place this
       // got set).
       fixtureId: (fixture._id as Types.ObjectId).toHexString(),
-      fixtureStage: fixture.stage,
-      hasDrawOption: isGroupStage,
+      ...denormalizedPostFieldsFromFixture(fixture),
     });
 
     fixture.campaignPostId = post._id as Types.ObjectId;

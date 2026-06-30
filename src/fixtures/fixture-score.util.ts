@@ -140,6 +140,45 @@ export function buildPostFixtureScoreSet(parsed: ParsedFixtureScores) {
   };
 }
 
+/** Seed / backfill denormalized match fields on a campaign post from a fixture row. */
+export function denormalizedPostFieldsFromFixture(fixture: {
+  status: string;
+  minute?: number | null;
+  rawStatus?: string | null;
+  stage: string;
+  hasDrawOption?: boolean;
+  score?: { home?: number | null; away?: number | null } | null;
+  scoreFullTimeHome?: number | null;
+  scoreFullTimeAway?: number | null;
+  scoreExtraTimeHome?: number | null;
+  scoreExtraTimeAway?: number | null;
+  scorePenaltyHome?: number | null;
+  scorePenaltyAway?: number | null;
+  wentToExtraTime?: boolean;
+  wentToPenalties?: boolean;
+}) {
+  const isLive = fixture.status === 'IN_PLAY' || fixture.status === 'PAUSED';
+  return {
+    fixtureStatus: fixture.status,
+    fixtureMinute: isLive ? (fixture.minute ?? null) : null,
+    fixtureStage: fixture.stage,
+    hasDrawOption: fixture.hasDrawOption ?? fixture.stage === 'GROUP_STAGE',
+    fixtureScore: {
+      home: fixture.score?.home ?? null,
+      away: fixture.score?.away ?? null,
+      phase: fixture.rawStatus ?? null,
+      fullTimeHome: fixture.scoreFullTimeHome ?? null,
+      fullTimeAway: fixture.scoreFullTimeAway ?? null,
+      extraTimeHome: fixture.scoreExtraTimeHome ?? null,
+      extraTimeAway: fixture.scoreExtraTimeAway ?? null,
+      penaltyHome: fixture.scorePenaltyHome ?? null,
+      penaltyAway: fixture.scorePenaltyAway ?? null,
+      wentToExtraTime: fixture.wentToExtraTime ?? false,
+      wentToPenalties: fixture.wentToPenalties ?? false,
+    },
+  };
+}
+
 export function isLiveExtraTimePhase(rawStatus?: string | null): boolean {
   const s = (rawStatus ?? '').toUpperCase();
   return s === 'ET' || s === 'BT';

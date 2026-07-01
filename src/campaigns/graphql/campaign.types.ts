@@ -155,6 +155,11 @@ export class UpdateCampaignInput {
   @Field(() => String, { nullable: true })
   @IsString()
   @IsOptional()
+  description?: string;
+
+  @Field(() => String, { nullable: true })
+  @IsString()
+  @IsOptional()
   bannerText?: string;
 
   @Field(() => String, { nullable: true })

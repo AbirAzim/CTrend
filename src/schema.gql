@@ -1062,6 +1062,7 @@ input UpdateCampaignInput {
   bannerText: String
   ctaLabel: String
   ctaUrl: String
+  description: String
   endDate: DateTime
   fixturesEnabled: Boolean
   hasRewards: Boolean

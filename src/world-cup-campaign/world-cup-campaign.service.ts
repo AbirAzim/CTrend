@@ -34,6 +34,7 @@ import {
   CAMPAIGN_WINNER_FIRST_TIME_WEIGHT,
   CAMPAIGN_WINNER_REPEAT_MULTI_WEIGHT,
   CAMPAIGN_WINNER_REPEAT_ONCE_WEIGHT,
+  campaignPrizeForFixtureStage,
 } from './world-cup-campaign.constants';
 
 @Injectable()
@@ -218,6 +219,7 @@ export class WorldCupCampaignService implements OnModuleInit {
       }
     }
     const scoreWinner = this.normalizeScoreWinner(fixture.score?.winner ?? null); // HOME_TEAM | AWAY_TEAM | DRAW | null
+    const prize = campaignPrizeForFixtureStage(fixture.stage);
 
     // Unknown result — record without a winner userId
     if (!scoreWinner) {
@@ -225,7 +227,7 @@ export class WorldCupCampaignService implements OnModuleInit {
         campaignId: campaignObjId,
         fixtureId: fixture._id,
         postId,
-        prize: 100,
+        prize,
         paid: false,
         note: 'No winner determined',
       });
@@ -268,7 +270,7 @@ export class WorldCupCampaignService implements OnModuleInit {
         campaignId: campaignObjId,
         fixtureId: fixture._id,
         postId,
-        prize: 100,
+        prize,
         winningOption: winningOptionIndex,
         paid: false,
         note: noWinnersNote,
@@ -309,7 +311,7 @@ export class WorldCupCampaignService implements OnModuleInit {
         campaignId: campaignObjId,
         fixtureId: fixture._id,
         postId,
-        prize: 100,
+        prize,
         winningOption: winningOptionIndex,
         paid: false,
         note: `All eligible voters are on a ${CAMPAIGN_WINNER_COOLDOWN_MATCHES}-match winner cooldown — exact score required to win again`,
@@ -346,7 +348,7 @@ export class WorldCupCampaignService implements OnModuleInit {
       fixtureId: fixture._id,
       postId,
       userId: drawn.userId,
-      prize: 100,
+      prize,
       winningOption: winningOptionIndex,
       paid: false,
       ...(wonViaExactScore ? { note: 'Won via exact score prediction 🎯' } : {}),
@@ -477,7 +479,7 @@ export class WorldCupCampaignService implements OnModuleInit {
         campaignPostId: { $exists: true, $ne: null },
         status: 'FINISHED',
       })
-      .select('_id campaignPostId matchEndedAt winnerScheduledAt')
+      .select('_id campaignPostId stage matchEndedAt winnerScheduledAt')
       .lean()
       .exec();
 
@@ -511,7 +513,7 @@ export class WorldCupCampaignService implements OnModuleInit {
         fixtureId: fixture._id,
         postId: fixture.campaignPostId,
         userId: post.voteWinnerUserId ?? undefined,
-        prize: 100,
+        prize: campaignPrizeForFixtureStage(fixture.stage),
         winningOption: post.voteWinnerOptionIndex,
         paid: false,
         createdAt: pickedAt,

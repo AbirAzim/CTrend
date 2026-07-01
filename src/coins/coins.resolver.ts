@@ -5,11 +5,14 @@ import {
   CoinHistoryItemGql,
   CoinLeaderboardEntryGql,
   DailyStreakGql,
+  MonthlyPodiumStatsGql,
 } from './graphql/coin.types';
 import { GqlAuthGuard } from '../common/guards/gql-auth.guard';
 import { OptionalJwtGqlGuard } from '../common/guards/optional-jwt-gql.guard';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { UsersService } from '../users/users.service';
+import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
+import { currentCompetingMonthKey } from './coin-monthly.utils';
 
 type ReqUser = { id: string; role: string };
 
@@ -18,6 +21,7 @@ export class CoinsResolver {
   constructor(
     private readonly coins: CoinsService,
     private readonly usersService: UsersService,
+    private readonly platformSettings: PlatformSettingsService,
   ) {}
 
   /** Viewer's own coin balance. */
@@ -85,7 +89,15 @@ export class CoinsResolver {
   ): Promise<CoinHistoryItemGql[]> {
     const targetId = userId ?? viewer?.id;
     if (!targetId) return [];
-    const rows = await this.coins.getHistory(targetId, skip ?? 0, take ?? 30);
+    const monthKey =
+      (await this.platformSettings.getCurrentCoinMonthKey()) ||
+      currentCompetingMonthKey();
+    const rows = await this.coins.getHistory(
+      targetId,
+      skip ?? 0,
+      take ?? 30,
+      monthKey,
+    );
     return rows.map((r) => ({
       id: r._id.toHexString(),
       type: r.type,
@@ -94,7 +106,7 @@ export class CoinsResolver {
     }));
   }
 
-  /** All-time top coin earners. */
+  /** Current-month top coin earners (admins excluded). */
   @Query(() => [CoinLeaderboardEntryGql])
   async coinLeaderboard(
     @Args('take', { type: () => Int, nullable: true }) take?: number,
@@ -107,7 +119,23 @@ export class CoinsResolver {
     }));
   }
 
-  /** Leaderboard position for a user (null if no coins earned). */
+  /** UTC month key for the active coin competition (`YYYY-MM`). */
+  @Query(() => String)
+  async currentCoinMonth(): Promise<string> {
+    const stored = await this.platformSettings.getCurrentCoinMonthKey();
+    return stored || currentCompetingMonthKey();
+  }
+
+  /** Lifetime monthly-podium finishes (1st / 2nd / 3rd place counts). */
+  @Query(() => MonthlyPodiumStatsGql)
+  @UseGuards(OptionalJwtGqlGuard)
+  async monthlyPodiumStats(
+    @Args('userId', { type: () => ID }) userId: string,
+  ): Promise<MonthlyPodiumStatsGql> {
+    return this.coins.getPodiumStats(userId);
+  }
+
+  /** Leaderboard position for the current month (null if no coins earned). */
   @Query(() => Int, { nullable: true })
   @UseGuards(OptionalJwtGqlGuard)
   async coinLeaderboardRank(

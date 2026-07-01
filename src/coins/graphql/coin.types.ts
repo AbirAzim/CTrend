@@ -48,3 +48,15 @@ export class DailyStreakGql {
   @Field(() => Int)
   streakDays: number;
 }
+
+@ObjectType()
+export class MonthlyPodiumStatsGql {
+  @Field(() => Int)
+  firstPlaceCount: number;
+
+  @Field(() => Int)
+  secondPlaceCount: number;
+
+  @Field(() => Int)
+  thirdPlaceCount: number;
+}

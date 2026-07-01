@@ -28,6 +28,13 @@ export class PlatformSettings {
   /** When true, referral invites, code redemption, and referral-point awards are active. */
   @Prop({ default: false })
   referralSystemEnabled: boolean;
+
+  /**
+   * UTC month key (`YYYY-MM`) for the active engagement-coin competition.
+   * Advanced by the monthly reset job on the 1st of each month.
+   */
+  @Prop({ default: '' })
+  currentCoinMonthKey: string;
 }
 
 export const PlatformSettingsSchema =

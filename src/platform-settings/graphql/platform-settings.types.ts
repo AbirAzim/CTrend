@@ -18,4 +18,8 @@ export class PlatformSettingsGql {
   /** Referral invites, code redemption, and referral-point awards. Default off. */
   @Field()
   referralSystemEnabled: boolean;
+
+  /** Active UTC month key for engagement coins (`YYYY-MM`). */
+  @Field()
+  currentCoinMonthKey: string;
 }

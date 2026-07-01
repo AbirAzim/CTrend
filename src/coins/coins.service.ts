@@ -5,8 +5,25 @@ import { CoinLedger, CoinLedgerDocument } from './coin-ledger.schema';
 import { User, UserDocument } from '../users/user.schema';
 import { CoinType, CoinTypeValue, COIN_AMOUNTS } from './coins.constants';
 import { UserRole } from '../common/enums';
+import {
+  currentCompetingMonthKey,
+  monthBoundsUtc,
+} from './coin-monthly.utils';
+import { CoinMonthlySnapshot, CoinMonthlySnapshotDocument } from './coin-monthly-snapshot.schema';
 
 export type AwardResult = { awarded: number; balance: number };
+
+export type MonthlyPodiumStats = {
+  firstPlaceCount: number;
+  secondPlaceCount: number;
+  thirdPlaceCount: number;
+};
+
+export type MonthCoinRow = {
+  userId: string;
+  coins: number;
+  createdAt: Date;
+};
 
 /** Users with admin in `roles[]` or legacy `role` are excluded from public leaderboards. */
 const NON_ADMIN_LEADERBOARD_FILTER = {
@@ -27,6 +44,8 @@ export class CoinsService {
     @InjectModel(CoinLedger.name)
     private readonly ledgerModel: Model<CoinLedgerDocument>,
     @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+    @InjectModel(CoinMonthlySnapshot.name)
+    private readonly snapshotModel: Model<CoinMonthlySnapshotDocument>,
   ) {}
 
   /**
@@ -163,14 +182,142 @@ export class CoinsService {
     userId: string,
     skip = 0,
     take = 30,
+    monthKey = currentCompetingMonthKey(),
   ): Promise<CoinLedgerDocument[]> {
     if (!Types.ObjectId.isValid(userId)) return [];
+    const { start, end } = monthBoundsUtc(monthKey);
     return this.ledgerModel
-      .find({ userId: new Types.ObjectId(userId) })
+      .find({
+        userId: new Types.ObjectId(userId),
+        createdAt: { $gte: start, $lt: end },
+      })
       .sort({ createdAt: -1 })
       .skip(Math.max(0, skip))
       .limit(Math.min(Math.max(1, take), 100))
       .exec();
+  }
+
+  async getPodiumStats(userId: string): Promise<MonthlyPodiumStats> {
+    if (!Types.ObjectId.isValid(userId)) {
+      return { firstPlaceCount: 0, secondPlaceCount: 0, thirdPlaceCount: 0 };
+    }
+    const u = await this.userModel
+      .findById(userId, {
+        podiumFirstCount: 1,
+        podiumSecondCount: 1,
+        podiumThirdCount: 1,
+      })
+      .exec();
+    return {
+      firstPlaceCount: u?.podiumFirstCount ?? 0,
+      secondPlaceCount: u?.podiumSecondCount ?? 0,
+      thirdPlaceCount: u?.podiumThirdCount ?? 0,
+    };
+  }
+
+  /**
+   * Sum ledger amounts per user for a UTC calendar month (option B — ledger source of truth).
+   */
+  async aggregateMonthCoins(monthKey: string): Promise<MonthCoinRow[]> {
+    const { start, end } = monthBoundsUtc(monthKey);
+    const grouped = await this.ledgerModel.aggregate<{
+      _id: Types.ObjectId;
+      coins: number;
+    }>([
+      { $match: { createdAt: { $gte: start, $lt: end } } },
+      { $group: { _id: '$userId', coins: { $sum: '$amount' } } },
+      { $match: { coins: { $gt: 0 } } },
+    ]);
+
+    if (grouped.length === 0) return [];
+
+    const userIds = grouped.map((g) => g._id);
+    const users = await this.userModel
+      .find({ _id: { $in: userIds } }, { createdAt: 1, role: 1, roles: 1 })
+      .exec();
+    const userMap = new Map(users.map((u) => [u._id.toHexString(), u]));
+
+    const rows: MonthCoinRow[] = [];
+    for (const g of grouped) {
+      const id = g._id.toHexString();
+      const user = userMap.get(id);
+      if (!user || userHoldsAdminRole(user)) continue;
+      rows.push({
+        userId: id,
+        coins: g.coins,
+        createdAt: user.createdAt ?? new Date(0),
+      });
+    }
+
+    rows.sort((a, b) => {
+      if (b.coins !== a.coins) return b.coins - a.coins;
+      return a.createdAt.getTime() - b.createdAt.getTime();
+    });
+    return rows;
+  }
+
+  /** Set every user's cached balance from ledger totals for the given month. */
+  async syncMonthCoinsFromLedger(monthKey: string): Promise<void> {
+    const rows = await this.aggregateMonthCoins(monthKey);
+    await this.userModel.updateMany({}, { $set: { coins: 0 } }).exec();
+    for (const row of rows) {
+      await this.userModel
+        .updateOne(
+          { _id: new Types.ObjectId(row.userId) },
+          { $set: { coins: row.coins } },
+        )
+        .exec();
+    }
+  }
+
+  /**
+   * Finalize a month: snapshot top 3 from ledger, bump podium counters, save audit rows.
+   * Does not reset balances — call syncMonthCoinsFromLedger for the new month after.
+   */
+  async finalizeMonth(monthKey: string): Promise<{ top3: MonthCoinRow[] }> {
+    const existing = await this.snapshotModel.countDocuments({ monthKey }).exec();
+    if (existing > 0) {
+      this.logger.warn(`Month ${monthKey} already finalized (${existing} snapshots) — skipping`);
+      const top = await this.snapshotModel
+        .find({ monthKey, rank: { $lte: 3 } })
+        .sort({ rank: 1 })
+        .exec();
+      return {
+        top3: top.map((s) => ({
+          userId: s.userId.toHexString(),
+          coins: s.coins,
+          createdAt: s.finalizedAt,
+        })),
+      };
+    }
+
+    const ranked = await this.aggregateMonthCoins(monthKey);
+    const top3 = ranked.slice(0, 3);
+    const now = new Date();
+
+    for (let i = 0; i < top3.length; i++) {
+      const row = top3[i];
+      const rank = i + 1;
+      const uid = new Types.ObjectId(row.userId);
+      const inc: Record<string, number> = {};
+      if (rank === 1) inc.podiumFirstCount = 1;
+      else if (rank === 2) inc.podiumSecondCount = 1;
+      else if (rank === 3) inc.podiumThirdCount = 1;
+
+      await this.userModel.updateOne({ _id: uid }, { $inc: inc }).exec();
+      await this.snapshotModel.create({
+        monthKey,
+        userId: uid,
+        rank,
+        coins: row.coins,
+        finalizedAt: now,
+      });
+    }
+
+    this.logger.log(
+      `Finalized coin month ${monthKey}: top3=${top3.map((r) => `${r.userId}:${r.coins}`).join(', ') || 'none'}`,
+    );
+    return { top3 };
   }
 
   /** Count non-admin users ranked above this user (same tie-break as getLeaderboard). */
@@ -187,7 +334,7 @@ export class CoinsService {
     return ahead + 1;
   }
 
-  /** Top coin earners, all-time (admins excluded). */
+  /** Top coin earners for the current UTC month (admins excluded). */
   async getLeaderboard(take = 50): Promise<UserDocument[]> {
     return this.userModel
       .find({ coins: { $gt: 0 }, ...NON_ADMIN_LEADERBOARD_FILTER })

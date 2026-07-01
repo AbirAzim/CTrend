@@ -548,6 +548,12 @@ type ModeratorThreadAdminGql {
   unreadFromUserCount: Int!
 }
 
+type MonthlyPodiumStatsGql {
+  firstPlaceCount: Int!
+  secondPlaceCount: Int!
+  thirdPlaceCount: Int!
+}
+
 type Mutation {
   acceptInvitation(displayName: String, password: String!, token: String!): AuthPayloadGql!
   addFriend(userId: ID!): String!
@@ -704,6 +710,7 @@ type PlatformSettingsGql {
   allowUserGlobalPosts: Boolean!
   androidUpdateBody: String!
   androidUpdateTitle: String!
+  currentCoinMonthKey: String!
   minAndroidVersionCode: Int!
   referralSystemEnabled: Boolean!
 }
@@ -909,6 +916,7 @@ type Query {
   coinLeaderboard(take: Int): [CoinLeaderboardEntryGql!]!
   coinLeaderboardRank(userId: ID): Int
   commentsByPost(postId: ID!): [CommentGql!]!
+  currentCoinMonth: String!
   feedPosts(campaignId: ID, postFilter: FeedPostFilter, scope: FeedScope, skip: Int = 0, sort: FeedSort, take: Int = 20): [PostGql!]!
   friendRequests: FriendRequestsGql!
   friendSuggestions(limit: Int, search: String): [UserGql!]!
@@ -930,6 +938,7 @@ type Query {
   matchPredictions(postId: ID!, skip: Int, take: Int): [MatchPredictionGql!]!
   me: UserGql!
   messages(conversationId: ID!, skip: Int! = 0, take: Int! = 30): [MessageGql!]!
+  monthlyPodiumStats(userId: ID!): MonthlyPodiumStatsGql!
   myCoins: Int!
   myConversations: [ConversationGql!]!
   myFriends: [UserGql!]!

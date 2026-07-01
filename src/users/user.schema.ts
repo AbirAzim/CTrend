@@ -91,9 +91,21 @@ export class User {
   @Prop({ default: 0 })
   lastAndroidVersionCode?: number;
 
-  /** Gamification — lifetime coin balance (cached sum of the coin ledger). */
+  /** Gamification — current-month coin balance (resets on the 1st UTC). */
   @Prop({ default: 0 })
   coins: number;
+
+  /** Times the user finished 1st on the monthly coin leaderboard. */
+  @Prop({ default: 0 })
+  podiumFirstCount: number;
+
+  /** Times the user finished 2nd on the monthly coin leaderboard. */
+  @Prop({ default: 0 })
+  podiumSecondCount: number;
+
+  /** Times the user finished 3rd on the monthly coin leaderboard. */
+  @Prop({ default: 0 })
+  podiumThirdCount: number;
 
   /** Last day the daily-streak bonus was claimed (used to gate one/day). */
   @Prop({ type: Date, default: null })

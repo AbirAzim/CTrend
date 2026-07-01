@@ -35,3 +35,4 @@ export class CoinLedger {
 export const CoinLedgerSchema = SchemaFactory.createForClass(CoinLedger);
 CoinLedgerSchema.index({ userId: 1, type: 1, refId: 1 }, { unique: true });
 CoinLedgerSchema.index({ userId: 1, createdAt: -1 }); // history feed
+CoinLedgerSchema.index({ createdAt: 1 }); // monthly aggregation

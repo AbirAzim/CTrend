@@ -22,6 +22,7 @@ export class PlatformSettingsService {
       androidUpdateTitle: doc?.androidUpdateTitle ?? '',
       androidUpdateBody: doc?.androidUpdateBody ?? '',
       referralSystemEnabled: doc?.referralSystemEnabled ?? false,
+      currentCoinMonthKey: doc?.currentCoinMonthKey?.trim() || '',
     };
   }
 
@@ -109,5 +110,20 @@ export class PlatformSettingsService {
       )
       .exec();
     return this.toGqlFromDoc(doc);
+  }
+
+  async getCurrentCoinMonthKey(): Promise<string> {
+    const doc = await this.getDocument();
+    return doc.currentCoinMonthKey?.trim() || '';
+  }
+
+  async setCurrentCoinMonthKey(monthKey: string): Promise<void> {
+    await this.model
+      .findOneAndUpdate(
+        { key: PLATFORM_SETTINGS_KEY },
+        { $set: { currentCoinMonthKey: monthKey.trim() } },
+        { upsert: true },
+      )
+      .exec();
   }
 }

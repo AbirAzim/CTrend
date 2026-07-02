@@ -101,8 +101,12 @@ export function parseFixtureScores(
     extraTime != null ||
     isLiveExtraTimePhase(rawStatus) ||
     rawStatus === 'AET';
-  const wentToPenalties = penalty != null;
   const afterExtraTime = scoreAfterExtraTime(fullTime, extraTime);
+  const wentToPenalties = computeWentToPenalties(
+    rawStatus,
+    penalty,
+    afterExtraTime,
+  );
   const predictionScore = afterExtraTime ?? fullTime ?? currentGoals;
 
   const isLive = isLiveFixtureStatus(normalizedStatus);
@@ -235,4 +239,20 @@ export function isLiveExtraTimePhase(rawStatus?: string | null): boolean {
 export function isLivePenaltyPhase(rawStatus?: string | null): boolean {
   const s = (rawStatus ?? '').toUpperCase();
   return s === 'P' || s === 'PEN';
+}
+
+/**
+ * True only when the match was decided on penalty kicks after extra time ended
+ * level. ET spot-kick winners (e.g. 120+5) are not shootouts.
+ */
+export function computeWentToPenalties(
+  rawStatus: string,
+  penalty: ScorePair | null,
+  scoreAfterEt: ScorePair | null,
+): boolean {
+  if (penalty == null) return false;
+  const s = rawStatus.toUpperCase();
+  if (s === 'P' || s === 'PEN' || s === 'PENALTIES') return true;
+  if (scoreAfterEt && scoreAfterEt.home !== scoreAfterEt.away) return false;
+  return true;
 }

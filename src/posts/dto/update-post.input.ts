@@ -3,6 +3,7 @@ import {
   ArrayMinSize,
   IsArray,
   IsBoolean,
+  IsEnum,
   IsInt,
   IsOptional,
   IsString,
@@ -12,6 +13,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { CompareLayout } from '../../common/enums';
 import { PostOptionInput } from './create-post.input';
 
 @InputType()
@@ -73,6 +75,12 @@ export class UpdatePostInput {
   @IsOptional()
   @IsBoolean()
   broadcastGlobally?: boolean;
+
+  /** Two-image compare: side-by-side (default) or stacked vertically. */
+  @Field(() => CompareLayout, { nullable: true })
+  @IsOptional()
+  @IsEnum(CompareLayout)
+  compareLayout?: CompareLayout;
 
   /**
    * When true, wipe existing votes (used when an option's image is replaced with

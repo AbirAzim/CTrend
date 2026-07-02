@@ -24,6 +24,12 @@ export enum PostFormat {
   ANNOUNCEMENT = 'announcement',
 }
 
+/** Two-image compare layout: side-by-side (default) or stacked vertically. */
+export enum CompareLayout {
+  HORIZONTAL = 'horizontal',
+  VERTICAL = 'vertical',
+}
+
 export enum Visibility {
   PUBLIC = 'public',
   PRIVATE = 'private',
@@ -90,6 +96,7 @@ registerEnumType(UserRole, { name: 'UserRole' });
 registerEnumType(InvitationStatus, { name: 'InvitationStatus' });
 registerEnumType(PostType, { name: 'PostType' });
 registerEnumType(PostFormat, { name: 'PostFormat' });
+registerEnumType(CompareLayout, { name: 'CompareLayout' });
 registerEnumType(Visibility, { name: 'Visibility' });
 registerEnumType(OrgPostReach, { name: 'OrgPostReach' });
 export enum FeedPostFilter {

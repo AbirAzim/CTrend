@@ -17,6 +17,7 @@ import { Type } from 'class-transformer';
 import {
   OrgPostReach,
   PostFormat,
+  CompareLayout,
   PostType,
   Visibility,
 } from '../../common/enums';
@@ -61,6 +62,12 @@ export class CreatePostInput {
   @IsOptional()
   @IsEnum(PostFormat)
   format?: PostFormat;
+
+  /** Two-image compare: side-by-side (default) or stacked vertically. */
+  @Field(() => CompareLayout, { nullable: true })
+  @IsOptional()
+  @IsEnum(CompareLayout)
+  compareLayout?: CompareLayout;
 
   @Field({ nullable: true })
   @IsOptional()

@@ -3,6 +3,7 @@ import { HydratedDocument, Types } from 'mongoose';
 import {
   OrgPostReach,
   PostFormat,
+  CompareLayout,
   PostStatus,
   PostType,
   Visibility,
@@ -30,6 +31,10 @@ export class Post {
   /** Voting layout. Legacy posts default to `compare`. */
   @Prop({ type: String, enum: PostFormat, default: PostFormat.COMPARE })
   format: PostFormat;
+
+  /** Two-image compare orientation (side-by-side vs stacked). */
+  @Prop({ type: String, enum: CompareLayout, default: CompareLayout.HORIZONTAL })
+  compareLayout: CompareLayout;
 
   @Prop({ trim: true })
   contentText?: string;

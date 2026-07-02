@@ -183,6 +183,11 @@ type CommentReactionCountGql {
   emoji: String!
 }
 
+enum CompareLayout {
+  HORIZONTAL
+  VERTICAL
+}
+
 type ContentReportGql {
   contextUrl: String
   createdAt: DateTime!
@@ -248,6 +253,7 @@ input CreatePostInput {
   campaignId: String
   caption: String
   categoryId: String!
+  compareLayout: CompareLayout
   contentText: String
   format: PostFormat
   imageUrls: [String!]
@@ -793,6 +799,7 @@ type PostGql {
   category: CategoryGql!
   commentCount: Int!
   commentsDisabled: Boolean!
+  compareLayout: CompareLayout!
   contentText: String
   createdAt: DateTime!
   downvoteCount: Int!
@@ -1082,6 +1089,7 @@ input UpdatePostInput {
   campaignId: String
   caption: String
   categoryId: String
+  compareLayout: CompareLayout
   endingSoonLeadMinutes: Int
   imageUrls: [String!]
   options: [PostOptionInput!]

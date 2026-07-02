@@ -19,6 +19,7 @@ import { UpdatePostInput } from './dto/update-post.input';
 import {
   OrgPostReach,
   PostFormat,
+  CompareLayout,
   PostStatus,
   PostType,
   UserRole,
@@ -200,6 +201,16 @@ export class PostsService implements OnModuleInit {
       ...(imageFocalX !== undefined ? { imageFocalX } : {}),
       ...(imageFocalY !== undefined ? { imageFocalY } : {}),
     };
+  }
+
+  private resolveCompareLayout(
+    format: PostFormat,
+    compareLayout?: CompareLayout,
+  ): CompareLayout {
+    if (format !== PostFormat.COMPARE) {
+      return CompareLayout.HORIZONTAL;
+    }
+    return compareLayout ?? CompareLayout.HORIZONTAL;
   }
 
   /** Winning option index(es) by vote count; all tied-at-max if draw. */
@@ -849,6 +860,12 @@ export class PostsService implements OnModuleInit {
         }
       }
     }
+    if (input.compareLayout !== undefined) {
+      post.compareLayout = this.resolveCompareLayout(
+        post.format ?? PostFormat.COMPARE,
+        input.compareLayout,
+      );
+    }
     if (input.broadcastGlobally !== undefined && post.type === PostType.USER) {
       const wantsGlobal = Boolean(input.broadcastGlobally);
       if (wantsGlobal && !post.isUserGlobalBroadcast) {
@@ -1182,6 +1199,7 @@ export class PostsService implements OnModuleInit {
     const doc = await this.postModel.create({
       type: PostType.USER,
       format,
+      compareLayout: this.resolveCompareLayout(format, input.compareLayout),
       contentText,
       imageUrls: input.imageUrls ?? [],
       options: (input.options ?? []).map((o) => this.mapOptionInput(o)),
@@ -1252,6 +1270,10 @@ export class PostsService implements OnModuleInit {
     const doc = await this.postModel.create({
       type: PostType.ORG,
       format: input.format ?? PostFormat.COMPARE,
+      compareLayout: this.resolveCompareLayout(
+        input.format ?? PostFormat.COMPARE,
+        input.compareLayout,
+      ),
       contentText,
       imageUrls: input.imageUrls ?? [],
       options: (input.options ?? []).map((o) => this.mapOptionInput(o)),
@@ -1301,6 +1323,7 @@ export class PostsService implements OnModuleInit {
     const doc = await this.postModel.create({
       type: PostType.SYSTEM,
       format,
+      compareLayout: this.resolveCompareLayout(format, input.compareLayout),
       contentText,
       imageUrls: input.imageUrls ?? [],
       options: isAnnouncement ? [] : (input.options ?? []).map((o) => this.mapOptionInput(o)),
@@ -1598,6 +1621,7 @@ export class PostsService implements OnModuleInit {
       id: post._id.toHexString(),
       type: post.type,
       format: post.format ?? PostFormat.COMPARE,
+      compareLayout: post.compareLayout ?? CompareLayout.HORIZONTAL,
       contentText: post.contentText,
       caption: post.contentText,
       imageUrls: post.imageUrls ?? [],

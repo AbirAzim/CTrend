@@ -298,3 +298,27 @@ export class PostGql {
   @Field()
   pinned: boolean;
 }
+
+/**
+ * Cheap counts for the profile "My Activity" tabs (stat pills + tab badges) —
+ * plain `countDocuments`/aggregate calls, no per-post hydration. Lets the UI
+ * show counts immediately without waiting on the paginated list queries.
+ */
+@ObjectType()
+export class MyContentSummaryGql {
+  @Field(() => Int)
+  dropsCount: number;
+
+  @Field(() => Int)
+  scheduledCount: number;
+
+  @Field(() => Int)
+  keptCount: number;
+
+  @Field(() => Int)
+  votedCount: number;
+
+  /** Sum of `voteCount` across all of this user's non-scheduled posts. */
+  @Field(() => Int)
+  totalVotesOnMyPosts: number;
+}

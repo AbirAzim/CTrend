@@ -654,6 +654,14 @@ type Mutation {
   votePost(anonymous: Boolean, postId: ID!, selectedOptionIndex: Int!): VoteResultGql!
 }
 
+type MyContentSummaryGql {
+  dropsCount: Int!
+  keptCount: Int!
+  scheduledCount: Int!
+  totalVotesOnMyPosts: Int!
+  votedCount: Int!
+}
+
 type NewPostGql {
   postId: ID!
 }
@@ -931,7 +939,7 @@ type Query {
   getAllCategories: [CategoryGql!]!
   getFeed(scope: FeedScope!, skip: Int = 0, sort: FeedSort!, take: Int = 20): FeedConnectionGql!
   getPostById(id: ID!): PostGql!
-  getPostsByUser(userId: ID!): [PostGql!]!
+  getPostsByUser(skip: Int = 0, take: Int = 20, userId: ID!): [PostGql!]!
   getUserProfile(userId: ID!): UserGql!
   globalSearch(limit: Int = 20, query: String!): SearchResultGql!
   hypersByPost(postId: ID!, search: String, skip: Int, take: Int): [UserGql!]!
@@ -947,13 +955,14 @@ type Query {
   messages(conversationId: ID!, skip: Int! = 0, take: Int! = 30): [MessageGql!]!
   monthlyPodiumStats(userId: ID!): MonthlyPodiumStatsGql!
   myCoins: Int!
+  myContentSummary: MyContentSummaryGql!
   myConversations: [ConversationGql!]!
   myFriends: [UserGql!]!
   myNotifications(skip: Int! = 0, take: Int! = 20): NotificationsPageGql!
   myOrganization: OrganizationGql
-  mySavedPosts: [PostGql!]!
-  myScheduledPosts: [PostGql!]!
-  myVotedPosts(anonymousOnly: Boolean): [PostGql!]!
+  mySavedPosts(skip: Int = 0, take: Int = 20): [PostGql!]!
+  myScheduledPosts(skip: Int = 0, take: Int = 20): [PostGql!]!
+  myVotedPosts(anonymousOnly: Boolean, skip: Int = 0, take: Int = 20): [PostGql!]!
   onlineUserIds: [String!]!
   organizationDashboard(organizationId: String!): OrganizationDashboardGql!
   platformSettings: PlatformSettingsGql!

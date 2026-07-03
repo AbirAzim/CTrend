@@ -32,7 +32,7 @@ import { UsersService } from '../users/users.service';
 import { VotesService } from '../votes/votes.service';
 import { CategoryDocument } from '../categories/category.schema';
 import { UserDocument } from '../users/user.schema';
-import { PostGql } from './graphql/post.types';
+import { PostGql, MyContentSummaryGql } from './graphql/post.types';
 import { PostCampaignSummaryGql } from './graphql/post-campaign-summary.types';
 import { PostVoteWinnerGql } from './graphql/post-vote-winner.types';
 import { UserGql } from '../users/graphql/user.types';
@@ -372,7 +372,8 @@ export class PostsService implements OnModuleInit {
     authorId: string,
     viewerId?: string,
     viewerRole?: string,
-    limit = 50,
+    skip = 0,
+    take = 50,
   ): Promise<PostDocument[]> {
     if (!Types.ObjectId.isValid(authorId)) return [];
     const authorOid = new Types.ObjectId(authorId);
@@ -383,7 +384,8 @@ export class PostsService implements OnModuleInit {
       return this.postModel
         .find({ createdBy: authorOid, ...notScheduled })
         .sort({ createdAt: -1 })
-        .limit(limit)
+        .skip(skip)
+        .limit(take)
         .exec();
     }
 
@@ -407,8 +409,37 @@ export class PostsService implements OnModuleInit {
     return this.postModel
       .find({ createdBy: authorOid, $or: visibleOr, ...notScheduled })
       .sort({ createdAt: -1 })
-      .limit(limit)
+      .skip(skip)
+      .limit(take)
       .exec();
+  }
+
+  /** Cheap count for {@link findViewableByAuthor}'s self/admin branch — used by
+   * `myContentSummary` (profile stat pill), not the full visibility-filtered set. */
+  async countPostsByAuthor(authorId: string): Promise<number> {
+    if (!Types.ObjectId.isValid(authorId)) return 0;
+    return this.postModel
+      .countDocuments({
+        createdBy: new Types.ObjectId(authorId),
+        status: { $ne: PostStatus.SCHEDULED },
+      })
+      .exec();
+  }
+
+  /** Sum of `voteCount` across a user's non-scheduled posts — cheap aggregate,
+   * no post hydration. Used by `myContentSummary`. */
+  async sumVotesOnAuthorPosts(authorId: string): Promise<number> {
+    if (!Types.ObjectId.isValid(authorId)) return 0;
+    const [row] = await this.postModel.aggregate<{ total: number }>([
+      {
+        $match: {
+          createdBy: new Types.ObjectId(authorId),
+          status: { $ne: PostStatus.SCHEDULED },
+        },
+      },
+      { $group: { _id: null, total: { $sum: '$voteCount' } } },
+    ]);
+    return row?.total ?? 0;
   }
 
   private isPrizeClaimEligiblePost(post: PostDocument): boolean {
@@ -703,7 +734,11 @@ export class PostsService implements OnModuleInit {
       .exec();
   }
 
-  async findScheduledByAuthor(authorId: string): Promise<PostDocument[]> {
+  async findScheduledByAuthor(
+    authorId: string,
+    skip = 0,
+    take = 20,
+  ): Promise<PostDocument[]> {
     if (!Types.ObjectId.isValid(authorId)) return [];
     return this.postModel
       .find({
@@ -711,6 +746,19 @@ export class PostsService implements OnModuleInit {
         status: PostStatus.SCHEDULED,
       })
       .sort({ scheduledAt: 1 })
+      .skip(skip)
+      .limit(take)
+      .exec();
+  }
+
+  /** Cheap count for the "Scheduled" tab badge — used by `myContentSummary`. */
+  async countScheduledByAuthor(authorId: string): Promise<number> {
+    if (!Types.ObjectId.isValid(authorId)) return 0;
+    return this.postModel
+      .countDocuments({
+        createdBy: new Types.ObjectId(authorId),
+        status: PostStatus.SCHEDULED,
+      })
       .exec();
   }
 
@@ -973,30 +1021,37 @@ export class PostsService implements OnModuleInit {
   async listVotedPosts(
     userId: string,
     anonymousOnly = false,
-    limit = 100,
+    skip = 0,
+    take = 100,
   ): Promise<PostDocument[]> {
     const postIds = await this.votesService.listVotedPostIds(
       userId,
       anonymousOnly,
     );
     if (!postIds.length) return [];
-    const limited = postIds.slice(0, limit);
-    const posts = await this.postModel.find({ _id: { $in: limited } }).exec();
+    const page = postIds.slice(skip, skip + take);
+    if (!page.length) return [];
+    const posts = await this.postModel.find({ _id: { $in: page } }).exec();
     const byId = new Map(posts.map((p) => [p._id.toHexString(), p]));
     const ordered: PostDocument[] = [];
-    for (const id of limited) {
+    for (const id of page) {
       const row = byId.get(id.toHexString());
       if (row) ordered.push(row as PostDocument);
     }
     return ordered;
   }
 
-  async listSavedPosts(userId: string, limit = 100): Promise<PostDocument[]> {
+  async listSavedPosts(
+    userId: string,
+    skip = 0,
+    take = 100,
+  ): Promise<PostDocument[]> {
     if (!Types.ObjectId.isValid(userId)) return [];
     const saves = await this.savedPostModel
       .find({ userId: new Types.ObjectId(userId) })
       .sort({ createdAt: -1 })
-      .limit(limit)
+      .skip(skip)
+      .limit(take)
       .lean()
       .exec();
     const postIds = saves.map((s) => s.postId);
@@ -1009,6 +1064,36 @@ export class PostsService implements OnModuleInit {
       if (row) ordered.push(row as PostDocument);
     }
     return ordered;
+  }
+
+  /** Cheap count for the "Kept" tab badge — used by `myContentSummary`. */
+  async countSavedPosts(userId: string): Promise<number> {
+    if (!Types.ObjectId.isValid(userId)) return 0;
+    return this.savedPostModel
+      .countDocuments({ userId: new Types.ObjectId(userId) })
+      .exec();
+  }
+
+  /**
+   * Cheap counts for the profile "My Activity" tabs (stat pills + tab badges) —
+   * five `countDocuments`/aggregate calls in parallel, no post hydration.
+   */
+  async myContentSummary(userId: string): Promise<MyContentSummaryGql> {
+    const [dropsCount, scheduledCount, keptCount, votedCount, totalVotesOnMyPosts] =
+      await Promise.all([
+        this.countPostsByAuthor(userId),
+        this.countScheduledByAuthor(userId),
+        this.countSavedPosts(userId),
+        this.votesService.countVotesByUser(userId, true),
+        this.sumVotesOnAuthorPosts(userId),
+      ]);
+    return {
+      dropsCount,
+      scheduledCount,
+      keptCount,
+      votedCount,
+      totalVotesOnMyPosts,
+    };
   }
 
   async setSaved(

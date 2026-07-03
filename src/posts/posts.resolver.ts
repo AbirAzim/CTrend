@@ -9,7 +9,7 @@ import {
 } from '@nestjs/graphql';
 import { NotFoundException, UseGuards } from '@nestjs/common';
 import { PostsService } from './posts.service';
-import { PostGql } from './graphql/post.types';
+import { PostGql, MyContentSummaryGql } from './graphql/post.types';
 import { UserGql } from '../users/graphql/user.types';
 import { PostCampaignSummaryGql } from './graphql/post-campaign-summary.types';
 import { PostVoteWinnerGql } from './graphql/post-vote-winner.types';
@@ -179,9 +179,25 @@ export class PostsResolver {
 
   @Query(() => [PostGql])
   @UseGuards(GqlAuthGuard)
-  async myScheduledPosts(@CurrentUser() user: ReqUser) {
-    const rows = await this.postsService.findScheduledByAuthor(user.id);
+  async myScheduledPosts(
+    @CurrentUser() user: ReqUser,
+    @Args('skip', { type: () => Int, nullable: true, defaultValue: 0 })
+    skip?: number,
+    @Args('take', { type: () => Int, nullable: true, defaultValue: 20 })
+    take?: number,
+  ) {
+    const rows = await this.postsService.findScheduledByAuthor(
+      user.id,
+      skip ?? 0,
+      take ?? 20,
+    );
     return Promise.all(rows.map((p) => this.postsService.toGql(p, user.id)));
+  }
+
+  @Query(() => MyContentSummaryGql)
+  @UseGuards(GqlAuthGuard)
+  async myContentSummary(@CurrentUser() user: ReqUser) {
+    return this.postsService.myContentSummary(user.id);
   }
 
   @Mutation(() => Boolean)
@@ -296,6 +312,10 @@ export class PostsResolver {
   @UseGuards(OptionalJwtGqlGuard)
   async getPostsByUser(
     @Args('userId', { type: () => ID }) userId: string,
+    @Args('skip', { type: () => Int, nullable: true, defaultValue: 0 })
+    skip?: number,
+    @Args('take', { type: () => Int, nullable: true, defaultValue: 20 })
+    take?: number,
     @CurrentUser() user?: ReqUser,
   ) {
     // Only return the author's posts this viewer is allowed to see — friend
@@ -304,14 +324,26 @@ export class PostsResolver {
       userId,
       user?.id,
       user?.role,
+      skip ?? 0,
+      take ?? 20,
     );
     return Promise.all(rows.map((p) => this.postsService.toGql(p, user?.id)));
   }
 
   @Query(() => [PostGql])
   @UseGuards(GqlAuthGuard)
-  async mySavedPosts(@CurrentUser() user: ReqUser) {
-    const rows = await this.postsService.listSavedPosts(user.id);
+  async mySavedPosts(
+    @CurrentUser() user: ReqUser,
+    @Args('skip', { type: () => Int, nullable: true, defaultValue: 0 })
+    skip?: number,
+    @Args('take', { type: () => Int, nullable: true, defaultValue: 20 })
+    take?: number,
+  ) {
+    const rows = await this.postsService.listSavedPosts(
+      user.id,
+      skip ?? 0,
+      take ?? 20,
+    );
     return Promise.all(rows.map((p) => this.postsService.toGql(p, user.id)));
   }
 
@@ -320,10 +352,16 @@ export class PostsResolver {
   async myVotedPosts(
     @CurrentUser() user: ReqUser,
     @Args('anonymousOnly', { nullable: true }) anonymousOnly?: boolean,
+    @Args('skip', { type: () => Int, nullable: true, defaultValue: 0 })
+    skip?: number,
+    @Args('take', { type: () => Int, nullable: true, defaultValue: 20 })
+    take?: number,
   ) {
     const rows = await this.postsService.listVotedPosts(
       user.id,
       !!anonymousOnly,
+      skip ?? 0,
+      take ?? 20,
     );
     return Promise.all(rows.map((p) => this.postsService.toGql(p, user.id)));
   }

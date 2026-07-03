@@ -37,7 +37,13 @@ export class FeedService {
     postFilter?: FeedPostFilter,
   ) {
     await this.syncDueScheduledPosts();
-    const filter = await this.buildFilter(scope, viewerId, viewerRole, campaignId, postFilter);
+    const filter = await this.buildFilter(
+      scope,
+      viewerId,
+      viewerRole,
+      campaignId,
+      postFilter,
+    );
     const sortSpec = this.buildSort(sort);
     const [rows, totalCount] = await Promise.all([
       this.fetchRows(filter, sort, sortSpec, skip, take),
@@ -198,7 +204,9 @@ export class FeedService {
                         { $eq: ['$fixtureStatus', 'FINISHED'] },
                       ],
                     },
-                    then: { $toLong: { $ifNull: ['$votingEndsAt', '$createdAt'] } },
+                    then: {
+                      $toLong: { $ifNull: ['$votingEndsAt', '$createdAt'] },
+                    },
                   },
                 ],
                 // Tier 3: regular posts — natural recency by createdAt
@@ -319,13 +327,24 @@ export class FeedService {
           // Global broadcasts + own posts + friends' posts (all USER-type content).
           // Unauthenticated viewers see only global broadcasts.
           if (!viewerId) {
-            return { type: PostType.USER, isUserGlobalBroadcast: true, ...notScheduled };
+            return {
+              type: PostType.USER,
+              isUserGlobalBroadcast: true,
+              ...notScheduled,
+            };
           }
           const viewerOidC = new Types.ObjectId(viewerId);
-          const followingIdsC = await this.followsService.getFollowingIds(viewerId);
-          const followingOidsC = followingIdsC.map((id) => new Types.ObjectId(id));
+          const followingIdsC =
+            await this.followsService.getFollowingIds(viewerId);
+          const followingOidsC = followingIdsC.map(
+            (id) => new Types.ObjectId(id),
+          );
           const communityParts: Record<string, unknown>[] = [
-            { type: PostType.USER, isUserGlobalBroadcast: true, ...notScheduled },
+            {
+              type: PostType.USER,
+              isUserGlobalBroadcast: true,
+              ...notScheduled,
+            },
             { type: PostType.USER, createdBy: viewerOidC, ...notScheduled },
           ];
           if (followingOidsC.length > 0) {
@@ -341,8 +360,11 @@ export class FeedService {
           // Friend/following posts — need to know who the viewer follows
           if (!viewerId) return { _id: null }; // unauthenticated: empty result
           const viewerOid = new Types.ObjectId(viewerId);
-          const followingIds = await this.followsService.getFollowingIds(viewerId);
-          const followingOids = followingIds.map((id) => new Types.ObjectId(id));
+          const followingIds =
+            await this.followsService.getFollowingIds(viewerId);
+          const followingOids = followingIds.map(
+            (id) => new Types.ObjectId(id),
+          );
           const friendParts: Record<string, unknown>[] = [
             {
               type: PostType.USER,
@@ -406,7 +428,11 @@ export class FeedService {
       });
     }
 
-    parts.push({ type: PostType.ORG, orgReach: OrgPostReach.GLOBAL, ...notScheduled });
+    parts.push({
+      type: PostType.ORG,
+      orgReach: OrgPostReach.GLOBAL,
+      ...notScheduled,
+    });
 
     return { $or: parts, ...campaignFilter };
   }

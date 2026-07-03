@@ -104,7 +104,11 @@ export class AdminAnalyticsService {
       {
         $group: {
           _id: {
-            $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: 'UTC' },
+            $dateToString: {
+              format: '%Y-%m-%d',
+              date: '$createdAt',
+              timezone: 'UTC',
+            },
           },
           count: { $sum: 1 },
         },
@@ -141,7 +145,9 @@ export class AdminAnalyticsService {
     ] = await Promise.all([
       this.userModel.countDocuments(userFilter).exec(),
       this.userModel.countDocuments(adminFilter).exec(),
-      this.userModel.countDocuments({ ...userFilter, emailVerified: true }).exec(),
+      this.userModel
+        .countDocuments({ ...userFilter, emailVerified: true })
+        .exec(),
       this.userModel
         .countDocuments({ ...userFilter, createdAt: { $gte: last7 } })
         .exec(),
@@ -165,9 +171,7 @@ export class AdminAnalyticsService {
           { $count: 'count' },
         ])
         .then((r) => r[0]?.count ?? 0),
-      this.campaignWinnerModel
-        .countDocuments({ userId: { $ne: null } })
-        .exec(),
+      this.campaignWinnerModel.countDocuments({ userId: { $ne: null } }).exec(),
       this.countByDay(this.userModel, since),
       this.countByDay(this.postModel, since),
       this.countByDay(this.voteModel, since),

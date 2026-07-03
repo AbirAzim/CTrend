@@ -368,7 +368,10 @@ export class NotificationsService {
         inserted.map(async (doc) => {
           const recipientId = doc.userId.toHexString();
           const gql = this.toGql(doc);
-          await pubsub.publish(NEW_NOTIFICATION, { newNotification: gql, recipientId });
+          await pubsub.publish(NEW_NOTIFICATION, {
+            newNotification: gql,
+            recipientId,
+          });
           await this.sendBellPush(recipientId, gql);
         }),
       );

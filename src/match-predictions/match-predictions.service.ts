@@ -66,8 +66,7 @@ export class MatchPredictionsService {
   /** Match finished with a known score → winners can be listed. */
   private isResolved(fixture: FixtureDocument): boolean {
     return (
-      fixture.status === 'FINISHED' &&
-      this.getPredictionScore(fixture) != null
+      fixture.status === 'FINISHED' && this.getPredictionScore(fixture) != null
     );
   }
 
@@ -124,7 +123,9 @@ export class MatchPredictionsService {
   ): Promise<MatchPredictionGql> {
     const { fixture } = await this.loadContext(postId);
     if (!this.isOpen(fixture)) {
-      throw new ForbiddenException('Predictions are closed — the match has started');
+      throw new ForbiddenException(
+        'Predictions are closed — the match has started',
+      );
     }
     if (
       !Number.isInteger(homeScore) ||
@@ -156,7 +157,9 @@ export class MatchPredictionsService {
   async remove(userId: string, postId: string): Promise<boolean> {
     const { fixture } = await this.loadContext(postId);
     if (!this.isOpen(fixture)) {
-      throw new ForbiddenException('Predictions are closed — the match has started');
+      throw new ForbiddenException(
+        'Predictions are closed — the match has started',
+      );
     }
     await this.predictionModel
       .deleteOne({

@@ -64,7 +64,9 @@ export class FixturesAutoScheduleService implements OnModuleInit {
     try {
       const synced = await this.fixturesService.syncFixtures();
       if (synced > 0) {
-        this.logger.log(`Imported/updated ${synced} fixture(s) from API-Football`);
+        this.logger.log(
+          `Imported/updated ${synced} fixture(s) from API-Football`,
+        );
       }
       const realigned =
         await this.fixturesService.reconcileScheduledMatchPostDates();

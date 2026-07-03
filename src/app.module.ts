@@ -83,8 +83,20 @@ import { CoinsModule } from './coins/coins.module';
     ]),
     GraphQLModule.forRootAsync<ApolloDriverConfig>({
       driver: ApolloDriver,
-      imports: [ConfigModule, UsersModule, AuthModule, PresenceModule, PlatformSettingsModule],
-      inject: [ConfigService, JwtService, UsersService, PresenceService, PlatformSettingsService],
+      imports: [
+        ConfigModule,
+        UsersModule,
+        AuthModule,
+        PresenceModule,
+        PlatformSettingsModule,
+      ],
+      inject: [
+        ConfigService,
+        JwtService,
+        UsersService,
+        PresenceService,
+        PlatformSettingsService,
+      ],
       useFactory: (
         config: ConfigService,
         jwtService: JwtService,

@@ -19,7 +19,9 @@ export function monthBoundsUtc(monthKey: string): { start: Date; end: Date } {
     throw new Error(`Invalid month key: ${monthKey}`);
   }
   const start = new Date(Date.UTC(y, m - 1, 1, 0, 0, 0, 0));
-  const end = new Date(Date.UTC(m === 12 ? y + 1 : y, m === 12 ? 0 : m, 1, 0, 0, 0, 0));
+  const end = new Date(
+    Date.UTC(m === 12 ? y + 1 : y, m === 12 ? 0 : m, 1, 0, 0, 0, 0),
+  );
   return { start, end };
 }
 
@@ -32,5 +34,9 @@ export function nextMonthKey(monthKey: string): string {
 export function formatCoinMonthLabel(monthKey: string): string {
   const [y, m] = monthKey.split('-').map(Number);
   const d = new Date(Date.UTC(y, m - 1, 1));
-  return d.toLocaleString('en-US', { month: 'long', year: 'numeric', timeZone: 'UTC' });
+  return d.toLocaleString('en-US', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
 }

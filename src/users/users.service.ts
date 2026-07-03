@@ -376,7 +376,9 @@ export class UsersService {
       .find({ 'pushTokens.0': { $exists: true } }, { pushTokens: 1 })
       .lean<{ pushTokens?: PushToken[] }[]>()
       .exec();
-    return docs.flatMap((d) => (d.pushTokens ?? []).map((t) => t.token)).filter(Boolean);
+    return docs
+      .flatMap((d) => (d.pushTokens ?? []).map((t) => t.token))
+      .filter(Boolean);
   }
 
   /** Purge tokens that FCM reported as invalid/unregistered, across all users. */

@@ -10,9 +10,7 @@ import { OrganizationsModule } from '../organizations/organizations.module';
 
 @Module({
   imports: [
-    MongooseModule.forFeature([
-      { name: Post.name, schema: PostSchema },
-    ]),
+    MongooseModule.forFeature([{ name: Post.name, schema: PostSchema }]),
     PostsModule,
     FollowsModule,
     OrganizationsModule,

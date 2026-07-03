@@ -56,9 +56,7 @@ export class VotesResolver {
    */
   @Query(() => Int)
   @UseGuards(GqlAuthGuard)
-  async userVoteCount(
-    @Args('userId', { type: () => ID }) userId: string,
-  ) {
+  async userVoteCount(@Args('userId', { type: () => ID }) userId: string) {
     return this.votesService.countVotesByUser(userId);
   }
 

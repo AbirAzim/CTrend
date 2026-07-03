@@ -39,7 +39,9 @@ function isAndroidClient(
   const platform = headerValue(headers, 'x-app-platform')?.toLowerCase();
   if (platform === 'android') return true;
   const ua = headerValue(headers, 'user-agent')?.toLowerCase() ?? '';
-  return ua.includes('android') && (ua.includes('okhttp') || ua.includes('react'));
+  return (
+    ua.includes('android') && (ua.includes('okhttp') || ua.includes('react'))
+  );
 }
 
 export function createAndroidVersionEnforcementPlugin(
@@ -66,7 +68,10 @@ export function createAndroidVersionEnforcementPlugin(
           const androidClient = isAndroidClient(headers);
 
           if (userId && clientVersion > 0) {
-            void usersService.updateLastAndroidVersionCode(userId, clientVersion);
+            void usersService.updateLastAndroidVersionCode(
+              userId,
+              clientVersion,
+            );
           }
 
           let recordedVersion = 0;
@@ -87,8 +92,7 @@ export function createAndroidVersionEnforcementPlugin(
             extensions: {
               code: 'ANDROID_UPDATE_REQUIRED',
               minAndroidVersionCode: minRequired,
-              title:
-                settings.androidUpdateTitle?.trim() || 'Update required',
+              title: settings.androidUpdateTitle?.trim() || 'Update required',
               body:
                 settings.androidUpdateBody?.trim() ||
                 'A newer version of Ke Jitbe is available. Please update from Google Play.',

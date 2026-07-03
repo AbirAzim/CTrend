@@ -17,7 +17,10 @@ export type ParsedFixtureScores = {
   winner: string | null;
 };
 
-type ApiScorePair = { home: number | null; away: number | null } | null | undefined;
+type ApiScorePair =
+  | { home: number | null; away: number | null }
+  | null
+  | undefined;
 
 export function readScorePair(pair: ApiScorePair): ScorePair | null {
   if (!pair || pair.home == null || pair.away == null) return null;
@@ -58,8 +61,7 @@ export function normalizeExtraTimeScore(
   if (!summed) return apiExtra;
 
   const matchesBoard =
-    apiExtra.home === currentGoals.home &&
-    apiExtra.away === currentGoals.away;
+    apiExtra.home === currentGoals.home && apiExtra.away === currentGoals.away;
   const overshootsBoard =
     summed.home > currentGoals.home || summed.away > currentGoals.away;
 
@@ -75,7 +77,10 @@ export function normalizeExtraTimeScore(
 
 type ApiFixtureItem = {
   fixture: { status: { short: string } };
-  teams: { home: { winner?: boolean | null }; away: { winner?: boolean | null } };
+  teams: {
+    home: { winner?: boolean | null };
+    away: { winner?: boolean | null };
+  };
   goals: { home: number | null; away: number | null };
   score?: {
     fulltime?: ApiScorePair;
@@ -98,9 +103,7 @@ export function parseFixtureScores(
   );
   const penalty = readScorePair(item.score?.penalty);
   const wentToExtraTime =
-    extraTime != null ||
-    isLiveExtraTimePhase(rawStatus) ||
-    rawStatus === 'AET';
+    extraTime != null || isLiveExtraTimePhase(rawStatus) || rawStatus === 'AET';
   const afterExtraTime = scoreAfterExtraTime(fullTime, extraTime);
   const wentToPenalties = computeWentToPenalties(
     rawStatus,

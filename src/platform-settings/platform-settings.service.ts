@@ -15,7 +15,9 @@ export class PlatformSettingsService {
     private readonly model: Model<PlatformSettingsDocument>,
   ) {}
 
-  private toGqlFromDoc(doc: PlatformSettingsDocument | null): PlatformSettingsGql {
+  private toGqlFromDoc(
+    doc: PlatformSettingsDocument | null,
+  ): PlatformSettingsGql {
     return {
       allowUserGlobalPosts: doc?.allowUserGlobalPosts ?? false,
       minAndroidVersionCode: doc?.minAndroidVersionCode ?? 0,
@@ -56,7 +58,9 @@ export class PlatformSettingsService {
     return Boolean(doc.referralSystemEnabled);
   }
 
-  async setAllowUserGlobalPosts(enabled: boolean): Promise<PlatformSettingsGql> {
+  async setAllowUserGlobalPosts(
+    enabled: boolean,
+  ): Promise<PlatformSettingsGql> {
     const doc = await this.model
       .findOneAndUpdate(
         { key: PLATFORM_SETTINGS_KEY },
@@ -67,7 +71,9 @@ export class PlatformSettingsService {
     return this.toGqlFromDoc(doc);
   }
 
-  async setReferralSystemEnabled(enabled: boolean): Promise<PlatformSettingsGql> {
+  async setReferralSystemEnabled(
+    enabled: boolean,
+  ): Promise<PlatformSettingsGql> {
     const doc = await this.model
       .findOneAndUpdate(
         { key: PLATFORM_SETTINGS_KEY },
@@ -78,7 +84,9 @@ export class PlatformSettingsService {
     return this.toGqlFromDoc(doc);
   }
 
-  async setMinAndroidVersionCode(versionCode: number): Promise<PlatformSettingsGql> {
+  async setMinAndroidVersionCode(
+    versionCode: number,
+  ): Promise<PlatformSettingsGql> {
     const safe = Math.max(0, Math.floor(Number(versionCode) || 0));
     const doc = await this.model
       .findOneAndUpdate(

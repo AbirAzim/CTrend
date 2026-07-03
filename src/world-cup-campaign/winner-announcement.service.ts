@@ -3,7 +3,10 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { Fixture, FixtureDocument } from '../fixtures/fixture.schema';
-import { CampaignWinner, CampaignWinnerDocument } from './campaign-winner.schema';
+import {
+  CampaignWinner,
+  CampaignWinnerDocument,
+} from './campaign-winner.schema';
 import { WorldCupCampaignService } from './world-cup-campaign.service';
 import { POST_UPDATED, pubsub } from '../pubsub';
 
@@ -48,10 +51,7 @@ export class WinnerAnnouncementService {
 
     const resolvedSet = new Set(
       existingRecords
-        .filter(
-          (r) =>
-            r.userId != null || Boolean(r.note?.trim()),
-        )
+        .filter((r) => r.userId != null || Boolean(r.note?.trim()))
         .map((r) => r.fixtureId.toString()),
     );
     const pending = ready.filter((f) => !resolvedSet.has(f._id.toString()));

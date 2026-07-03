@@ -14,16 +14,21 @@ describe('normalizeExtraTimeScore', () => {
       home: 0,
       away: 0,
     });
-    expect(scoreAfterExtraTime(fullTime, normalizeExtraTimeScore(fullTime, apiExtra, goals))).toEqual(
-      goals,
-    );
+    expect(
+      scoreAfterExtraTime(
+        fullTime,
+        normalizeExtraTimeScore(fullTime, apiExtra, goals),
+      ),
+    ).toEqual(goals);
   });
 
   it('keeps true ET deltas when sum matches goals', () => {
     const fullTime = { home: 1, away: 1 };
     const apiExtra = { home: 1, away: 0 };
     const goals = { home: 2, away: 1 };
-    expect(normalizeExtraTimeScore(fullTime, apiExtra, goals)).toEqual(apiExtra);
+    expect(normalizeExtraTimeScore(fullTime, apiExtra, goals)).toEqual(
+      apiExtra,
+    );
   });
 });
 

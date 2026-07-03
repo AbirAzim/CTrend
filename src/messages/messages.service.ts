@@ -237,8 +237,7 @@ export class MessagesService {
           $set: {
             lastMessageText: welcome.slice(0, 100),
             lastMessageAt: msg.createdAt,
-            [`unreadCounts.${userId}`]:
-              (convo.unreadCounts?.[userId] ?? 0) + 1,
+            [`unreadCounts.${userId}`]: (convo.unreadCounts?.[userId] ?? 0) + 1,
             supportWelcomeAt: msg.createdAt,
           },
         },
@@ -763,7 +762,10 @@ export class MessagesService {
    * are cleared and `deleted` is flagged so clients render "message deleted".
    * Broadcasts to participants so open chats update in real time.
    */
-  async deleteMessage(viewerId: string, messageId: string): Promise<MessageGql> {
+  async deleteMessage(
+    viewerId: string,
+    messageId: string,
+  ): Promise<MessageGql> {
     const msg = await this.messageModel.findById(messageId).exec();
     if (!msg) throw new NotFoundException('Message not found');
     if (!msg.senderId.equals(new Types.ObjectId(viewerId))) {
@@ -799,8 +801,7 @@ export class MessagesService {
 
     await pubsub.publish(MESSAGE_DELETED, {
       messageDeleted: gql,
-      participantIds:
-        convo?.participantIds.map((id) => id.toHexString()) ?? [],
+      participantIds: convo?.participantIds.map((id) => id.toHexString()) ?? [],
     });
 
     return gql;

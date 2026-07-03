@@ -1,9 +1,6 @@
 import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
-import {
-  ContentReport,
-  ContentReportSchema,
-} from './content-report.schema';
+import { ContentReport, ContentReportSchema } from './content-report.schema';
 import { Post, PostSchema } from '../posts/post.schema';
 import { ContentReportsService } from './content-reports.service';
 import { ContentReportsResolver } from './content-reports.resolver';

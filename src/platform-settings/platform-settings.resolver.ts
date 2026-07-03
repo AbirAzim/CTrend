@@ -56,11 +56,12 @@ export class PlatformSettingsResolver {
     @Args('body') body: string,
     @Args('minVersionCode', { type: () => Int }) minVersionCode: number,
   ): Promise<number> {
-    const settings = await this.platformSettingsService.publishAndroidUpdateNotice(
-      title,
-      body,
-      minVersionCode,
-    );
+    const settings =
+      await this.platformSettingsService.publishAndroidUpdateNotice(
+        title,
+        body,
+        minVersionCode,
+      );
     return this.notificationsService.sendAndroidUpdateNotice(
       title.trim(),
       body.trim(),

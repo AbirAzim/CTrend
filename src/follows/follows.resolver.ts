@@ -49,9 +49,7 @@ export class FollowsResolver {
   /** Public-ish: another user's mutual-friend list (used on their profile). */
   @Query(() => [UserGql])
   @UseGuards(GqlAuthGuard)
-  async userFriends(
-    @Args('userId', { type: () => ID }) userId: string,
-  ) {
+  async userFriends(@Args('userId', { type: () => ID }) userId: string) {
     return this.followsService.getMyFriends(userId);
   }
 

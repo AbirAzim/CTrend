@@ -7,7 +7,11 @@ import {
   Query,
   Resolver,
 } from '@nestjs/graphql';
-import { ForbiddenException, UseGuards, BadRequestException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  UseGuards,
+  BadRequestException,
+} from '@nestjs/common';
 import { InvitationsService } from './invitations.service';
 import { GqlAuthGuard } from '../common/guards/gql-auth.guard';
 import { RolesGuard } from '../common/guards/roles.guard';

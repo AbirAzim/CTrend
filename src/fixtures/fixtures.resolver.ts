@@ -1,7 +1,13 @@
 import { Args, ID, Mutation, Query, Resolver } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { FixturesService } from './fixtures.service';
-import { FixtureGql, FixtureFilterInput, FixtureDetailsSyncResultGql, TopScorerGql, TopAssistantGql } from './graphql/fixture.types';
+import {
+  FixtureGql,
+  FixtureFilterInput,
+  FixtureDetailsSyncResultGql,
+  TopScorerGql,
+  TopAssistantGql,
+} from './graphql/fixture.types';
 import { PostGql } from '../posts/graphql/post.types';
 import { PostsService } from '../posts/posts.service';
 import { GqlAuthGuard } from '../common/guards/gql-auth.guard';
@@ -68,7 +74,8 @@ export class FixturesResolver {
     @Args('fixtureId', { type: () => ID }) fixtureId: string,
   ): Promise<FixtureDetailsSyncResultGql> {
     const doc = await this.fixturesService.findById(fixtureId);
-    if (!doc) return { events: 0, stats: 0, lineups: 0, error: 'Fixture not found' };
+    if (!doc)
+      return { events: 0, stats: 0, lineups: 0, error: 'Fixture not found' };
     return this.fixturesService.syncMatchDetails(doc, true);
   }
 

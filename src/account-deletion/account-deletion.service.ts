@@ -156,7 +156,9 @@ export class AccountDeletionService {
       .lean()
       .exec();
 
-    const conversationIds = userConversations.map((c) => c._id as Types.ObjectId);
+    const conversationIds = userConversations.map(
+      (c) => c._id as Types.ObjectId,
+    );
 
     if (conversationIds.length > 0) {
       await Promise.all([

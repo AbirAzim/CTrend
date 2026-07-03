@@ -89,11 +89,7 @@ export class WorldCupCampaignService implements OnModuleInit {
         $and: [
           { $or: [{ userId: null }, { userId: { $exists: false } }] },
           {
-            $or: [
-              { note: null },
-              { note: '' },
-              { note: { $exists: false } },
-            ],
+            $or: [{ note: null }, { note: '' }, { note: { $exists: false } }],
           },
         ],
       })
@@ -141,7 +137,9 @@ export class WorldCupCampaignService implements OnModuleInit {
       }
     }
     if (processed) {
-      this.logger.log(`Processed ${processed} pending campaign winner(s) on startup`);
+      this.logger.log(
+        `Processed ${processed} pending campaign winner(s) on startup`,
+      );
     }
     return processed;
   }
@@ -218,7 +216,9 @@ export class WorldCupCampaignService implements OnModuleInit {
         campaignObjId = campaignPost.campaignId as Types.ObjectId;
       }
     }
-    const scoreWinner = this.normalizeScoreWinner(fixture.score?.winner ?? null); // HOME_TEAM | AWAY_TEAM | DRAW | null
+    const scoreWinner = this.normalizeScoreWinner(
+      fixture.score?.winner ?? null,
+    ); // HOME_TEAM | AWAY_TEAM | DRAW | null
     const prize = campaignPrizeForFixtureStage(fixture.stage);
 
     // Unknown result — record without a winner userId
@@ -242,7 +242,11 @@ export class WorldCupCampaignService implements OnModuleInit {
       if (fixture.hasDrawOption) {
         // Option 2 is the "Draw 🤝" option
         winningOptionIndex = 2;
-        voteFilter = { postId, selectedOptionIndex: 2, anonymous: { $ne: true } };
+        voteFilter = {
+          postId,
+          selectedOptionIndex: 2,
+          anonymous: { $ne: true },
+        };
         noWinnersNote = 'Match was a draw — no one voted for Draw 🤝';
       } else {
         // Legacy 2-option post: draw from all voters
@@ -260,10 +264,7 @@ export class WorldCupCampaignService implements OnModuleInit {
       noWinnersNote = 'No users voted for the winning side';
     }
 
-    const eligibleVotes = await this.voteModel
-      .find(voteFilter)
-      .lean()
-      .exec();
+    const eligibleVotes = await this.voteModel.find(voteFilter).lean().exec();
 
     if (!eligibleVotes.length) {
       const record = await this.campaignWinnerModel.create({
@@ -288,11 +289,7 @@ export class WorldCupCampaignService implements OnModuleInit {
     const finalAway = fixture.score?.away;
     const exactPredictorIds =
       finalHome != null && finalAway != null
-        ? await this.getExactPredictorUserIds(
-            fixture._id,
-            finalHome,
-            finalAway,
-          )
+        ? await this.getExactPredictorUserIds(fixture._id, finalHome, finalAway)
         : new Set<string>();
 
     const cooldownUserIds = await this.getCooldownUserIdSet(
@@ -351,7 +348,9 @@ export class WorldCupCampaignService implements OnModuleInit {
       prize,
       winningOption: winningOptionIndex,
       paid: false,
-      ...(wonViaExactScore ? { note: 'Won via exact score prediction 🎯' } : {}),
+      ...(wonViaExactScore
+        ? { note: 'Won via exact score prediction 🎯' }
+        : {}),
     });
     // Stamp the post so claimPostVotePrize can verify winner eligibility
     await this.postModel.updateOne(
@@ -359,7 +358,8 @@ export class WorldCupCampaignService implements OnModuleInit {
       {
         $set: {
           voteWinnerUserId: drawn.userId,
-          voteWinnerOptionIndex: winningOptionIndex ?? drawn.selectedOptionIndex,
+          voteWinnerOptionIndex:
+            winningOptionIndex ?? drawn.selectedOptionIndex,
           voteWinnerPickedAt: pickedAt,
         },
       },
@@ -699,9 +699,10 @@ export class WorldCupCampaignService implements OnModuleInit {
   }
 
   /** Weighted random pick — used only when no first-time winners remain. */
-  private drawWeightedCampaignWinner<
-    T extends { userId: Types.ObjectId },
-  >(pool: T[], pastWinCountByUser: Map<string, number>): T {
+  private drawWeightedCampaignWinner<T extends { userId: Types.ObjectId }>(
+    pool: T[],
+    pastWinCountByUser: Map<string, number>,
+  ): T {
     if (pool.length === 1) return pool[0];
 
     let total = 0;

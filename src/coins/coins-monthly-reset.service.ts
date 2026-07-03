@@ -2,10 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { CoinsService } from './coins.service';
 import { PlatformSettingsService } from '../platform-settings/platform-settings.service';
-import {
-  currentCompetingMonthKey,
-  nextMonthKey,
-} from './coin-monthly.utils';
+import { currentCompetingMonthKey, nextMonthKey } from './coin-monthly.utils';
 
 @Injectable()
 export class CoinsMonthlyResetService implements OnModuleInit {
@@ -95,6 +92,8 @@ export class CoinsMonthlyResetService implements OnModuleInit {
     await this.coins.finalizeMonth(monthKey);
     await this.platformSettings.setCurrentCoinMonthKey(nextMonth);
     await this.coins.syncMonthCoinsFromLedger(nextMonth);
-    this.logger.log(`Bootstrapped: finalized ${monthKey}, now competing in ${nextMonth}`);
+    this.logger.log(
+      `Bootstrapped: finalized ${monthKey}, now competing in ${nextMonth}`,
+    );
   }
 }

@@ -5,11 +5,11 @@ import { CoinLedger, CoinLedgerDocument } from './coin-ledger.schema';
 import { User, UserDocument } from '../users/user.schema';
 import { CoinType, CoinTypeValue, COIN_AMOUNTS } from './coins.constants';
 import { UserRole } from '../common/enums';
+import { currentCompetingMonthKey, monthBoundsUtc } from './coin-monthly.utils';
 import {
-  currentCompetingMonthKey,
-  monthBoundsUtc,
-} from './coin-monthly.utils';
-import { CoinMonthlySnapshot, CoinMonthlySnapshotDocument } from './coin-monthly-snapshot.schema';
+  CoinMonthlySnapshot,
+  CoinMonthlySnapshotDocument,
+} from './coin-monthly-snapshot.schema';
 
 export type AwardResult = { awarded: number; balance: number };
 
@@ -31,9 +31,7 @@ const NON_ADMIN_LEADERBOARD_FILTER = {
 };
 
 function userHoldsAdminRole(user: Pick<User, 'role' | 'roles'>): boolean {
-  return (
-    user.roles?.includes(UserRole.ADMIN) || user.role === UserRole.ADMIN
-  );
+  return user.roles?.includes(UserRole.ADMIN) || user.role === UserRole.ADMIN;
 }
 
 @Injectable()
@@ -66,7 +64,8 @@ export class CoinsService {
       }
       const amount = amountOverride ?? COIN_AMOUNTS[type] ?? 0;
       const uid = new Types.ObjectId(userId);
-      if (amount <= 0) return { awarded: 0, balance: await this.getBalance(userId) };
+      if (amount <= 0)
+        return { awarded: 0, balance: await this.getBalance(userId) };
 
       const res = await this.ledgerModel.updateOne(
         { userId: uid, type, refId },
@@ -275,9 +274,13 @@ export class CoinsService {
    * Does not reset balances — call syncMonthCoinsFromLedger for the new month after.
    */
   async finalizeMonth(monthKey: string): Promise<{ top3: MonthCoinRow[] }> {
-    const existing = await this.snapshotModel.countDocuments({ monthKey }).exec();
+    const existing = await this.snapshotModel
+      .countDocuments({ monthKey })
+      .exec();
     if (existing > 0) {
-      this.logger.warn(`Month ${monthKey} already finalized (${existing} snapshots) — skipping`);
+      this.logger.warn(
+        `Month ${monthKey} already finalized (${existing} snapshots) — skipping`,
+      );
       const top = await this.snapshotModel
         .find({ monthKey, rank: { $lte: 3 } })
         .sort({ rank: 1 })
@@ -324,12 +327,16 @@ export class CoinsService {
   async getLeaderboardRank(userId: string): Promise<number | null> {
     if (!Types.ObjectId.isValid(userId)) return null;
     const user = await this.userModel.findById(userId).exec();
-    if (!user || (user.coins ?? 0) <= 0 || userHoldsAdminRole(user)) return null;
+    if (!user || (user.coins ?? 0) <= 0 || userHoldsAdminRole(user))
+      return null;
     const coins = user.coins ?? 0;
     const createdAt = user.createdAt ?? new Date(0);
     const ahead = await this.userModel.countDocuments({
       ...NON_ADMIN_LEADERBOARD_FILTER,
-      $or: [{ coins: { $gt: coins } }, { coins, createdAt: { $lt: createdAt } }],
+      $or: [
+        { coins: { $gt: coins } },
+        { coins, createdAt: { $lt: createdAt } },
+      ],
     });
     return ahead + 1;
   }

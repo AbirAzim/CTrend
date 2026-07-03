@@ -33,7 +33,11 @@ export class Post {
   format: PostFormat;
 
   /** Two-image compare orientation (side-by-side vs stacked). */
-  @Prop({ type: String, enum: CompareLayout, default: CompareLayout.HORIZONTAL })
+  @Prop({
+    type: String,
+    enum: CompareLayout,
+    default: CompareLayout.HORIZONTAL,
+  })
   compareLayout: CompareLayout;
 
   @Prop({ trim: true })

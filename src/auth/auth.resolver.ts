@@ -48,11 +48,7 @@ export class AuthResolver {
     @Args('code') code: string,
     @Args('referralCode', { nullable: true }) referralCode?: string,
   ) {
-    return this.authService.verifyEmail(
-      email,
-      code,
-      referralCode ?? undefined,
-    );
+    return this.authService.verifyEmail(email, code, referralCode ?? undefined);
   }
 
   @Mutation(() => Boolean)

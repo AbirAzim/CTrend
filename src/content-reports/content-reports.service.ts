@@ -6,10 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
-import {
-  ContentReport,
-  ContentReportDocument,
-} from './content-report.schema';
+import { ContentReport, ContentReportDocument } from './content-report.schema';
 import { Post, PostDocument } from '../posts/post.schema';
 import { ReportContentInput } from './dto/report-content.input';
 import {

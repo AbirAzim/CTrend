@@ -22,7 +22,9 @@ export class FixturesSyncService {
   ) {
     this.disabled = this.config.get<string>('DISABLE_FIXTURES_SYNC') === 'true';
     if (this.disabled) {
-      this.logger.warn('Fixtures auto-sync disabled (DISABLE_FIXTURES_SYNC=true)');
+      this.logger.warn(
+        'Fixtures auto-sync disabled (DISABLE_FIXTURES_SYNC=true)',
+      );
     }
   }
 
@@ -39,7 +41,9 @@ export class FixturesSyncService {
       // without extra API calls (existing mobile apps rely on post.matchScore).
       const liveReconciled = await this.fixturesService.reconcileLivePosts();
       if (liveReconciled > 0) {
-        this.logger.log(`Live post reconcile — ${liveReconciled} post(s) refreshed`);
+        this.logger.log(
+          `Live post reconcile — ${liveReconciled} post(s) refreshed`,
+        );
       }
       await this.fixturesService.reconcileFinishedPosts();
     } catch (err) {

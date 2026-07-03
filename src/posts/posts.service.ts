@@ -1318,7 +1318,11 @@ export class PostsService implements OnModuleInit {
     );
     const scheduledAt = this.parseFutureDate(input.scheduledAt, 'scheduledAt');
     const status = scheduledAt ? PostStatus.SCHEDULED : PostStatus.PUBLISHED;
-    const campaignOid = await this.resolveCampaignId(input.campaignId, adminId, UserRole.ADMIN);
+    const campaignOid = await this.resolveCampaignId(
+      input.campaignId,
+      adminId,
+      UserRole.ADMIN,
+    );
     const isAnnouncement = format === PostFormat.ANNOUNCEMENT;
     const doc = await this.postModel.create({
       type: PostType.SYSTEM,
@@ -1326,7 +1330,9 @@ export class PostsService implements OnModuleInit {
       compareLayout: this.resolveCompareLayout(format, input.compareLayout),
       contentText,
       imageUrls: input.imageUrls ?? [],
-      options: isAnnouncement ? [] : (input.options ?? []).map((o) => this.mapOptionInput(o)),
+      options: isAnnouncement
+        ? []
+        : (input.options ?? []).map((o) => this.mapOptionInput(o)),
       categoryId: category._id,
       visibility: Visibility.PUBLIC,
       createdBy: new Types.ObjectId(adminId),
@@ -1334,7 +1340,12 @@ export class PostsService implements OnModuleInit {
       voteCount: 0,
       commentsDisabled: false,
       likesDisabled: false,
-      ...(isAnnouncement ? {} : { votingEndsAt, endingSoonLeadMinutes: DEFAULT_ENDING_SOON_LEAD_MINUTES }),
+      ...(isAnnouncement
+        ? {}
+        : {
+            votingEndsAt,
+            endingSoonLeadMinutes: DEFAULT_ENDING_SOON_LEAD_MINUTES,
+          }),
       status,
       scheduledAt,
       campaignId: campaignOid,
@@ -1488,19 +1499,31 @@ export class PostsService implements OnModuleInit {
   }
 
   async toGql(post: PostDocument, viewerId?: string): Promise<PostGql> {
-    const [category, author, commentCount, likeCount, hypeCount, saveCount] =
-      await Promise.all([
-        this.categoriesService.findById(post.categoryId.toString()),
-        this.usersService.findById(post.createdBy.toString()),
-        this.commentModel.countDocuments({ postId: post._id }).exec(),
-        this.postReactionModel
-          .countDocuments({ postId: post._id, kind: 'like' })
-          .exec(),
-        this.postReactionModel
-          .countDocuments({ postId: post._id, kind: 'hype' })
-          .exec(),
-        this.savedPostModel.countDocuments({ postId: post._id }).exec(),
-      ]);
+    const [
+      category,
+      author,
+      commentCount,
+      likeCount,
+      hypeCount,
+      saveCount,
+      recentComments,
+    ] = await Promise.all([
+      this.categoriesService.findById(post.categoryId.toString()),
+      this.usersService.findById(post.createdBy.toString()),
+      this.commentModel.countDocuments({ postId: post._id }).exec(),
+      this.postReactionModel
+        .countDocuments({ postId: post._id, kind: 'like' })
+        .exec(),
+      this.postReactionModel
+        .countDocuments({ postId: post._id, kind: 'hype' })
+        .exec(),
+      this.savedPostModel.countDocuments({ postId: post._id }).exec(),
+      this.commentsService.listPreviewComments(
+        post._id.toHexString(),
+        2,
+        viewerId,
+      ),
+    ]);
     if (!category || !author) {
       throw new NotFoundException('Related data missing');
     }
@@ -1656,7 +1679,7 @@ export class PostsService implements OnModuleInit {
       saveCount,
       viewerHasSaved: !!viewerHasSaved,
       viewerHasHyped: !!viewerHasHyped,
-      recentComments: [],
+      recentComments,
       totalVotes: stats.totalVotes,
       upvoteCount: stats.countsPerOption[0] ?? 0,
       downvoteCount: stats.countsPerOption[1] ?? 0,

@@ -67,7 +67,9 @@ export class InvitationsService {
       const exists = await this.invitationModel.exists({ referralCode: code });
       if (!exists) return code;
     }
-    throw new BadRequestException('Could not generate referral code — try again');
+    throw new BadRequestException(
+      'Could not generate referral code — try again',
+    );
   }
 
   async invite(
@@ -147,7 +149,9 @@ export class InvitationsService {
     });
   }
 
-  async findByReferralCode(rawCode: string): Promise<InvitationDocument | null> {
+  async findByReferralCode(
+    rawCode: string,
+  ): Promise<InvitationDocument | null> {
     const code = rawCode.trim().toUpperCase();
     if (!code) return null;
     return this.invitationModel.findOne({
@@ -174,7 +178,9 @@ export class InvitationsService {
     const user = await this.usersService.findById(userId);
     if (!user) throw new NotFoundException('User not found');
     if (!user.emailVerified) {
-      throw new BadRequestException('Verify your email before redeeming a code');
+      throw new BadRequestException(
+        'Verify your email before redeeming a code',
+      );
     }
 
     const invitation = await this.findByReferralCode(code);
@@ -190,7 +196,9 @@ export class InvitationsService {
     }
 
     if (invitation.invitedBy.toHexString() === userId) {
-      throw new BadRequestException('You cannot redeem your own invitation code');
+      throw new BadRequestException(
+        'You cannot redeem your own invitation code',
+      );
     }
 
     return this.fulfillInvitation(invitation, userId);
@@ -230,7 +238,9 @@ export class InvitationsService {
       .exec();
 
     if (!updated) {
-      throw new BadRequestException('This invitation has already been redeemed');
+      throw new BadRequestException(
+        'This invitation has already been redeemed',
+      );
     }
 
     const referralEnabled =
@@ -282,9 +292,7 @@ export class InvitationsService {
         this.usersService.findById(params.inviterId),
       ]);
       const inviteeName =
-        invitee?.displayName?.trim() ||
-        invitee?.username?.trim() ||
-        'Someone';
+        invitee?.displayName?.trim() || invitee?.username?.trim() || 'Someone';
       const inviterName =
         inviter?.displayName?.trim() ||
         inviter?.username?.trim() ||

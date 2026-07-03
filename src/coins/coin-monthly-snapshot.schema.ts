@@ -1,10 +1,11 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument, Types } from 'mongoose';
 
-export type CoinMonthlySnapshotDocument = HydratedDocument<CoinMonthlySnapshot> & {
-  createdAt: Date;
-  updatedAt: Date;
-};
+export type CoinMonthlySnapshotDocument =
+  HydratedDocument<CoinMonthlySnapshot> & {
+    createdAt: Date;
+    updatedAt: Date;
+  };
 
 /** One row per user per finalized month (top earners stored; rank 1–3 get podium credit). */
 @Schema({ timestamps: true })

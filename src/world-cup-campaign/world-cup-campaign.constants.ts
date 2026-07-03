@@ -26,7 +26,9 @@ export const CAMPAIGN_PRIZE_FINAL = 1000;
 export const CAMPAIGN_PRIZE_THIRD_PLACE = 200;
 
 /** Cash prize (BDT) for a campaign draw, based on fixture stage. */
-export function campaignPrizeForFixtureStage(stage: string | null | undefined): number {
+export function campaignPrizeForFixtureStage(
+  stage: string | null | undefined,
+): number {
   const s = (stage ?? '').toUpperCase();
   if (s === 'FINAL') return CAMPAIGN_PRIZE_FINAL;
   if (s === 'SEMI_FINALS') return CAMPAIGN_PRIZE_SEMI_FINAL;

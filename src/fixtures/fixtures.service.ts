@@ -264,6 +264,13 @@ function deriveWinner(
  * deriveWinner now emits 'HOME_TEAM'/'AWAY_TEAM'/'DRAW'. Map both to the latter
  * so all clients can rely on a single format.
  */
+/** Campaign match posts go live this long before kickoff (voting ends at kickoff). */
+export const WC_MATCH_POST_LEAD_MS = 24 * 60 * 60 * 1000;
+
+function matchPostGoLiveAt(kickoff: Date): Date {
+  return new Date(kickoff.getTime() - WC_MATCH_POST_LEAD_MS);
+}
+
 function normalizeWinner(winner?: string | null): string | null {
   if (!winner) return null;
   switch (winner.toUpperCase()) {
@@ -984,6 +991,48 @@ export class FixturesService implements OnModuleInit {
   }
 
   /**
+   * Keep scheduled match posts aligned with fixture kickoff (e.g. after full API sync).
+   * Publish time is always kickoff − 24 h; voting closes at kickoff.
+   */
+  async reconcileScheduledMatchPostDates(): Promise<number> {
+    const fixtures = await this.fixtureModel
+      .find({ campaignPostId: { $exists: true } })
+      .select({ kickoff: 1, campaignPostId: 1, homeTeam: 1, awayTeam: 1 })
+      .exec();
+
+    let updated = 0;
+    for (const fixture of fixtures) {
+      const post = await this.postModel
+        .findOne({
+          _id: fixture.campaignPostId,
+          status: PostStatus.SCHEDULED,
+          matchType: true,
+        })
+        .select({ scheduledAt: 1, votingEndsAt: 1 })
+        .exec();
+      if (!post) continue;
+
+      const goLiveAt = matchPostGoLiveAt(fixture.kickoff);
+      const scheduledMs = post.scheduledAt?.getTime();
+      const votingMs = post.votingEndsAt?.getTime();
+      const kickoffMs = fixture.kickoff.getTime();
+      if (scheduledMs === goLiveAt.getTime() && votingMs === kickoffMs) {
+        continue;
+      }
+
+      await this.postModel.updateOne(
+        { _id: post._id },
+        { $set: { scheduledAt: goLiveAt, votingEndsAt: fixture.kickoff } },
+      );
+      updated++;
+      this.logger.log(
+        `Aligned scheduled post for ${fixture.homeTeam.name} vs ${fixture.awayTeam.name} → publish ${goLiveAt.toISOString()}`,
+      );
+    }
+    return updated;
+  }
+
+  /**
    * Cron updater — refreshes dynamic fields (status / minute / score / kickoff)
    * for all WC fixtures, handles FINISHED transitions (set matchEndedAt /
    * winnerScheduledAt) and postponement kickoff changes.
@@ -1073,9 +1122,7 @@ export class FixturesService implements OnModuleInit {
         newStatus !== 'FINISHED' &&
         existing.campaignPostId
       ) {
-        const newScheduledAt = new Date(
-          newKickoff.getTime() - 24 * 60 * 60 * 1000,
-        );
+        const newScheduledAt = matchPostGoLiveAt(newKickoff);
         await this.postModel.updateOne(
           { _id: existing.campaignPostId, status: PostStatus.SCHEDULED },
           { $set: { scheduledAt: newScheduledAt, votingEndsAt: newKickoff } },
@@ -1711,13 +1758,11 @@ export class FixturesService implements OnModuleInit {
     }
 
     const kickoff = fixture.kickoff;
-    const twentyFourHoursBefore = new Date(
-      kickoff.getTime() - 24 * 60 * 60 * 1000,
-    );
+    const goLiveAt = matchPostGoLiveAt(kickoff);
     const now = new Date();
 
-    const isScheduled = twentyFourHoursBefore > now;
-    const scheduledAt = isScheduled ? twentyFourHoursBefore : undefined;
+    const isScheduled = goLiveAt > now;
+    const scheduledAt = isScheduled ? goLiveAt : undefined;
     const status = isScheduled ? PostStatus.SCHEDULED : PostStatus.PUBLISHED;
 
     const home = fixture.homeTeam;

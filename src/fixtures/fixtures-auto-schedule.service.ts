@@ -7,11 +7,22 @@ import { Fixture, FixtureDocument } from './fixture.schema';
 import { FixturesService } from './fixtures.service';
 import { UsersService } from '../users/users.service';
 
-/** Schedules campaign posts for fixtures kicking off within the next 72 hours. */
+/** How far back we still create posts for fixtures that were missed (e.g. deploy downtime). */
+const SCHEDULE_BACKFILL_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * Keeps the World Cup fixture list in sync with API-Football and auto-creates
+ * scheduled campaign posts (24 h before kickoff) for every match that appears
+ * in the API without a post yet.
+ *
+ * Disable with DISABLE_WC_FIXTURE_AUTO_IMPORT=true.
+ */
 @Injectable()
 export class FixturesAutoScheduleService implements OnModuleInit {
   private readonly logger = new Logger(FixturesAutoScheduleService.name);
   private readonly adminEmail: string;
+  private readonly disabled: boolean;
+  private running = false;
 
   constructor(
     @InjectModel(Fixture.name) private fixtureModel: Model<FixtureDocument>,
@@ -22,18 +33,61 @@ export class FixturesAutoScheduleService implements OnModuleInit {
     this.adminEmail =
       this.configService.get<string>('WC_AUTO_SCHEDULE_ADMIN_EMAIL') ??
       'badhonkhanbk007@gmail.com';
+    this.disabled =
+      this.configService.get<string>('DISABLE_WC_FIXTURE_AUTO_IMPORT') ===
+      'true';
+    if (this.disabled) {
+      this.logger.warn(
+        'WC fixture import + auto-schedule disabled (DISABLE_WC_FIXTURE_AUTO_IMPORT=true)',
+      );
+    }
   }
 
   async onModuleInit(): Promise<void> {
-    // Run once on startup so deploys immediately fill the 72-hour window
-    // and reconcile any finished matches that were missed during downtime.
-    await this.scheduleUpcoming();
+    if (this.disabled) return;
+    // Run once on startup so deploys immediately import new rounds and schedule posts.
+    await this.syncAndSchedule();
     await this.fixturesService.reconcileFinishedPosts();
     await this.fixturesService.reconcileIncompleteMatchEvents();
   }
 
   @Cron(CronExpression.EVERY_4_HOURS)
-  async scheduleUpcoming(): Promise<void> {
+  async syncAndScheduleCron(): Promise<void> {
+    if (this.disabled) return;
+    await this.syncAndSchedule();
+  }
+
+  /** Pull all fixtures from API-Football, then schedule posts for any without one. */
+  async syncAndSchedule(): Promise<void> {
+    if (this.running) return;
+    this.running = true;
+    try {
+      const synced = await this.fixturesService.syncFixtures();
+      if (synced > 0) {
+        this.logger.log(`Imported/updated ${synced} fixture(s) from API-Football`);
+      }
+      const realigned =
+        await this.fixturesService.reconcileScheduledMatchPostDates();
+      if (realigned > 0) {
+        this.logger.log(
+          `Realigned publish time for ${realigned} scheduled match post(s) (kickoff − 24 h)`,
+        );
+      }
+      await this.schedulePendingPosts();
+    } catch (err) {
+      this.logger.error(
+        `WC sync + auto-schedule failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    } finally {
+      this.running = false;
+    }
+  }
+
+  /**
+   * Create campaign posts for every non-finished fixture that lacks one.
+   * No upper kickoff window — quarter-finals etc. are scheduled as soon as the API lists them.
+   */
+  async schedulePendingPosts(): Promise<void> {
     const admin = await this.usersService.findByEmail(this.adminEmail);
     if (!admin) {
       this.logger.warn(
@@ -44,21 +98,21 @@ export class FixturesAutoScheduleService implements OnModuleInit {
     const adminId = admin._id.toHexString();
 
     const now = new Date();
-    const windowStart = new Date(now.getTime() - 48 * 60 * 60 * 1000); // backfill up to 48 h ago
-    const windowEnd = new Date(now.getTime() + 72 * 60 * 60 * 1000);
+    const windowStart = new Date(now.getTime() - SCHEDULE_BACKFILL_MS);
 
-    // Fixtures within [-48h, +72h] that don't yet have a campaign post
     const pending = await this.fixtureModel
       .find({
-        kickoff: { $gte: windowStart, $lte: windowEnd },
         campaignPostId: { $exists: false },
+        kickoff: { $gte: windowStart },
+        status: { $nin: ['FINISHED', 'CANCELLED', 'ABANDONED', 'AWARDED'] },
       })
+      .sort({ kickoff: 1 })
       .exec();
 
     if (pending.length === 0) return;
 
     this.logger.log(
-      `Auto-scheduling ${pending.length} fixture(s) in the next 72 h`,
+      `Auto-scheduling ${pending.length} fixture(s) without campaign posts`,
     );
 
     for (const fixture of pending) {
@@ -69,7 +123,7 @@ export class FixturesAutoScheduleService implements OnModuleInit {
           { autoScheduled: true },
         );
         this.logger.log(
-          `Scheduled post for fixture ${fixture.homeTeam.name} vs ${fixture.awayTeam.name} (${fixture.kickoff.toISOString()})`,
+          `Scheduled post for ${fixture.homeTeam.name} vs ${fixture.awayTeam.name} (${fixture.stage}, ${fixture.kickoff.toISOString()})`,
         );
       } catch (err) {
         this.logger.error(
@@ -77,5 +131,10 @@ export class FixturesAutoScheduleService implements OnModuleInit {
         );
       }
     }
+  }
+
+  /** @deprecated Use syncAndSchedule — kept for scripts that only schedule. */
+  async scheduleUpcoming(): Promise<void> {
+    await this.schedulePendingPosts();
   }
 }

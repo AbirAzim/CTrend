@@ -166,7 +166,7 @@ CTrend supports promotional campaigns that run alongside the normal feed. Multip
 
 A specific campaign type tied to FIFA World Cup 2026 match data from **football-data.org** (free tier, 10 req/min).
 
-**Fixture sync:** Admin calls `syncWorldCupFixtures` mutation → fetches all WC matches, upserts into `fixtures` collection. Fixtures store: teams (name, shortName, crest/flag URL), kickoff UTC, status, stage, group, score, and `campaignPostId`.
+**Fixture sync:** `FixturesAutoScheduleService` imports all WC matches from API-Football on startup and every 4 h (`syncFixtures`), then auto-creates scheduled campaign posts (24 h before kickoff) for any fixture without one. Admin `syncWorldCupFixtures` mutation still works for manual refresh. Disable auto import with `DISABLE_WC_FIXTURE_AUTO_IMPORT=true`. Fixtures store: teams (name, shortName, crest/flag URL), kickoff UTC, status, stage, group, score, and `campaignPostId`.
 
 **Campaign post flow (per match):**
 1. Admin calls `createWorldCupCampaignPost(fixtureId)`.

@@ -231,6 +231,11 @@ PostSchema.index({ status: 1, scheduledAt: 1 });
 // Feed filter queries: type + createdBy, and type + status + orgReach
 PostSchema.index({ type: 1, createdBy: 1, status: 1 });
 PostSchema.index({ type: 1, orgReach: 1, status: 1 });
+// "My Activity" (Drops/Scheduled tabs + their count/summary queries) filters
+// on createdBy+status without a `type` predicate, so it couldn't use the
+// type-led index above — this compound index also covers the createdAt sort
+// for the Drops tab (avoids an in-memory sort as the collection grows).
+PostSchema.index({ createdBy: 1, status: 1, createdAt: -1 });
 PostSchema.index({ reportCount: -1, createdAt: -1 });
 // Pinned posts: fetch admin-pinned posts (newest pin first) for any feed filter.
 PostSchema.index({ pinnedAt: -1 });

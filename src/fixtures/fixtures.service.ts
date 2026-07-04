@@ -1153,18 +1153,36 @@ export class FixturesService implements OnModuleInit {
         (newStatus === 'FINISHED' && recentlyFinished);
       if (needsDetailSync && this.apiKey) {
         const exId = item.fixture.id;
-        const lastSync = this.lastDetailSync.get(exId) ?? 0;
         const isFinishedNow = !wasFinished && newStatus === 'FINISHED';
+        // Gate on the fixture's own persisted `detailsSyncedAt` (only set by
+        // syncMatchDetails on a fully successful run) instead of the
+        // in-memory `lastDetailSync` attempt map. That map used to be
+        // touched the moment we DECIDED to sync, before the (fire-and-forget)
+        // sync even ran — so a failed or slow attempt still marked the
+        // fixture "recently synced" and silently blocked retries for a full
+        // DETAIL_SYNC_INTERVAL. Reading the real DB state means a failure is
+        // retried on the very next tick (30s later, not 3min), and the gate
+        // survives process restarts instead of resetting to "unknown".
+        const lastSyncedAt = existing.detailsSyncedAt?.getTime() ?? 0;
         const due =
           isFinishedNow ||
-          Date.now() - lastSync >= FixturesService.DETAIL_SYNC_INTERVAL;
+          Date.now() - lastSyncedAt >= FixturesService.DETAIL_SYNC_INTERVAL;
         if (due) {
-          this.lastDetailSync.set(exId, Date.now());
           const needsLineups = (existing.lineups?.length ?? 0) === 0;
           const fresh = await this.fixtureModel
             .findOne({ externalId: exId })
             .exec();
-          if (fresh) void this.syncMatchDetails(fresh, needsLineups);
+          // Awaited (not fire-and-forget): errors are now visible to this
+          // sync cycle and logged with fixture context instead of vanishing
+          // into an unobserved rejected promise.
+          if (fresh) {
+            const result = await this.syncMatchDetails(fresh, needsLineups);
+            if (result.error) {
+              this.logger.warn(
+                `Detail sync for fixture ${exId} failed — will retry next tick: ${result.error}`,
+              );
+            }
+          }
         }
       }
 

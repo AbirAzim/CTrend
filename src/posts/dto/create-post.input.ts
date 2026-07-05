@@ -120,6 +120,12 @@ export class CreatePostInput {
   @IsDate()
   votingEndsAt?: Date;
 
+  /** Opt-in: draw and announce a vote-giveaway winner once votingEndsAt passes. */
+  @Field(() => Boolean, { nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  announceWinnerAfterVotingEnd?: boolean;
+
   @Field(() => Date, { nullable: true })
   @IsOptional()
   @Type(() => Date)

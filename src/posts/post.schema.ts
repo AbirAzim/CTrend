@@ -90,6 +90,15 @@ export class Post {
   @Prop({ type: Date })
   votingEndsAt?: Date;
 
+  /**
+   * Opt-in: draw and announce a vote-giveaway winner once `votingEndsAt`
+   * passes. Off by default — setting a deadline alone no longer implies a
+   * winner will be picked. Ignored for `matchType` posts (fixture-linked
+   * winners are decided by the owning campaign's own rules instead).
+   */
+  @Prop({ default: false })
+  announceWinnerAfterVotingEnd: boolean;
+
   /** Minutes before voting end to show "ending soon" urgency UI. */
   @Prop({ type: Number, min: 1, max: 1440, default: 5 })
   endingSoonLeadMinutes: number;

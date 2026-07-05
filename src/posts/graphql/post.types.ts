@@ -210,6 +210,10 @@ export class PostGql {
   @Field(() => Date, { nullable: true })
   votingEndsAt?: Date;
 
+  /** Opt-in: whether a vote-giveaway winner gets drawn once votingEndsAt passes. */
+  @Field()
+  announceWinnerAfterVotingEnd: boolean;
+
   @Field(() => Int)
   endingSoonLeadMinutes: number;
 

@@ -64,6 +64,12 @@ export class UpdatePostInput {
   @IsString()
   votingEndsAt?: string;
 
+  /** Opt-in: draw and announce a vote-giveaway winner once votingEndsAt passes. */
+  @Field(() => Boolean, { nullable: true })
+  @IsOptional()
+  @IsBoolean()
+  announceWinnerAfterVotingEnd?: boolean;
+
   /** Reschedule a SCHEDULED post to a new future time (ISO). */
   @Field(() => String, { nullable: true })
   @IsOptional()

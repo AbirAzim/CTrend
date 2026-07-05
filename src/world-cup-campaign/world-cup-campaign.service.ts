@@ -216,6 +216,27 @@ export class WorldCupCampaignService implements OnModuleInit {
         campaignObjId = campaignPost.campaignId as Types.ObjectId;
       }
     }
+
+    // Campaign opts out of winner announcements entirely — record the match
+    // as resolved (idempotency guard above) without drawing/announcing one.
+    if (campaignObjId) {
+      const campaign = await this.campaignModel
+        .findById(campaignObjId)
+        .select('hasWinner')
+        .exec();
+      if (campaign && !campaign.hasWinner) {
+        const record = await this.campaignWinnerModel.create({
+          campaignId: campaignObjId,
+          fixtureId: fixture._id,
+          postId,
+          prize: 0,
+          paid: false,
+          note: 'Campaign does not announce winners',
+        });
+        return this.toGql(record);
+      }
+    }
+
     const scoreWinner = this.normalizeScoreWinner(
       fixture.score?.winner ?? null,
     ); // HOME_TEAM | AWAY_TEAM | DRAW | null

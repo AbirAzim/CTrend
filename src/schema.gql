@@ -249,6 +249,7 @@ input CreateCampaignInput {
 }
 
 input CreatePostInput {
+  announceWinnerAfterVotingEnd: Boolean
   broadcastGlobally: Boolean
   campaignId: String
   caption: String
@@ -794,6 +795,7 @@ enum PostFormat {
 }
 
 type PostGql {
+  announceWinnerAfterVotingEnd: Boolean!
   author: UserGql!
   authorDisplayName: String
   authorEmail: String
@@ -1094,6 +1096,7 @@ input UpdateCampaignInput {
 }
 
 input UpdatePostInput {
+  announceWinnerAfterVotingEnd: Boolean
   broadcastGlobally: Boolean
   campaignId: String
   caption: String

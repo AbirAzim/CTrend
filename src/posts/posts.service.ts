@@ -231,6 +231,9 @@ export class PostsService implements OnModuleInit {
     // result via WinnerAnnouncementService, not by a random draw at kickoff.
     if (post.matchType) return post;
 
+    // Opt-in only — a deadline alone no longer implies a winner gets picked.
+    if (!post.announceWinnerAfterVotingEnd) return post;
+
     const now = Date.now();
     const votingClosed =
       !!post.votingEndsAt && post.votingEndsAt.getTime() <= now;
@@ -893,6 +896,9 @@ export class PostsService implements OnModuleInit {
         'votingEndsAt',
       );
     }
+    if (input.announceWinnerAfterVotingEnd !== undefined) {
+      post.announceWinnerAfterVotingEnd = input.announceWinnerAfterVotingEnd;
+    }
     if (input.scheduledAt !== undefined) {
       const scheduledAt = this.parseFutureDate(
         input.scheduledAt,
@@ -1297,6 +1303,7 @@ export class PostsService implements OnModuleInit {
       commentsDisabled: false,
       likesDisabled: false,
       votingEndsAt,
+      announceWinnerAfterVotingEnd: input.announceWinnerAfterVotingEnd ?? false,
       endingSoonLeadMinutes: DEFAULT_ENDING_SOON_LEAD_MINUTES,
       status,
       scheduledAt,
@@ -1372,6 +1379,7 @@ export class PostsService implements OnModuleInit {
       commentsDisabled: false,
       likesDisabled: false,
       votingEndsAt,
+      announceWinnerAfterVotingEnd: input.announceWinnerAfterVotingEnd ?? false,
       endingSoonLeadMinutes: DEFAULT_ENDING_SOON_LEAD_MINUTES,
       status,
       scheduledAt,
@@ -1429,6 +1437,8 @@ export class PostsService implements OnModuleInit {
         ? {}
         : {
             votingEndsAt,
+            announceWinnerAfterVotingEnd:
+              input.announceWinnerAfterVotingEnd ?? false,
             endingSoonLeadMinutes: DEFAULT_ENDING_SOON_LEAD_MINUTES,
           }),
       status,
@@ -1774,6 +1784,7 @@ export class PostsService implements OnModuleInit {
       viewerVote:
         mySelected === undefined ? null : mySelected === 0 ? 'up' : 'down',
       votingEndsAt: post.votingEndsAt,
+      announceWinnerAfterVotingEnd: post.announceWinnerAfterVotingEnd ?? false,
       endingSoonLeadMinutes:
         post.endingSoonLeadMinutes ?? DEFAULT_ENDING_SOON_LEAD_MINUTES,
       isVotingOpen,

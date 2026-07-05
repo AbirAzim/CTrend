@@ -639,7 +639,7 @@ type Mutation {
   submitMatchPrediction(awayScore: Int!, homeScore: Int!, postId: ID!): MatchPredictionGql!
   switchActiveRole(role: UserRole!): AuthPayloadGql!
   syncAllFinishedFixtures: String!
-  syncFixtureDetails(fixtureId: ID!): FixtureDetailsSyncResultGql!
+  syncFixtureDetails(fixtureId: ID!, force: Boolean): FixtureDetailsSyncResultGql!
   syncLiveNow: String!
   syncWorldCupFixtures: Boolean!
   toggleCampaign(id: ID!, isActive: Boolean!): CampaignGql!

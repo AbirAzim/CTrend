@@ -681,8 +681,11 @@ export class WorldCupCampaignService implements OnModuleInit {
         coinsOf(entry) >= avgCoins
           ? CAMPAIGN_WINNER_ABOVE_AVG_COINS_WEIGHT
           : CAMPAIGN_WINNER_BELOW_AVG_COINS_WEIGHT;
+      // hasRealProfilePhoto (not just profileImageUrl presence) — Google
+      // auto-generates a placeholder photo for accounts without a real one,
+      // served from the same kind of URL as a genuine photo.
       const hasPicture = Boolean(
-        userById.get(entry.userId.toHexString())?.profileImageUrl,
+        userById.get(entry.userId.toHexString())?.hasRealProfilePhoto,
       );
       const weight = hasPicture
         ? coinWeight

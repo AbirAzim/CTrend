@@ -46,6 +46,19 @@ export class User {
   @Prop()
   profileImageUrl?: string;
 
+  /**
+   * True once `profileImageUrl` is confirmed to be a genuine photo — set
+   * directly (true) on manual upload, or computed for Google-login photos
+   * (Google auto-generates a tiny "colored circle + initial" placeholder for
+   * accounts without a real photo, served from the same kind of URL as a
+   * real one — see resolveGoogleProfilePhotoIsReal). Left `undefined` (no
+   * default) on purpose so a one-time backfill can tell "not yet checked"
+   * apart from "checked, confirmed no real photo" — both read as falsy
+   * (penalized) wherever this is consumed, e.g. the campaign winner draw.
+   */
+  @Prop()
+  hasRealProfilePhoto?: boolean;
+
   @Prop({ trim: true, default: 'buzz-in' })
   voteSoundId?: string;
 

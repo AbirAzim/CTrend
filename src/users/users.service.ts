@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model, Types } from 'mongoose';
 import { randomInt } from 'crypto';
@@ -6,10 +6,56 @@ import { User, UserDocument, PushToken } from './user.schema';
 import { UserGql } from './graphql/user.types';
 import { UserRole } from '../common/enums';
 import { ListUsersQuery } from './dto/list-users.input';
+import { resolveGoogleProfilePhotoIsReal } from './google-profile-photo.util';
 
 @Injectable()
-export class UsersService {
+export class UsersService implements OnModuleInit {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(@InjectModel(User.name) private userModel: Model<UserDocument>) {}
+
+  onModuleInit(): void {
+    void this.backfillRealProfilePhotoFlags().catch((err) =>
+      this.logger.warn(
+        `hasRealProfilePhoto backfill failed: ${err instanceof Error ? err.message : String(err)}`,
+      ),
+    );
+  }
+
+  /**
+   * One-time backfill for accounts created before hasRealProfilePhoto existed.
+   * Only touches users with a photo set but not yet checked — naturally
+   * idempotent (checked users are excluded from the query), safe to run on
+   * every boot.
+   */
+  private async backfillRealProfilePhotoFlags(): Promise<void> {
+    const pending = await this.userModel
+      .find({
+        profileImageUrl: { $exists: true, $nin: [null, ''] },
+        hasRealProfilePhoto: { $exists: false },
+      })
+      .select('_id profileImageUrl')
+      .exec();
+    if (!pending.length) return;
+
+    let updated = 0;
+    for (const user of pending) {
+      const url = user.profileImageUrl as string;
+      // Non-Google-hosted photos come from our own upload flow — always genuine.
+      const isReal = url.includes('googleusercontent.com')
+        ? await resolveGoogleProfilePhotoIsReal(url)
+        : true;
+      if (isReal === null) continue; // couldn't determine — retry next boot
+      await this.userModel.updateOne(
+        { _id: user._id },
+        { $set: { hasRealProfilePhoto: isReal } },
+      );
+      updated++;
+    }
+    if (updated) {
+      this.logger.log(`Backfilled hasRealProfilePhoto for ${updated} user(s)`);
+    }
+  }
 
   /** Resolve the canonical roles array, falling back to the legacy `role` field. */
   resolveRoles(doc: UserDocument): UserRole[] {
@@ -52,6 +98,7 @@ export class UsersService {
     displayName?: string;
     googleSub?: string;
     profileImageUrl?: string;
+    hasRealProfilePhoto?: boolean;
     interests?: string[];
     roles?: UserRole[];
     /** @deprecated use roles */
@@ -112,8 +159,13 @@ export class UsersService {
       displayName?: string;
     },
   ): Promise<UserDocument | null> {
+    // A photo set through our own upload flow is always a genuine, deliberately
+    // chosen photo — no need for the Google-default-avatar heuristic here.
+    const set: Record<string, unknown> = patch.profileImageUrl
+      ? { ...patch, hasRealProfilePhoto: true }
+      : patch;
     return this.userModel
-      .findByIdAndUpdate(userId, { $set: patch }, { new: true })
+      .findByIdAndUpdate(userId, { $set: set }, { new: true })
       .exec();
   }
 

@@ -16,6 +16,7 @@ import { MailService } from '../mail/mail.service';
 import { resolveFrontendUrl } from '../common/frontend-url';
 import { InvitationsService } from '../invitations/invitations.service';
 import { UserRole } from '../common/enums';
+import { resolveGoogleProfilePhotoIsReal } from '../users/google-profile-photo.util';
 
 const OTP_TTL_MS = 15 * 60 * 1000;
 
@@ -244,7 +245,11 @@ export class AuthService {
       byEmail.googleSub = sub;
       byEmail.emailVerified = true;
       if (payload.name?.trim()) byEmail.displayName = payload.name.trim();
-      if (payload.picture) byEmail.profileImageUrl = payload.picture;
+      if (payload.picture) {
+        byEmail.profileImageUrl = payload.picture;
+        const isReal = await resolveGoogleProfilePhotoIsReal(payload.picture);
+        if (isReal !== null) byEmail.hasRealProfilePhoto = isReal;
+      }
       await byEmail.save();
       return this.toAuthPayload(byEmail);
     }
@@ -253,6 +258,9 @@ export class AuthService {
       payload.name || email.split('@')[0] || 'user',
     );
     const randomPass = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
+    const photoIsReal = payload.picture
+      ? await resolveGoogleProfilePhotoIsReal(payload.picture)
+      : null;
     const created = await this.usersService.create({
       username,
       email,
@@ -260,6 +268,7 @@ export class AuthService {
       googleSub: sub,
       displayName: payload.name?.trim() || undefined,
       profileImageUrl: payload.picture,
+      hasRealProfilePhoto: photoIsReal ?? false,
       emailVerified: true,
       passwordAuthEnabled: false,
     });
@@ -344,6 +353,8 @@ export class AuthService {
     }
     if (picture && !user.profileImageUrl) {
       user.profileImageUrl = picture;
+      const isReal = await resolveGoogleProfilePhotoIsReal(picture);
+      if (isReal !== null) user.hasRealProfilePhoto = isReal;
       dirty = true;
     }
     if (dirty) await user.save();

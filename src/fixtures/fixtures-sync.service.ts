@@ -15,6 +15,9 @@ export class FixturesSyncService {
   private readonly logger = new Logger(FixturesSyncService.name);
   private readonly disabled: boolean;
   private running = false;
+  /** Throttle stale-event reconcile — only hits API for fixtures whose score ≠ event goals. */
+  private lastEventReconcileAt = 0;
+  private static readonly EVENT_RECONCILE_INTERVAL_MS = 5 * 60 * 1000;
 
   constructor(
     private readonly fixturesService: FixturesService,
@@ -46,6 +49,20 @@ export class FixturesSyncService {
         );
       }
       await this.fixturesService.reconcileFinishedPosts();
+      const now = Date.now();
+      if (
+        now - this.lastEventReconcileAt >=
+        FixturesSyncService.EVENT_RECONCILE_INTERVAL_MS
+      ) {
+        this.lastEventReconcileAt = now;
+        const resynced =
+          await this.fixturesService.reconcileIncompleteMatchEvents();
+        if (resynced > 0) {
+          this.logger.log(
+            `Stale match events reconcile — ${resynced} fixture(s) re-synced`,
+          );
+        }
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       this.logger.warn(`Live fixture sync skipped: ${message}`);

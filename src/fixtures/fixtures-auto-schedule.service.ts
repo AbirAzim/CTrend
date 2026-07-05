@@ -55,6 +55,7 @@ export class FixturesAutoScheduleService implements OnModuleInit {
   async syncAndScheduleCron(): Promise<void> {
     if (this.disabled) return;
     await this.syncAndSchedule();
+    await this.fixturesService.reconcileIncompleteMatchEvents();
   }
 
   /** Pull all fixtures from API-Football, then schedule posts for any without one. */

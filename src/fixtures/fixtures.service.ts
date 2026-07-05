@@ -1310,6 +1310,23 @@ export class FixturesService implements OnModuleInit {
             });
           }
         }
+        if (newStatus === 'FINISHED' && this.apiKey) {
+          const freshGhost = await this.fixtureModel
+            .findOne({ externalId: ghost.externalId })
+            .exec();
+          if (freshGhost) {
+            const needsLineups = (freshGhost.lineups?.length ?? 0) === 0;
+            const result = await this.syncMatchDetails(
+              freshGhost,
+              needsLineups,
+            );
+            if (result.error) {
+              this.logger.warn(
+                `Ghost detail sync for fixture ${ghost.externalId} failed: ${result.error}`,
+              );
+            }
+          }
+        }
         updated++;
       } catch (err) {
         this.logger.warn(

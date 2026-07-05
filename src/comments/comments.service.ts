@@ -292,20 +292,31 @@ export class CommentsService {
     }
 
     // Top-level comment → also remove its replies.
-    const replyIds = comment.parentId
+    const replies = comment.parentId
       ? []
-      : (
-          await this.commentModel
-            .find({ parentId: comment._id })
-            .select('_id')
-            .exec()
-        ).map((r) => r._id);
-    const allIds = [comment._id, ...replyIds];
+      : await this.commentModel
+          .find({ parentId: comment._id })
+          .select('_id userId')
+          .exec();
+    const allDeleted = [comment, ...replies];
+    const allIds = allDeleted.map((c) => c._id);
 
     await this.commentReactionModel
       .deleteMany({ commentId: { $in: allIds } })
       .exec();
     await this.commentModel.deleteMany({ _id: { $in: allIds } }).exec();
+
+    // Coins: reverse the comment-creation reward for every comment removed
+    // (cascaded replies may belong to other users, so revoke per-author).
+    await Promise.all(
+      allDeleted.map((c) =>
+        this.coinsService.revoke(
+          c.userId.toHexString(),
+          CoinType.COMMENT,
+          c._id.toHexString(),
+        ),
+      ),
+    );
 
     await this.publishPostUpdated(comment.postId.toHexString());
 

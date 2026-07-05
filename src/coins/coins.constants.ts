@@ -23,7 +23,7 @@ export const COIN_AMOUNTS: Record<CoinTypeValue, number> = {
   VOTE: 10,
   PREDICTION: 15,
   POST: 20,
-  COMMENT: 3,
+  COMMENT: 1,
   POST_HYPED: 2,
   POST_VOTED: 2,
   PREDICTION_CORRECT: 25,

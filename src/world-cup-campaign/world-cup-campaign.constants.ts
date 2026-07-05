@@ -1,17 +1,19 @@
 /**
- * After winning a match campaign draw, a user cannot win again for this many
- * subsequently processed match posts unless they predict the exact final score.
+ * After winning a match campaign draw, a user cannot win the very next
+ * processed match post (strict consecutive-win block). Only applies when
+ * there's an actual choice between 2+ correct candidates — a lone correct
+ * candidate always wins regardless of cooldown.
  */
-export const CAMPAIGN_WINNER_COOLDOWN_MATCHES = 4;
+export const CAMPAIGN_WINNER_COOLDOWN_MATCHES = 1;
 
-/** Draw weight for eligible voters who have never won a campaign match. */
-export const CAMPAIGN_WINNER_FIRST_TIME_WEIGHT = 1;
+/** Draw-weight multiplier for candidates at/above the pool's average coin balance. */
+export const CAMPAIGN_WINNER_ABOVE_AVG_COINS_WEIGHT = 2;
 
-/** Fallback weights when only past winners remain in the pool (no exact score, no never-won). */
-export const CAMPAIGN_WINNER_REPEAT_ONCE_WEIGHT = 0.2;
+/** Draw-weight multiplier for candidates below the pool's average coin balance. */
+export const CAMPAIGN_WINNER_BELOW_AVG_COINS_WEIGHT = 1;
 
-/** Draw weight for voters with 2+ past campaign wins (outside cooldown). */
-export const CAMPAIGN_WINNER_REPEAT_MULTI_WEIGHT = 0.08;
+/** Draw-weight multiplier applied when a candidate has no profile picture. */
+export const CAMPAIGN_WINNER_NO_PICTURE_WEIGHT_MULTIPLIER = 0.5;
 
 /** Default bKash prize for group stage and knockout matches (through quarter-finals). */
 export const CAMPAIGN_PRIZE_DEFAULT = 100;

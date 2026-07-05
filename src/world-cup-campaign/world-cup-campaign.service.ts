@@ -20,6 +20,7 @@ import {
   MatchPredictionDocument,
 } from '../match-predictions/match-prediction.schema';
 import { UsersService } from '../users/users.service';
+import { UserDocument } from '../users/user.schema';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NotificationType } from '../notifications/notification.schema';
 import {
@@ -27,13 +28,13 @@ import {
   CampaignWinLeaderboardEntryGql,
   UserCampaignWinSummaryGql,
 } from './graphql/campaign-winner.types';
-import { CoinsService } from '../coins/coins.service';
+import { CoinsService, userHoldsAdminRole } from '../coins/coins.service';
 import { CoinType } from '../coins/coins.constants';
 import {
+  CAMPAIGN_WINNER_ABOVE_AVG_COINS_WEIGHT,
+  CAMPAIGN_WINNER_BELOW_AVG_COINS_WEIGHT,
   CAMPAIGN_WINNER_COOLDOWN_MATCHES,
-  CAMPAIGN_WINNER_FIRST_TIME_WEIGHT,
-  CAMPAIGN_WINNER_REPEAT_MULTI_WEIGHT,
-  CAMPAIGN_WINNER_REPEAT_ONCE_WEIGHT,
+  CAMPAIGN_WINNER_NO_PICTURE_WEIGHT_MULTIPLIER,
   campaignPrizeForFixtureStage,
 } from './world-cup-campaign.constants';
 
@@ -156,13 +157,17 @@ export class WorldCupCampaignService implements OnModuleInit {
    *   DRAW, hasDrawOption=false → draw from all voters (legacy 2-option posts)
    *   null / unknown  → record "no winner" without a userId
    *
-   * Cooldown: after winning, a user sits out the next
-   *   CAMPAIGN_WINNER_COOLDOWN_MATCHES processed match draws unless they
-   *   predicted the exact final score.
-   * Draw tiers (after cooldown filter):
-   *   1. Exact score predictors (never-won preferred within that tier).
-   *   2. No exact score → only voters who have never won before.
-   *   3. No never-won left → weighted draw among past winners.
+   * Candidate resolution (see resolveCampaignWinner), tried against the
+   * exact-score-predictor pool first, falling back to the full correct-side
+   * voter pool only if there are no exact-score predictors at all:
+   *   1. Exactly one candidate → they win outright, no exceptions.
+   *   2. 2+ candidates → drop admins and whoever won the immediately
+   *      previous processed match; if exactly one remains, they win.
+   *   3. If that leaves zero candidates, fall back to a weighted draw over
+   *      the original (unfiltered) pool so a winner is still picked.
+   *   4. Otherwise, weighted draw over the filtered pool: candidates at/above
+   *      the pool's average coin balance get 2x weight, below average get 1x;
+   *      candidates with no profile picture have their weight halved.
    */
   async processMatchResult(
     fixtureId: string,
@@ -313,53 +318,36 @@ export class WorldCupCampaignService implements OnModuleInit {
         ? await this.getExactPredictorUserIds(fixture._id, finalHome, finalAway)
         : new Set<string>();
 
-    const cooldownUserIds = await this.getCooldownUserIdSet(
+    // Whoever won the immediately previous processed match — a strict
+    // consecutive-win block, only relevant once we reach a multi-candidate
+    // choice below (a lone correct candidate always wins regardless).
+    const lastMatchWinnerIds = await this.getCooldownUserIdSet(
       eligibleVotes.map((v) => v.userId),
       fixture._id,
     );
 
-    const poolAfterCooldown = eligibleVotes.filter((v) => {
-      const uid = v.userId.toString();
-      if (!cooldownUserIds.has(uid)) return true;
-      return exactPredictorIds.has(uid);
-    });
-
-    if (!poolAfterCooldown.length) {
-      const record = await this.campaignWinnerModel.create({
-        campaignId: campaignObjId,
-        fixtureId: fixture._id,
-        postId,
-        prize,
-        winningOption: winningOptionIndex,
-        paid: false,
-        note: `All eligible voters are on a ${CAMPAIGN_WINNER_COOLDOWN_MATCHES}-match winner cooldown — exact score required to win again`,
-      });
-      void this.notifyMatchResult(
-        postId.toHexString(),
-        fixture.homeTeam.name,
-        fixture.awayTeam.name,
-        null,
-      );
-      return this.toGql(record);
-    }
-
-    // ── Draw pool tiers ────────────────────────────────────────────────────
-    // 1. Exact score → draw among exact scorers (never-won first if any).
-    // 2. No exact score → draw only from never-won correct-side voters.
-    // 3. If no never-won left → weighted draw among past winners (fallback).
-    const pastWinCountByUser = await this.getPastWinCountByUser(
-      poolAfterCooldown.map((v) => v.userId),
+    // Exact-score predictors get first shot at the draw; only fall back to
+    // the general correct-side-voter pool if there are none.
+    const exactScorePool = eligibleVotes.filter((v) =>
+      exactPredictorIds.has(v.userId.toString()),
     );
-    const { pool, wonViaExactScore, useWeightedDraw } =
-      this.buildCampaignDrawPool(
-        poolAfterCooldown,
-        exactPredictorIds,
-        pastWinCountByUser,
+    let drawn = await this.resolveCampaignWinner(
+      exactScorePool,
+      lastMatchWinnerIds,
+    );
+    const wonViaExactScore = drawn !== null;
+    if (!drawn) {
+      // eligibleVotes is non-empty (checked above), so this always resolves.
+      drawn = await this.resolveCampaignWinner(
+        eligibleVotes,
+        lastMatchWinnerIds,
       );
-
-    const drawn = useWeightedDraw
-      ? this.drawWeightedCampaignWinner(pool, pastWinCountByUser)
-      : this.drawUniformCampaignWinner(pool);
+    }
+    if (!drawn) {
+      throw new Error(
+        `resolveCampaignWinner returned no winner despite ${eligibleVotes.length} eligible vote(s) — fixture ${fixture._id.toHexString()}`,
+      );
+    }
     const pickedAt = new Date();
     const record = await this.campaignWinnerModel.create({
       campaignId: campaignObjId,
@@ -601,8 +589,8 @@ export class WorldCupCampaignService implements OnModuleInit {
   }
 
   /**
-   * Users who won a recent match post and are still in the cooldown window
-   * (next N processed matches after their last win).
+   * Users who won the immediately previous processed match post — a strict
+   * consecutive-win block (CAMPAIGN_WINNER_COOLDOWN_MATCHES = 1).
    */
   private async getCooldownUserIdSet(
     voterUserIds: Types.ObjectId[],
@@ -637,106 +625,71 @@ export class WorldCupCampaignService implements OnModuleInit {
     return cooldown;
   }
 
-  /** Total campaign wins per user (all time, excluding current fixture). */
-  private async getPastWinCountByUser(
-    userIds: Types.ObjectId[],
-  ): Promise<Map<string, number>> {
-    const unique = [
-      ...new Set(userIds.map((id) => id.toString()).filter(Boolean)),
-    ];
-    if (!unique.length) return new Map();
+  /**
+   * Resolves a single winner from a candidate pool, or `null` if the pool is
+   * empty (caller should try the next tier). See the doc comment above
+   * `processMatchResult` for the full rule set.
+   */
+  private async resolveCampaignWinner<T extends { userId: Types.ObjectId }>(
+    pool: T[],
+    lastMatchWinnerIds: Set<string>,
+  ): Promise<T | null> {
+    if (!pool.length) return null;
+    if (pool.length === 1) return pool[0];
 
-    const rows = await this.campaignWinnerModel.aggregate<{
-      _id: Types.ObjectId;
-      wins: number;
-    }>([
-      {
-        $match: {
-          userId: {
-            $in: unique.map((id) => new Types.ObjectId(id)),
-          },
-        },
-      },
-      { $group: { _id: '$userId', wins: { $sum: 1 } } },
-    ]);
-
-    const map = new Map<string, number>();
-    for (const row of rows) {
-      map.set(row._id.toString(), row.wins);
-    }
-    return map;
-  }
-
-  private campaignWinnerDrawWeight(pastWins: number): number {
-    if (pastWins <= 0) return CAMPAIGN_WINNER_FIRST_TIME_WEIGHT;
-    if (pastWins === 1) return CAMPAIGN_WINNER_REPEAT_ONCE_WEIGHT;
-    return CAMPAIGN_WINNER_REPEAT_MULTI_WEIGHT;
-  }
-
-  private buildCampaignDrawPool<T extends { userId: Types.ObjectId }>(
-    poolAfterCooldown: T[],
-    exactPredictorIds: Set<string>,
-    pastWinCountByUser: Map<string, number>,
-  ): {
-    pool: T[];
-    wonViaExactScore: boolean;
-    useWeightedDraw: boolean;
-  } {
-    const isNeverWon = (entry: T) =>
-      (pastWinCountByUser.get(entry.userId.toString()) ?? 0) === 0;
-    const neverWon = poolAfterCooldown.filter(isNeverWon);
-    const exactInPool = poolAfterCooldown.filter((entry) =>
-      exactPredictorIds.has(entry.userId.toString()),
+    const userDocs = await this.usersService.findByIds(
+      pool.map((entry) => entry.userId.toHexString()),
+    );
+    const userById = new Map(
+      userDocs.map((u) => [u._id.toHexString(), u] as const),
     );
 
-    if (exactInPool.length) {
-      const exactNeverWon = exactInPool.filter(isNeverWon);
-      const pool = exactNeverWon.length ? exactNeverWon : exactInPool;
-      return {
-        pool,
-        wonViaExactScore: true,
-        useWeightedDraw: exactNeverWon.length === 0,
-      };
-    }
+    const filtered = pool.filter((entry) => {
+      const uid = entry.userId.toHexString();
+      const user = userById.get(uid);
+      if (user && userHoldsAdminRole(user)) return false;
+      if (lastMatchWinnerIds.has(uid)) return false;
+      return true;
+    });
 
-    if (neverWon.length) {
-      return {
-        pool: neverWon,
-        wonViaExactScore: false,
-        useWeightedDraw: false,
-      };
-    }
-
-    const pastWinners = poolAfterCooldown.filter((entry) => !isNeverWon(entry));
-    return {
-      pool: pastWinners.length ? pastWinners : poolAfterCooldown,
-      wonViaExactScore: false,
-      useWeightedDraw: true,
-    };
+    if (filtered.length === 1) return filtered[0];
+    // Filtering wiped out every candidate (e.g. all admins, or all won the
+    // last match) — fall back to the original pool so someone still wins.
+    const drawPool = filtered.length ? filtered : pool;
+    return this.drawWeightedByCoinsAndPicture(drawPool, userById);
   }
 
-  private drawUniformCampaignWinner<T>(pool: T[]): T {
-    return pool[Math.floor(Math.random() * pool.length)];
-  }
-
-  /** Weighted random pick — used only when no first-time winners remain. */
-  private drawWeightedCampaignWinner<T extends { userId: Types.ObjectId }>(
+  /**
+   * Weighted random pick: candidates at/above the pool's average coin
+   * balance get CAMPAIGN_WINNER_ABOVE_AVG_COINS_WEIGHT, below average get
+   * CAMPAIGN_WINNER_BELOW_AVG_COINS_WEIGHT; no profile picture halves it.
+   */
+  private drawWeightedByCoinsAndPicture<T extends { userId: Types.ObjectId }>(
     pool: T[],
-    pastWinCountByUser: Map<string, number>,
+    userById: Map<string, UserDocument>,
   ): T {
     if (pool.length === 1) return pool[0];
 
+    const coinsOf = (entry: T) =>
+      userById.get(entry.userId.toHexString())?.coins ?? 0;
+    const avgCoins =
+      pool.reduce((sum, entry) => sum + coinsOf(entry), 0) / pool.length;
+
     let total = 0;
     const weights = pool.map((entry) => {
-      const pastWins = pastWinCountByUser.get(entry.userId.toString()) ?? 0;
-      const w = this.campaignWinnerDrawWeight(pastWins);
-      total += w;
-      return w;
+      const coinWeight =
+        coinsOf(entry) >= avgCoins
+          ? CAMPAIGN_WINNER_ABOVE_AVG_COINS_WEIGHT
+          : CAMPAIGN_WINNER_BELOW_AVG_COINS_WEIGHT;
+      const hasPicture = Boolean(
+        userById.get(entry.userId.toHexString())?.profileImageUrl,
+      );
+      const weight = hasPicture
+        ? coinWeight
+        : coinWeight * CAMPAIGN_WINNER_NO_PICTURE_WEIGHT_MULTIPLIER;
+      total += weight;
+      return weight;
     });
-
-    if (total <= 0) {
-      return pool[Math.floor(Math.random() * pool.length)];
-    }
 
     let roll = Math.random() * total;
     for (let i = 0; i < pool.length; i++) {

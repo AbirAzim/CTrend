@@ -30,7 +30,9 @@ const NON_ADMIN_LEADERBOARD_FILTER = {
   $nor: [{ roles: UserRole.ADMIN }, { role: UserRole.ADMIN }],
 };
 
-function userHoldsAdminRole(user: Pick<User, 'role' | 'roles'>): boolean {
+export function userHoldsAdminRole(
+  user: Pick<User, 'role' | 'roles'>,
+): boolean {
   return user.roles?.includes(UserRole.ADMIN) || user.role === UserRole.ADMIN;
 }
 

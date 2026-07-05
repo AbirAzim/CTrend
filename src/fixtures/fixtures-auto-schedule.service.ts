@@ -51,7 +51,10 @@ export class FixturesAutoScheduleService implements OnModuleInit {
     await this.fixturesService.reconcileIncompleteMatchEvents();
   }
 
-  @Cron(CronExpression.EVERY_4_HOURS)
+  // Fixture list + standings barely change mid-tournament (only on
+  // postponements/knockout pairing announcements) — twice a day is plenty,
+  // and the on-boot sync above already covers freshness right after a deploy.
+  @Cron(CronExpression.EVERY_12_HOURS)
   async syncAndScheduleCron(): Promise<void> {
     if (this.disabled) return;
     await this.syncAndSchedule();

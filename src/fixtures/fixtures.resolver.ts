@@ -72,11 +72,12 @@ export class FixturesResolver {
   @Roles(UserRole.ADMIN)
   async syncFixtureDetails(
     @Args('fixtureId', { type: () => ID }) fixtureId: string,
+    @Args('force', { type: () => Boolean, nullable: true }) force?: boolean,
   ): Promise<FixtureDetailsSyncResultGql> {
-    const doc = await this.fixturesService.findById(fixtureId);
-    if (!doc)
-      return { events: 0, stats: 0, lineups: 0, error: 'Fixture not found' };
-    return this.fixturesService.syncMatchDetails(doc, true);
+    return this.fixturesService.syncFixtureDetailsIfNeeded(
+      fixtureId,
+      force ?? false,
+    );
   }
 
   @Mutation(() => String)

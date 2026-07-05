@@ -299,6 +299,12 @@ export class FixturesService implements OnModuleInit {
   private readonly lastDetailSync = new Map<number, number>();
   /** How often to re-fetch events/stats/lineups per fixture while live (ms). */
   private static readonly DETAIL_SYNC_INTERVAL = 3 * 60 * 1000; // 3 min
+  /** Tracks last ghost-IN_PLAY individual-fixture check timestamp per externalId. */
+  private readonly lastGhostCheck = new Map<number, number>();
+  /** Throttles the low-quota warning log so a sustained low period doesn't spam. */
+  private lastQuotaWarnAt = 0;
+  private static readonly QUOTA_WARN_THRESHOLD = 0.2; // warn at ≤20% of the period's requests remaining
+  private static readonly QUOTA_WARN_INTERVAL_MS = 10 * 60 * 1000; // at most once per 10 min
 
   constructor(
     @InjectModel(Fixture.name) private fixtureModel: Model<FixtureDocument>,
@@ -374,6 +380,7 @@ export class FixturesService implements OnModuleInit {
       `API-Football → ${url} (key: ${key ? key.slice(0, 6) + '…' : 'MISSING'})`,
     );
     const res = await fetch(url, { headers });
+    this.logQuotaIfLow(res.headers);
     if (!res.ok) {
       throw new BadRequestException(
         `API-Football error: ${res.status} ${res.statusText} — URL: ${url}`,
@@ -393,6 +400,26 @@ export class FixturesService implements OnModuleInit {
       );
     }
     return json.response as T;
+  }
+
+  /**
+   * Logs a warning once remaining API-Football requests for the current
+   * period drop to QUOTA_WARN_THRESHOLD or below, so a quota exhaustion is
+   * caught in logs before it silently breaks live-match syncing.
+   */
+  private logQuotaIfLow(headers: Headers): void {
+    const limit = Number(headers.get('x-ratelimit-requests-limit'));
+    const remaining = Number(headers.get('x-ratelimit-requests-remaining'));
+    if (!limit || Number.isNaN(remaining)) return;
+    if (remaining / limit > FixturesService.QUOTA_WARN_THRESHOLD) return;
+    const now = Date.now();
+    if (now - this.lastQuotaWarnAt < FixturesService.QUOTA_WARN_INTERVAL_MS) {
+      return;
+    }
+    this.lastQuotaWarnAt = now;
+    this.logger.warn(
+      `API-Football quota running low: ${remaining}/${limit} requests remaining`,
+    );
   }
 
   private fetchFixtures(): Promise<AfFixtureItem[]> {
@@ -460,6 +487,18 @@ export class FixturesService implements OnModuleInit {
     return { home, away };
   }
 
+  /** True when events, stats, and player ratings are all already populated. */
+  private hasCompleteFixtureData(fixture: FixtureDocument): boolean {
+    return (
+      Array.isArray(fixture.events) &&
+      fixture.events.length > 0 &&
+      Array.isArray(fixture.stats) &&
+      fixture.stats.length > 0 &&
+      Array.isArray(fixture.playerRatings) &&
+      fixture.playerRatings.length > 0
+    );
+  }
+
   /** True when API score has more goals than our stored events (stale sync). */
   private eventsMismatchScore(fixture: FixtureDocument): boolean {
     const scoreHome = fixture.score?.home;
@@ -469,16 +508,28 @@ export class FixturesService implements OnModuleInit {
     return home !== scoreHome || away !== scoreAway;
   }
 
+  /** Stop re-syncing a finished fixture's events/stats after this long — a
+   * mismatch that hasn't resolved by then is a permanent data quirk (e.g. a
+   * VAR overturn or own-goal misattribution the API itself never corrects),
+   * not something more polling will fix. Without this cap, one such fixture
+   * would burn ~4 API calls every 5 minutes forever. */
+  private static readonly EVENT_RECONCILE_GIVE_UP_MS = 6 * 60 * 60 * 1000;
+
   /**
    * Re-fetch events/stats for FINISHED fixtures whose event count doesn't
    * match the final score (e.g. stoppage-time goals added after first sync).
+   * Gives up on a fixture once it's been over for EVENT_RECONCILE_GIVE_UP_MS.
    */
   async reconcileIncompleteMatchEvents(): Promise<number> {
+    const cutoff = new Date(
+      Date.now() - FixturesService.EVENT_RECONCILE_GIVE_UP_MS,
+    );
     const fixtures = await this.fixtureModel
       .find({
         status: 'FINISHED',
         'score.home': { $ne: null },
         'score.away': { $ne: null },
+        matchEndedAt: { $gte: cutoff },
       })
       .exec();
 
@@ -1233,6 +1284,11 @@ export class FixturesService implements OnModuleInit {
       .exec();
     for (const ghost of ghosts) {
       if (liveExternalIds.has(ghost.externalId)) continue; // still live — handled above
+      const lastGhostCheck = this.lastGhostCheck.get(ghost.externalId) ?? 0;
+      if (Date.now() - lastGhostCheck < FixturesService.DETAIL_SYNC_INTERVAL) {
+        continue;
+      }
+      this.lastGhostCheck.set(ghost.externalId, Date.now());
       // Fetch the individual fixture to get its current status
       try {
         const res = await this.apiFetch<AfFixtureItem[]>(
@@ -1676,14 +1732,10 @@ export class FixturesService implements OnModuleInit {
 
     for (const fixture of fixtures) {
       // Skip only when all data sets exist AND event goals match final score
-      const hasCompleteData =
-        Array.isArray(fixture.events) &&
-        fixture.events.length > 0 &&
-        Array.isArray(fixture.stats) &&
-        fixture.stats.length > 0 &&
-        Array.isArray(fixture.playerRatings) &&
-        fixture.playerRatings.length > 0;
-      if (hasCompleteData && !this.eventsMismatchScore(fixture)) {
+      if (
+        this.hasCompleteFixtureData(fixture) &&
+        !this.eventsMismatchScore(fixture)
+      ) {
         skipped++;
         continue;
       }
@@ -1708,6 +1760,39 @@ export class FixturesService implements OnModuleInit {
       `Bulk sync complete: ${synced} synced, ${skipped} skipped (already had data), ${errors} errors`,
     );
     return { synced, skipped, errors };
+  }
+
+  /**
+   * Admin single-fixture detail resync. Skips the API calls entirely if the
+   * fixture already has complete, score-matching data — pass force=true to
+   * bypass this (e.g. suspected data corruption) and always refetch.
+   */
+  async syncFixtureDetailsIfNeeded(
+    fixtureId: string,
+    force = false,
+  ): Promise<{
+    events: number;
+    stats: number;
+    lineups: number;
+    error?: string;
+  }> {
+    const doc = await this.findById(fixtureId);
+    if (!doc) {
+      return { events: 0, stats: 0, lineups: 0, error: 'Fixture not found' };
+    }
+    if (
+      !force &&
+      this.hasCompleteFixtureData(doc) &&
+      !this.eventsMismatchScore(doc)
+    ) {
+      return {
+        events: doc.events?.length ?? 0,
+        stats: doc.stats?.length ?? 0,
+        lineups: doc.lineups?.length ?? 0,
+        error: 'Skipped — already complete (pass force: true to override)',
+      };
+    }
+    return this.syncMatchDetails(doc, true);
   }
 
   /**

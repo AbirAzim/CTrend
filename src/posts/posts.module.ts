@@ -2,6 +2,10 @@ import { Module } from '@nestjs/common';
 import { MongooseModule } from '@nestjs/mongoose';
 import { Post, PostSchema } from './post.schema';
 import { PostReaction, PostReactionSchema } from './post-reaction.schema';
+import {
+  PostEmojiReaction,
+  PostEmojiReactionSchema,
+} from './post-emoji-reaction.schema';
 import { SavedPost, SavedPostSchema } from './saved-post.schema';
 import { Comment, CommentSchema } from '../comments/comment.schema';
 import { PostsService } from './posts.service';
@@ -27,6 +31,7 @@ import { Fixture, FixtureSchema } from '../fixtures/fixture.schema';
     MongooseModule.forFeature([
       { name: Post.name, schema: PostSchema },
       { name: PostReaction.name, schema: PostReactionSchema },
+      { name: PostEmojiReaction.name, schema: PostEmojiReactionSchema },
       { name: SavedPost.name, schema: SavedPostSchema },
       { name: Comment.name, schema: CommentSchema },
       { name: Fixture.name, schema: FixtureSchema },

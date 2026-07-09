@@ -13,6 +13,14 @@ import {
   PostReactionDocument,
   PostReactionKind,
 } from './post-reaction.schema';
+import {
+  PostEmojiReaction,
+  PostEmojiReactionDocument,
+} from './post-emoji-reaction.schema';
+import {
+  POST_REACTION_EMOJIS,
+  isPostReactionEmoji,
+} from './post-reaction-emoji.constants';
 import { SavedPost, SavedPostDocument } from './saved-post.schema';
 import { CreatePostInput, PostOptionInput } from './dto/create-post.input';
 import { UpdatePostInput } from './dto/update-post.input';
@@ -32,7 +40,12 @@ import { UsersService } from '../users/users.service';
 import { VotesService } from '../votes/votes.service';
 import { CategoryDocument } from '../categories/category.schema';
 import { UserDocument } from '../users/user.schema';
-import { PostGql, MyContentSummaryGql } from './graphql/post.types';
+import {
+  PostGql,
+  MyContentSummaryGql,
+  PostReactionCountGql,
+  PostHyperGql,
+} from './graphql/post.types';
 import { PostCampaignSummaryGql } from './graphql/post-campaign-summary.types';
 import { PostVoteWinnerGql } from './graphql/post-vote-winner.types';
 import { UserGql } from '../users/graphql/user.types';
@@ -105,6 +118,8 @@ export class PostsService implements OnModuleInit {
     @InjectModel(Post.name) private postModel: Model<PostDocument>,
     @InjectModel(PostReaction.name)
     private postReactionModel: Model<PostReactionDocument>,
+    @InjectModel(PostEmojiReaction.name)
+    private postEmojiReactionModel: Model<PostEmojiReactionDocument>,
     @InjectModel(SavedPost.name)
     private savedPostModel: Model<SavedPostDocument>,
     @InjectModel(Comment.name)
@@ -1085,14 +1100,19 @@ export class PostsService implements OnModuleInit {
    * five `countDocuments`/aggregate calls in parallel, no post hydration.
    */
   async myContentSummary(userId: string): Promise<MyContentSummaryGql> {
-    const [dropsCount, scheduledCount, keptCount, votedCount, totalVotesOnMyPosts] =
-      await Promise.all([
-        this.countPostsByAuthor(userId),
-        this.countScheduledByAuthor(userId),
-        this.countSavedPosts(userId),
-        this.votesService.countVotesByUser(userId, true),
-        this.sumVotesOnAuthorPosts(userId),
-      ]);
+    const [
+      dropsCount,
+      scheduledCount,
+      keptCount,
+      votedCount,
+      totalVotesOnMyPosts,
+    ] = await Promise.all([
+      this.countPostsByAuthor(userId),
+      this.countScheduledByAuthor(userId),
+      this.countSavedPosts(userId),
+      this.votesService.countVotesByUser(userId, true),
+      this.sumVotesOnAuthorPosts(userId),
+    ]);
     return {
       dropsCount,
       scheduledCount,
@@ -1190,19 +1210,123 @@ export class PostsService implements OnModuleInit {
     }
   }
 
+  private sortPostReactionCounts(
+    reactions: PostReactionCountGql[],
+  ): PostReactionCountGql[] {
+    const order = new Map(POST_REACTION_EMOJIS.map((e, i) => [e, i]));
+    return [...reactions].sort(
+      (a, b) =>
+        (order.get(a.emoji as (typeof POST_REACTION_EMOJIS)[number]) ?? 99) -
+        (order.get(b.emoji as (typeof POST_REACTION_EMOJIS)[number]) ?? 99),
+    );
+  }
+
+  private async reactionCountsForPost(
+    postId: Types.ObjectId,
+  ): Promise<PostReactionCountGql[]> {
+    const rows = await this.postEmojiReactionModel
+      .aggregate<{
+        emoji: string;
+        count: number;
+      }>([
+        { $match: { postId } },
+        { $group: { _id: '$emoji', count: { $sum: 1 } } },
+        { $project: { _id: 0, emoji: '$_id', count: 1 } },
+      ])
+      .exec();
+    return this.sortPostReactionCounts(
+      rows.map((r) => ({ emoji: r.emoji, count: r.count })),
+    );
+  }
+
+  private async viewerReactionForPost(
+    postId: Types.ObjectId,
+    viewerId: string,
+  ): Promise<string | null> {
+    const doc = await this.postEmojiReactionModel
+      .findOne({ postId, userId: new Types.ObjectId(viewerId) })
+      .select({ emoji: 1 })
+      .lean()
+      .exec();
+    return doc?.emoji ?? null;
+  }
+
+  /**
+   * Set (or clear, `emoji: null`) the viewer's emoji reaction on a post.
+   * One reaction per user — picking a new emoji replaces the old one.
+   *
+   * `hypeCount`/`viewerHasHyped` stay driven by the existing `PostReaction`
+   * ('hype' kind) collection: on a `null → emoji` or `emoji → null` edge this
+   * delegates to `setReaction(..., 'hype', active)`, which already handles
+   * coin award/revoke + the POST_HYPE notification. Switching between two
+   * emojis (never passing through null) only updates the stored emoji here —
+   * no coin/notification effect, matching how hype toggling has always
+   * worked (award once, not per interaction).
+   */
+  async setPostReaction(
+    userId: string,
+    postId: string,
+    emoji: string | null,
+  ): Promise<{
+    postId: string;
+    reactions: PostReactionCountGql[];
+    viewerReaction: string | null;
+  }> {
+    const post = await this.findById(postId);
+    if (!post) throw new NotFoundException('Post not found');
+    if (post.likesDisabled) {
+      throw new ForbiddenException('Reactions are disabled on this post');
+    }
+    const normalizedEmoji = emoji === '' ? null : emoji;
+    if (normalizedEmoji !== null && !isPostReactionEmoji(normalizedEmoji)) {
+      throw new BadRequestException('Invalid reaction emoji');
+    }
+
+    const uid = new Types.ObjectId(userId);
+    const pid = post._id;
+    const existing = await this.postEmojiReactionModel
+      .findOne({ postId: pid, userId: uid })
+      .exec();
+    const hadReaction = Boolean(existing);
+    const wantsActive = normalizedEmoji !== null;
+
+    if (wantsActive) {
+      await this.postEmojiReactionModel.updateOne(
+        { postId: pid, userId: uid },
+        { $set: { emoji: normalizedEmoji } },
+        { upsert: true },
+      );
+    } else {
+      await this.postEmojiReactionModel.deleteOne({ postId: pid, userId: uid });
+    }
+
+    if (wantsActive !== hadReaction) {
+      await this.setReaction(userId, postId, 'hype', wantsActive);
+    }
+
+    return {
+      postId,
+      reactions: await this.reactionCountsForPost(pid),
+      viewerReaction: wantsActive ? normalizedEmoji : null,
+    };
+  }
+
   /**
    * List the users who hyped a post, most recent first (Instagram-style "liked
    * by" list). Supports name search + skip/take pagination for large lists.
+   * Includes each person's chosen emoji (defaults to ❤️ for legacy hype rows
+   * created before emoji reactions shipped).
    */
   async listHypers(
     postId: string,
     search?: string,
     skip = 0,
     take?: number,
-  ): Promise<UserGql[]> {
+  ): Promise<PostHyperGql[]> {
     if (!Types.ObjectId.isValid(postId)) return [];
+    const pid = new Types.ObjectId(postId);
     const query: Record<string, unknown> = {
-      postId: new Types.ObjectId(postId),
+      postId: pid,
       kind: 'hype',
     };
     const trimmedSearch = search?.trim();
@@ -1217,15 +1341,32 @@ export class PostsService implements OnModuleInit {
       .skip(Math.max(0, skip));
     if (take !== undefined && take > 0) cursor = cursor.limit(take);
     const rows = await cursor.exec();
-    const users = await this.usersService.findByIds(
-      rows.map((r) => r.userId.toHexString()),
-    );
+    const [users, emojiRows] = await Promise.all([
+      this.usersService.findByIds(rows.map((r) => r.userId.toHexString())),
+      this.postEmojiReactionModel
+        .find({ postId: pid, userId: { $in: rows.map((r) => r.userId) } })
+        .select({ userId: 1, emoji: 1 })
+        .lean()
+        .exec(),
+    ]);
     // Preserve the reaction order (findByIds may return a different order).
     const byId = new Map(users.map((u) => [u._id.toHexString(), u]));
-    const out: UserGql[] = [];
+    const emojiByUserId = new Map(
+      emojiRows.map((r) => [r.userId.toHexString(), r.emoji]),
+    );
+    const out: PostHyperGql[] = [];
     for (const r of rows) {
-      const u = byId.get(r.userId.toHexString());
-      if (u) out.push(this.usersService.toGql(u));
+      const key = r.userId.toHexString();
+      const u = byId.get(key);
+      if (!u) continue;
+      const userGql = this.usersService.toGql(u);
+      out.push({
+        id: userGql.id,
+        username: userGql.username,
+        displayName: userGql.displayName,
+        profileImageUrl: userGql.profileImageUrl,
+        reactionEmoji: emojiByUserId.get(key) ?? '❤️',
+      });
     }
     return out;
   }
@@ -1602,6 +1743,7 @@ export class PostsService implements OnModuleInit {
       hypeCount,
       saveCount,
       recentComments,
+      reactions,
     ] = await Promise.all([
       this.categoriesService.findById(post.categoryId.toString()),
       this.usersService.findById(post.createdBy.toString()),
@@ -1618,6 +1760,7 @@ export class PostsService implements OnModuleInit {
         2,
         viewerId,
       ),
+      this.reactionCountsForPost(post._id),
     ]);
     if (!category || !author) {
       throw new NotFoundException('Related data missing');
@@ -1642,7 +1785,7 @@ export class PostsService implements OnModuleInit {
       mySelected = voteIndex;
       myVoteAnonymous = myVote ? myVote.anonymous : null;
     }
-    const [viewerHasSaved, viewerHasHyped] = await Promise.all([
+    const [viewerHasSaved, viewerHasHyped, viewerReaction] = await Promise.all([
       viewerId
         ? this.savedPostModel
             .exists({ userId: new Types.ObjectId(viewerId), postId: post._id })
@@ -1656,6 +1799,9 @@ export class PostsService implements OnModuleInit {
               kind: 'hype',
             })
             .exec()
+        : Promise.resolve(null),
+      viewerId
+        ? this.viewerReactionForPost(post._id, viewerId)
         : Promise.resolve(null),
     ]);
     const now = Date.now();
@@ -1774,6 +1920,8 @@ export class PostsService implements OnModuleInit {
       saveCount,
       viewerHasSaved: !!viewerHasSaved,
       viewerHasHyped: !!viewerHasHyped,
+      reactions,
+      viewerReaction,
       recentComments,
       totalVotes: stats.totalVotes,
       upvoteCount: stats.countsPerOption[0] ?? 0,

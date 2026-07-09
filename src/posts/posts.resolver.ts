@@ -9,8 +9,12 @@ import {
 } from '@nestjs/graphql';
 import { NotFoundException, UseGuards } from '@nestjs/common';
 import { PostsService } from './posts.service';
-import { PostGql, MyContentSummaryGql } from './graphql/post.types';
-import { UserGql } from '../users/graphql/user.types';
+import {
+  PostGql,
+  MyContentSummaryGql,
+  PostReactionSummaryGql,
+  PostHyperGql,
+} from './graphql/post.types';
 import { PostCampaignSummaryGql } from './graphql/post-campaign-summary.types';
 import { PostVoteWinnerGql } from './graphql/post-vote-winner.types';
 
@@ -83,8 +87,19 @@ export class PostsResolver {
     return active;
   }
 
+  /** Full 6-emoji reaction set (👍 ❤️ 😂 😮 😢 🔥). Pass `emoji: null` to clear. */
+  @Mutation(() => PostReactionSummaryGql)
+  @UseGuards(GqlAuthGuard)
+  async setPostReaction(
+    @CurrentUser() user: ReqUser,
+    @Args('postId', { type: () => ID }) postId: string,
+    @Args('emoji', { type: () => String, nullable: true }) emoji: string | null,
+  ) {
+    return this.postsService.setPostReaction(user.id, postId, emoji);
+  }
+
   /** Users who hyped a post — Instagram-style "hyped by" list. */
-  @Query(() => [UserGql])
+  @Query(() => [PostHyperGql])
   async hypersByPost(
     @Args('postId', { type: () => ID }) postId: string,
     @Args('search', { type: () => String, nullable: true }) search?: string,

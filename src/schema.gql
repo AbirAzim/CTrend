@@ -632,6 +632,7 @@ type Mutation {
   setPostHype(active: Boolean!, postId: ID!): Boolean!
   setPostKeep(keep: Boolean!, postId: ID!): Boolean!
   setPostLike(active: Boolean!, postId: ID!): Boolean!
+  setPostReaction(emoji: String, postId: ID!): PostReactionSummaryGql!
   setReferralSystemEnabled(enabled: Boolean!): PlatformSettingsGql!
   setTyping(conversationId: ID!, isTyping: Boolean!): Boolean!
   signup(displayName: String, email: String!, password: String!): Boolean!
@@ -839,6 +840,7 @@ type PostGql {
   options: [PostOptionGql!]!
   orgReach: OrgPostReach
   pinned: Boolean!
+  reactions: [PostReactionCountGql!]!
   recentComments: [CommentGql!]!
   reportCount: Int!
   saveCount: Int!
@@ -850,11 +852,20 @@ type PostGql {
   upvoteCount: Int!
   viewerHasHyped: Boolean!
   viewerHasSaved: Boolean!
+  viewerReaction: String
   viewerVote: String
   visibility: Visibility!
   votePrizeClaimedAt: DateTime
   voteWinner: PostVoteWinnerGql
   votingEndsAt: DateTime
+}
+
+type PostHyperGql {
+  displayName: String
+  id: ID!
+  profileImageUrl: String
+  reactionEmoji: String
+  username: String!
 }
 
 type PostOptionGql {
@@ -869,6 +880,17 @@ input PostOptionInput {
   imageFocalY: Int
   imageUrl: String
   label: String!
+}
+
+type PostReactionCountGql {
+  count: Int!
+  emoji: String!
+}
+
+type PostReactionSummaryGql {
+  postId: ID!
+  reactions: [PostReactionCountGql!]!
+  viewerReaction: String
 }
 
 enum PostStatus {
@@ -944,7 +966,7 @@ type Query {
   getPostsByUser(skip: Int = 0, take: Int = 20, userId: ID!): [PostGql!]!
   getUserProfile(userId: ID!): UserGql!
   globalSearch(limit: Int = 20, query: String!): SearchResultGql!
-  hypersByPost(postId: ID!, search: String, skip: Int, take: Int): [UserGql!]!
+  hypersByPost(postId: ID!, search: String, skip: Int, take: Int): [PostHyperGql!]!
   incomingFriendRequests: [UserGql!]!
   invitationSignupInfo(token: String!): InvitationSignupInfoGql!
   listInvitations(status: InvitationStatus): [InvitationGql!]!

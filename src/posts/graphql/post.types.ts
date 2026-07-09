@@ -62,6 +62,48 @@ export class MatchScoreGql {
 }
 
 @ObjectType()
+export class PostReactionCountGql {
+  @Field()
+  emoji: string;
+
+  @Field(() => Int)
+  count: number;
+}
+
+/** Lean return for `setPostReaction` — posts are heavy, so unlike comments we don't round-trip the whole object. */
+@ObjectType()
+export class PostReactionSummaryGql {
+  @Field(() => ID)
+  postId: string;
+
+  @Field(() => [PostReactionCountGql])
+  reactions: PostReactionCountGql[];
+
+  @Field({ nullable: true })
+  viewerReaction?: string;
+}
+
+/** Row shape for `hypersByPost` — only the fields the reactor list actually needs, plus which emoji they used. */
+@ObjectType()
+export class PostHyperGql {
+  @Field(() => ID)
+  id: string;
+
+  @Field()
+  username: string;
+
+  @Field(() => String, { nullable: true })
+  displayName?: string | null;
+
+  @Field(() => String, { nullable: true })
+  profileImageUrl?: string | null;
+
+  /** Emoji this user reacted with. Defaults to ❤️ for legacy hype rows created before emoji reactions shipped. */
+  @Field(() => String, { nullable: true })
+  reactionEmoji?: string | null;
+}
+
+@ObjectType()
 export class PostOptionGql {
   @Field()
   label: string;
@@ -170,6 +212,13 @@ export class PostGql {
 
   @Field()
   viewerHasHyped: boolean;
+
+  @Field(() => [PostReactionCountGql])
+  reactions: PostReactionCountGql[];
+
+  /** Emoji the viewer reacted with, or null. Generalizes `viewerHasHyped`. */
+  @Field(() => String, { nullable: true })
+  viewerReaction?: string | null;
 
   @Field(() => [CommentGql])
   recentComments: CommentGql[];

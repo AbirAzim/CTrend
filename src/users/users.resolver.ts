@@ -47,6 +47,17 @@ export class UsersResolver {
     return this.usersService.toGql(u);
   }
 
+  /** @mention autocomplete data source — search users by username/display name. */
+  @Query(() => [UserGql])
+  @UseGuards(GqlAuthGuard)
+  async searchUsers(
+    @Args('search') search: string,
+    @Args('skip', { type: () => Int, nullable: true }) skip?: number,
+    @Args('take', { type: () => Int, nullable: true }) take?: number,
+  ) {
+    return this.usersService.searchUsers(search, skip ?? 0, take ?? 20);
+  }
+
   @Mutation(() => UserGql)
   @UseGuards(GqlAuthGuard)
   async updateProfile(

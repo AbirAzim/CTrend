@@ -24,6 +24,10 @@ import { CoinsService } from '../coins/coins.service';
 import { CoinType } from '../coins/coins.constants';
 import { Logger } from '@nestjs/common';
 import { POST_UPDATED, pubsub } from '../pubsub';
+import {
+  parseMentionUsernames,
+  newlyMentionedUsernames,
+} from '../common/mentions';
 
 /** How far back to look for the "most engaged" preview pick — bounds cost on
  * heavily-commented posts; not a true all-time top comment. */
@@ -60,6 +64,43 @@ export class CommentsService {
   private async actorName(userId: string): Promise<string> {
     const user = await this.usersService.findById(userId);
     return user?.displayName?.trim() || user?.username || 'Someone';
+  }
+
+  /** Notifies each newly-@mentioned user (excluding the author). `prevContent`
+   * is only passed on edits, so re-notifying on unrelated edits is avoided. */
+  private async notifyMentions(
+    content: string,
+    doc: CommentDocument,
+    postId: string,
+    userId: string,
+    actorName: string,
+    prevContent?: string,
+  ): Promise<void> {
+    const usernames =
+      prevContent === undefined
+        ? parseMentionUsernames(content)
+        : newlyMentionedUsernames(prevContent, content);
+    if (usernames.length === 0) return;
+    try {
+      const mentioned = await this.usersService.findByUsernames(usernames);
+      for (const user of mentioned) {
+        if (user._id.toHexString() === userId) continue;
+        await this.notificationsService.createOrUpdateGrouped({
+          userId: user._id.toHexString(),
+          type: 'COMMENT_MENTION',
+          referenceId: doc._id.toHexString(),
+          referenceType: 'Comment',
+          postId,
+          commentId: doc._id.toHexString(),
+          actorId: userId,
+          actorName,
+          verbPhrase: 'mentioned you in a comment',
+          title: 'You were mentioned',
+        });
+      }
+    } catch {
+      // Don't fail the comment write if mention notification fan-out fails
+    }
   }
 
   async create(
@@ -134,6 +175,8 @@ export class CommentsService {
     } catch {
       // Don't fail the comment create if notification fan-out fails
     }
+
+    await this.notifyMentions(content, doc, postId, userId, name);
 
     // Coins: reward the commenter (once per comment).
     await this.coinsService.award(
@@ -273,9 +316,20 @@ export class CommentsService {
       throw new ForbiddenException('You can only edit your own comment');
     }
 
+    const prevContent = comment.content;
     comment.content = trimmed;
     comment.editedAt = new Date();
     await comment.save();
+
+    const actorName = await this.actorName(userId);
+    await this.notifyMentions(
+      trimmed,
+      comment,
+      comment.postId.toHexString(),
+      userId,
+      actorName,
+      prevContent,
+    );
 
     return this.toGql(comment, userId);
   }

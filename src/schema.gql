@@ -720,6 +720,7 @@ type ParticipantGql {
   displayName: String!
   id: ID!
   online: Boolean!
+  username: String
 }
 
 type PlatformSettingsGql {
@@ -994,6 +995,7 @@ type Query {
   publicCampaigns: [CampaignGql!]!
   referralPoints(userId: ID!): Int!
   referralPointsHistory(skip: Int, take: Int, userId: ID): [CoinHistoryItemGql!]!
+  searchUsers(search: String!, skip: Int, take: Int): [UserGql!]!
   unreadNotificationCount: Int!
   userCampaignWinSummary(userId: ID!): [UserCampaignWinSummaryGql!]!
   userFriends(userId: ID!): [UserGql!]!

@@ -354,6 +354,31 @@ export class UsersService implements OnModuleInit {
     return docs.map((d) => d._id as Types.ObjectId);
   }
 
+  /** Batch-resolves @mention usernames (already lowercased) to user docs. */
+  async findByUsernames(usernames: string[]): Promise<UserDocument[]> {
+    if (usernames.length === 0) return [];
+    return this.userModel.find({ username: { $in: usernames } }).exec();
+  }
+
+  /**
+   * Paginated user search by username/display name — the data source for the
+   * @mention autocomplete (comments, captions). Capped at 20 per page since
+   * it's an interactive typeahead, not a bulk listing.
+   */
+  async searchUsers(term: string, skip = 0, take = 20): Promise<UserGql[]> {
+    const trimmed = term.trim();
+    if (!trimmed) return [];
+    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = { $regex: escaped, $options: 'i' };
+    const docs = await this.userModel
+      .find({ $or: [{ displayName: regex }, { username: regex }] })
+      .sort({ username: 1 })
+      .skip(Math.max(0, skip))
+      .limit(Math.min(Math.max(1, take), 20))
+      .exec();
+    return docs.map((d) => this.toGql(d));
+  }
+
   async findAllIds(): Promise<string[]> {
     const docs = await this.userModel.find({}, { _id: 1 }).lean().exec();
     return docs.map((d) => (d._id as Types.ObjectId).toHexString());

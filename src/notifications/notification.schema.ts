@@ -12,6 +12,9 @@ export type NotificationType =
   | 'POST_COMMENT'
   | 'COMMENT_REPLY'
   | 'COMMENT_REACTION'
+  | 'COMMENT_MENTION'
+  | 'POST_MENTION'
+  | 'MESSAGE_MENTION'
   | 'VOTE_ENDED'
   | 'VOTE_WINNER'
   | 'VOTE_PRIZE_CLAIMED'
@@ -44,6 +47,9 @@ export class Notification {
       'POST_COMMENT',
       'COMMENT_REPLY',
       'COMMENT_REACTION',
+      'COMMENT_MENTION',
+      'POST_MENTION',
+      'MESSAGE_MENTION',
       'VOTE_ENDED',
       'VOTE_WINNER',
       'VOTE_PRIZE_CLAIMED',

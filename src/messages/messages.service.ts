@@ -49,6 +49,7 @@ import {
   MODERATOR_SENDER_GQL_ID,
   MODERATOR_SENDER_OBJECT_ID,
 } from './moderator.constants';
+import { parseMentionUsernames } from '../common/mentions';
 
 @Injectable()
 export class MessagesService {
@@ -553,6 +554,42 @@ export class MessagesService {
     return true;
   }
 
+  /** Notifies @mentioned users, restricted to actual participants of this
+   * conversation — mentioning someone not in the chat is silently dropped. */
+  private async notifyMentions(
+    text: string,
+    convo: ConversationDocument,
+    senderOid: Types.ObjectId,
+    senderName: string | null | undefined,
+  ): Promise<void> {
+    const usernames = parseMentionUsernames(text);
+    if (usernames.length === 0) return;
+    try {
+      const mentioned = await this.usersService.findByUsernames(usernames);
+      const participantIds = new Set(
+        convo.participantIds.map((id) => id.toHexString()),
+      );
+      const senderId = senderOid.toHexString();
+      for (const user of mentioned) {
+        const userId = user._id.toHexString();
+        if (userId === senderId) continue;
+        if (!participantIds.has(userId)) continue;
+        await this.notificationsService.createOrUpdateGrouped({
+          userId,
+          type: 'MESSAGE_MENTION',
+          referenceId: convo._id.toHexString(),
+          referenceType: 'Conversation',
+          actorId: senderId,
+          actorName: senderName?.trim() || 'Someone',
+          verbPhrase: 'mentioned you in a chat',
+          title: 'You were mentioned',
+        });
+      }
+    } catch {
+      // Don't fail the message send if mention notification fan-out fails
+    }
+  }
+
   // ── Messages ──────────────────────────────────────────────────
 
   async sendMessage(
@@ -644,6 +681,10 @@ export class MessagesService {
     // messages. Unread message counts are tracked per-conversation via
     // unreadCounts on the Conversation document and surfaced through the
     // messenger FAB badge, not the notification bell.
+    //
+    // @mentions are the one exception: they're an explicit, targeted call-out
+    // (not "you have unread messages"), so they get a real bell notification.
+    await this.notifyMentions(trimmedText, convo, viewerOid, gql.senderName);
 
     // Mobile push: send a data-only, high-priority FCM message to every other
     // participant so their app (even backgrounded) can surface the message.
@@ -971,6 +1012,7 @@ export class MessagesService {
         participants.push({
           id: uid,
           displayName: u?.displayName?.trim() || u?.username || 'User',
+          username: u?.username,
           avatarUrl: u?.profileImageUrl ?? undefined,
           online: this.presenceService.isOnline(uid),
         });
@@ -997,6 +1039,7 @@ export class MessagesService {
         return {
           id: uid,
           displayName: u?.displayName?.trim() || u?.username || 'User',
+          username: u?.username,
           avatarUrl: u?.profileImageUrl ?? undefined,
           online: this.presenceService.isOnline(uid),
         };

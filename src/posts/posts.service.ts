@@ -75,6 +75,10 @@ import { WorldCupCampaignService } from '../world-cup-campaign/world-cup-campaig
 import { CoinsService } from '../coins/coins.service';
 import { CoinType } from '../coins/coins.constants';
 import { Fixture, FixtureDocument } from '../fixtures/fixture.schema';
+import {
+  parseMentionUsernames,
+  newlyMentionedUsernames,
+} from '../common/mentions';
 
 const PREMIUM_GLOBAL_MONTHLY = 20;
 const DEFAULT_ENDING_SOON_LEAD_MINUTES = 5;
@@ -863,6 +867,7 @@ export class PostsService implements OnModuleInit {
         'Admins can only edit platform-wide (system) posts',
       );
     }
+    const prevCaption = post.contentText;
     if (input.caption !== undefined) post.contentText = input.caption;
 
     // Item edits: appending new images keeps existing votes, but changing or
@@ -962,6 +967,18 @@ export class PostsService implements OnModuleInit {
       post.voteCount = 0;
     }
     const saved = await post.save();
+    if (input.caption !== undefined && saved.status === PostStatus.PUBLISHED) {
+      const editor = await this.usersService.findById(userId);
+      const editorName =
+        editor?.displayName?.trim() || editor?.username || 'Someone';
+      await this.notifyMentions(
+        saved.contentText,
+        saved,
+        userId,
+        editorName,
+        prevCaption,
+      );
+    }
     await this.safePubsubPublish(POST_UPDATED, {
       postUpdated: { postId: saved._id.toHexString() },
     });
@@ -1386,6 +1403,42 @@ export class PostsService implements OnModuleInit {
     return out;
   }
 
+  /** Notifies each newly-@mentioned user in a post caption (excluding the
+   * author). `prevContent` is only passed on edits, to skip re-notifying
+   * mentions that were already there. */
+  private async notifyMentions(
+    content: string | undefined,
+    post: PostDocument,
+    userId: string,
+    actorName: string,
+    prevContent?: string,
+  ): Promise<void> {
+    const usernames =
+      prevContent === undefined
+        ? parseMentionUsernames(content)
+        : newlyMentionedUsernames(prevContent, content);
+    if (usernames.length === 0) return;
+    try {
+      const mentioned = await this.usersService.findByUsernames(usernames);
+      for (const user of mentioned) {
+        if (user._id.toHexString() === userId) continue;
+        await this.notificationsService.createOrUpdateGrouped({
+          userId: user._id.toHexString(),
+          type: 'POST_MENTION',
+          referenceId: post._id.toHexString(),
+          referenceType: 'Post',
+          postId: post._id.toHexString(),
+          actorId: userId,
+          actorName,
+          verbPhrase: 'mentioned you in a post',
+          title: 'You were mentioned',
+        });
+      }
+    } catch {
+      // Don't fail the post write if mention notification fan-out fails
+    }
+  }
+
   async create(
     authorId: string,
     input: CreatePostInput,
@@ -1624,6 +1677,8 @@ export class PostsService implements OnModuleInit {
       const authorName =
         author?.displayName?.trim() || author?.username || 'CTrend';
       const caption = (post.contentText ?? '').trim();
+
+      await this.notifyMentions(caption, post, authorId, authorName);
 
       if (post.type === PostType.SYSTEM) {
         // Platform-wide posts → every user (except author) gets a bell notification.

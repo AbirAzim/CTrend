@@ -153,6 +153,10 @@ export class ParticipantGql {
   @Field()
   displayName: string;
 
+  /** @mention autocomplete needs the username, not just the display name. */
+  @Field({ nullable: true })
+  username?: string;
+
   @Field({ nullable: true })
   avatarUrl?: string;
 

@@ -967,7 +967,7 @@ type Query {
   getPostsByUser(skip: Int = 0, take: Int = 20, userId: ID!): [PostGql!]!
   getUserProfile(userId: ID!): UserGql!
   globalSearch(limit: Int = 20, query: String!): SearchResultGql!
-  hypersByPost(postId: ID!, search: String, skip: Int, take: Int): [PostHyperGql!]!
+  hypersByPost(emoji: String, postId: ID!, search: String, skip: Int, take: Int): [PostHyperGql!]!
   incomingFriendRequests: [UserGql!]!
   invitationSignupInfo(token: String!): InvitationSignupInfoGql!
   listInvitations(status: InvitationStatus): [InvitationGql!]!

@@ -105,8 +105,9 @@ export class PostsResolver {
     @Args('search', { type: () => String, nullable: true }) search?: string,
     @Args('skip', { type: () => Int, nullable: true }) skip?: number,
     @Args('take', { type: () => Int, nullable: true }) take?: number,
+    @Args('emoji', { type: () => String, nullable: true }) emoji?: string,
   ) {
-    return this.postsService.listHypers(postId, search, skip ?? 0, take);
+    return this.postsService.listHypers(postId, search, skip ?? 0, take, emoji);
   }
 
   @Mutation(() => PostGql)

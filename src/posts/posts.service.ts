@@ -1345,15 +1345,17 @@ export class PostsService implements OnModuleInit {
 
   /**
    * List the users who hyped a post, most recent first (Instagram-style "liked
-   * by" list). Supports name search + skip/take pagination for large lists.
-   * Includes each person's chosen emoji (defaults to ❤️ for legacy hype rows
-   * created before emoji reactions shipped).
+   * by" list). Supports name search + skip/take pagination for large lists,
+   * plus an optional `emoji` filter (e.g. the Facebook-style "who reacted
+   * with 👍" tab). Includes each person's chosen emoji (defaults to ❤️ for
+   * legacy hype rows created before emoji reactions shipped).
    */
   async listHypers(
     postId: string,
     search?: string,
     skip = 0,
     take?: number,
+    emoji?: string,
   ): Promise<PostHyperGql[]> {
     if (!Types.ObjectId.isValid(postId)) return [];
     const pid = new Types.ObjectId(postId);
@@ -1366,6 +1368,23 @@ export class PostsService implements OnModuleInit {
       const ids = await this.usersService.findIdsByNameSearch(trimmedSearch);
       if (ids.length === 0) return [];
       query.userId = { $in: ids };
+    }
+    const trimmedEmoji = emoji?.trim();
+    if (trimmedEmoji) {
+      const emojiUserIds = await this.postEmojiReactionModel
+        .find({ postId: pid, emoji: trimmedEmoji })
+        .distinct('userId')
+        .exec();
+      if (emojiUserIds.length === 0) return [];
+      const existing = query.userId as { $in: Types.ObjectId[] } | undefined;
+      if (existing) {
+        const allowed = new Set(emojiUserIds.map((id) => id.toHexString()));
+        existing.$in = existing.$in.filter((id) =>
+          allowed.has(id.toHexString()),
+        );
+      } else {
+        query.userId = { $in: emojiUserIds };
+      }
     }
     let cursor = this.postReactionModel
       .find(query)

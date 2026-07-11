@@ -1188,6 +1188,18 @@ export class PostsService implements OnModuleInit {
           );
         }
       }
+      // Keep the emoji-reactions collection in sync even when the caller is the
+      // old boolean setPostHype/setPostLike mutation (pre-reactions app builds) —
+      // $setOnInsert so it never clobbers an emoji the user explicitly picked via
+      // setPostReaction. Without this, hype/like activity from clients that
+      // haven't upgraded yet would silently drift out of the reactions breakdown.
+      if (kind === 'hype') {
+        await this.postEmojiReactionModel.updateOne(
+          { postId: pid, userId: uid },
+          { $setOnInsert: { postId: pid, userId: uid, emoji: '❤️' } },
+          { upsert: true },
+        );
+      }
       return;
     }
     const removed = await this.postReactionModel.deleteOne({
@@ -1207,6 +1219,9 @@ export class PostsService implements OnModuleInit {
           `${postId}:${userId}`,
         );
       }
+    }
+    if (kind === 'hype') {
+      await this.postEmojiReactionModel.deleteOne({ postId: pid, userId: uid });
     }
   }
 
